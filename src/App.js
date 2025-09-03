@@ -1,5 +1,6 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useLocation, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './components/AuthContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -12,41 +13,57 @@ import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
 import ReportsAlerts from './pages/ReportsAlerts';
 import SettingsSecurity from './pages/SettingsSecurity';
-
 import BillingReport from './pages/reports/BillingReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
-
 import PurchaseOrder from './pages/PurchaseOrder';
-
+import Login from './pages/Login';
+import Logout from './pages/Logout';
+import Landing from './pages/Landing';
 import './App.css';
 
-const App = () => (
-  <div className="app-shell">
-    <Sidebar />
-    <div className="main-content">
-      <Header />
-      <div className="content-area">
-        <Routes>
-          <Route path="/" element={<Navigate to="/categories" />} />
-          <Route path="/categories" element={<CategoryManagement />} />
-          <Route path="/suppliers" element={<SupplierManagement />} />
-          <Route path="/products" element={<ProductManagement />} />
-          <Route path="/purchase-order" element={<PurchaseOrder />} />
-          <Route path="/grn" element={<GRNManagement />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/customers" element={<CustomerManagement />} />
-          <Route path="/bin" element={<ProductBin />} />
-          <Route path="/reports" element={<ReportsAlerts />} />
-          <Route path="/reports/billing" element={<BillingReport />} />
-          <Route path="/reports/sales" element={<SalesReport />} />
-          <Route path="/reports/alert" element={<AlertReport />} />
-          <Route path="/settings" element={<SettingsSecurity />} />
-        </Routes>
+const AppContent = () => {
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/logout';
+
+  // Import PrivateRoute
+  // ...existing code...
+  const PrivateRoute = require('./components/PrivateRoute').default;
+  return (
+    <div className="app-shell">
+      {!isAuthPage && <Sidebar />}
+      <div className="main-content">
+        {!isAuthPage && <Header />}
+        <div className="content-area">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/logout" element={<Logout />} />
+            <Route path="/" element={<PrivateRoute><Landing /></PrivateRoute>} />
+            <Route path="/categories" element={<PrivateRoute><CategoryManagement /></PrivateRoute>} />
+            <Route path="/suppliers" element={<PrivateRoute><SupplierManagement /></PrivateRoute>} />
+            <Route path="/products" element={<PrivateRoute><ProductManagement /></PrivateRoute>} />
+            <Route path="/purchase-order" element={<PrivateRoute><PurchaseOrder /></PrivateRoute>} />
+            <Route path="/grn" element={<PrivateRoute><GRNManagement /></PrivateRoute>} />
+            <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+            <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
+            <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
+            <Route path="/reports" element={<PrivateRoute><ReportsAlerts /></PrivateRoute>} />
+            <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
+            <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
+            <Route path="/reports/alert" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
+            <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
+          </Routes>
+        </div>
+        {!isAuthPage && <Footer />}
       </div>
-      <Footer />
     </div>
-  </div>
+  );
+};
+
+const App = () => (
+  <AuthProvider>
+    <AppContent />
+  </AuthProvider>
 );
 
 export default App;

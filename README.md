@@ -40,3 +40,24 @@
   npm -v
   ```
 - For deployment to cloud platforms (Vercel, Netlify, etc.), follow their specific instructions for React apps.
+
+## Development Workflow Guidelines
+
+1. **Branching:**
+   - Always create a feature branch from the `release` branch.
+   - Name your feature branch clearly (e.g., `feature/add-billing-ui`).
+
+2. **Pull Requests:**
+   - Create a pull request (PR) from your feature branch to the `developer` branch for code review and integration.
+
+3. **Testing & Bug Tracking:**
+   - After merging to `developer`, perform all required testing.
+   - If any bugs are found, log them in the Excel sheet provided in the `qa_test` folder.
+
+4. **Release Process:**
+   - Once all testing is complete and bugs are resolved, create a final pull request from the `developer` branch to the `release` branch.
+   - Only merge to `release` after QA sign-off.
+
+5. **General Notes:**
+   - Keep branches up to date with the latest changes from `release` and `developer` as needed.
+   - Communicate with the team for code reviews and QA status.

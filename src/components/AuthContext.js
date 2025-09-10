@@ -1,40 +1,45 @@
+// AuthContext.jsx
 import React, { createContext, useState, useEffect } from 'react';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
   const [token, setToken] = useState(null);
+  const [roles, setRoles] = useState([]);    // array
+  const [username, setUsername] = useState(null);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedRole = localStorage.getItem('role');
-    if (storedToken && storedRole) {
-      setToken(storedToken);
-      setRole(storedRole);
-      setUser({ role: storedRole });
-    }
+    const t = localStorage.getItem('token');
+    const r = localStorage.getItem('roles');     // stored as JSON string
+    const u = localStorage.getItem('username');
+    if (t) setToken(t);
+    if (r) setRoles(JSON.parse(r));
+    if (u) setUsername(u);
   }, []);
 
-  const login = (token, role) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
+  const login = (token, rolesArr = [], user = null) => {
     setToken(token);
-    setRole(role);
-    setUser({ role });
+    setRoles(rolesArr);
+    setUsername(user);
+    localStorage.setItem('token', token);
+    localStorage.setItem('roles', JSON.stringify(rolesArr));
+    if (user) localStorage.setItem('username', user);
+    console.log(token);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
     setToken(null);
-    setRole(null);
-    setUser(null);
+    setRoles([]);
+    setUsername(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('roles');
+    localStorage.removeItem('username');
   };
 
+  const hasRole = (role) => roles.map(r => r.toLowerCase()).includes(role.toLowerCase());
+
   return (
-    <AuthContext.Provider value={{ user, role, token, login, logout }}>
+    <AuthContext.Provider value={{ token, roles, username, login, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

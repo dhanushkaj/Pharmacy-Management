@@ -1,6 +1,4 @@
-<<<<<<< HEAD
 import React, { useContext, useEffect, useMemo, useState } from "react";
-import logo from "../assets/logo.png";
 import { AuthContext } from "../components/AuthContext";
 import * as XLSX from "xlsx";
 
@@ -25,26 +23,15 @@ const BULK_COLUMNS = [
   "binLocation",
 ];
 
-function alertReport(report, title = "Bulk upload result") {
-  const { ok = 0, failed = 0, errors = [] } = report || {};
-  const msg =
-    `${title}\n` +
-    `Imported: ${ok}\n` +
-    `Failed: ${failed}` +
-    (errors && errors.length ? `\n\nErrors:\n- ${errors.join("\n- ")}` : "");
-  alert(msg);
-}
+// Regex for exactly 2 letters + 4 digits (e.g., AB1234)
+const PRODUCT_CODE_RE = /^[A-Za-z]{2}\d{4}$/;
 
-/** Convert a worksheet to an array of objects keyed by header row. */
 function sheetToObjects(workbook) {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-  return rows;
+  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
 }
 
-/** Coerce/clean a row from Excel into your API payload shape. */
 function normalizeRow(r) {
-  // accept different header letter-casing, spaces, underscores
   const pick = (key) => {
     const foundKey = Object.keys(r).find(
       (k) =>
@@ -53,8 +40,7 @@ function normalizeRow(r) {
     );
     return foundKey ? r[foundKey] : "";
   };
-
-  const obj = {
+  return {
     name: String(pick("name")).trim(),
     genericName: String(pick("genericName")).trim() || null,
     categoryId: pick("categoryId") === "" ? null : Number(pick("categoryId")),
@@ -72,10 +58,8 @@ function normalizeRow(r) {
     patientInstructions: String(pick("patientInstructions")).trim() || null,
     binLocation: String(pick("binLocation")).trim() || null,
   };
-  return obj;
 }
 
-/** Validate a normalized row; return null if OK, or an error string */
 function validateRow(obj, idx) {
   if (!obj.name) return `Row ${idx}: "name" is required`;
   if (Number.isNaN(obj.costPrice))
@@ -86,11 +70,9 @@ function validateRow(obj, idx) {
   return null;
 }
 
-/** Download an Excel template the user can fill. */
 function downloadTemplate() {
   const data = [
-    BULK_COLUMNS, // header
-    // sample line (can be removed by user)
+    BULK_COLUMNS,
     [
       "Paracetamol",
       "Acetaminophen",
@@ -123,36 +105,25 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-// Regex for exactly 2 letters + 4 digits
-const PRODUCT_CODE_RE = /^[A-Za-z]{2}\d{4}$/;
-
-// Ensure product code stays uppercase as user types
+// UI helpers
 function normalizeProductCode(value) {
   return (value || "").toUpperCase();
 }
-
-// 2 letters + 4 digits (e.g., AB1234)
 function genCode() {
   const letters =
     String.fromCharCode(65 + Math.floor(Math.random() * 26)) +
     String.fromCharCode(65 + Math.floor(Math.random() * 26));
-  const digits = String(Math.floor(1000 + Math.random() * 9000)); // 4 digits
+  const digits = String(Math.floor(1000 + Math.random() * 9000));
   return letters + digits;
 }
-
 function genBarcode() {
   return String(Math.floor(100000000000 + Math.random() * 900000000000));
 }
 
-// ✅ Helper to normalize roles (avoid "map is not a function" error)
 function getRolesArray(ctxRoles) {
-  // prefer roles from AuthContext if it's already an array
   if (Array.isArray(ctxRoles) && ctxRoles.length) return ctxRoles;
-
-  // check localStorage
   const rawRoles = localStorage.getItem("roles");
   const rawRole = localStorage.getItem("role");
-
   if (rawRoles) {
     try {
       const parsed = JSON.parse(rawRoles);
@@ -162,9 +133,7 @@ function getRolesArray(ctxRoles) {
       if (typeof rawRoles === "string") return [rawRoles];
     }
   }
-
   if (rawRole && typeof rawRole === "string") return [rawRole];
-
   return [];
 }
 
@@ -175,6 +144,17 @@ function tryParseError(text, fallback) {
   } catch {
     return text || fallback || "Request failed";
   }
+}
+
+// 🔔 alert helper for bulk results
+function alertReport(report, title = "Bulk upload") {
+  const { ok = 0, failed = 0, errors = [] } = report || {};
+  const msg =
+    `${title}\n` +
+    `Imported: ${ok}\n` +
+    `Failed: ${failed}` +
+    (errors.length ? `\n\nErrors:\n- ${errors.join("\n- ")}` : "");
+  alert(msg);
 }
 
 const emptyForm = {
@@ -197,19 +177,12 @@ const emptyForm = {
 };
 
 const ProductManagement = () => {
-  // 🔑 get token + roles from AuthContext
   const { token: ctxToken, roles: ctxRoles } = useContext(AuthContext);
-
-  // ✅ normalize token
   const token = useMemo(
     () => ctxToken || localStorage.getItem("token") || "",
     [ctxToken]
   );
-
-  // ✅ normalize roles into an array
   const rolesArr = useMemo(() => getRolesArray(ctxRoles), [ctxRoles]);
-
-  // ✅ compute admin flag safely
   const isAdmin = useMemo(
     () => rolesArr.some((r) => String(r).toLowerCase() === "admin"),
     [rolesArr]
@@ -223,7 +196,6 @@ const ProductManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // search + paging
   const [search, setSearch] = useState({
     category: "",
     code: "",
@@ -243,7 +215,6 @@ const ProductManagement = () => {
     errors: [],
   });
 
-  // Load categories + suppliers
   useEffect(() => {
     let aborted = false;
     async function loadRefs() {
@@ -274,7 +245,6 @@ const ProductManagement = () => {
     };
   }, [authHeaders]);
 
-  // Load products
   useEffect(() => {
     let aborted = false;
     async function loadProducts() {
@@ -438,11 +408,8 @@ const ProductManagement = () => {
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
-  const paginated = filtered.slice(
-    (pageSafe - 1) * pageSize,
-    pageSafe * pageSize
-  );
 
+  // ⬇️ Bulk upload with alert popups
   async function handleBulkFile(file) {
     setBulkReport({ ok: 0, failed: 0, errors: [] });
     if (!file) return;
@@ -464,11 +431,10 @@ const ProductManagement = () => {
         return;
       }
 
-      // Normalize + validate
       const payloads = [];
       const errors = [];
       rows.forEach((r, i) => {
-        const idx = i + 2; // +2 for header row
+        const idx = i + 2; // +2 because row 1 is header
         const obj = normalizeRow(r);
         const err = validateRow(obj, idx);
         if (err) errors.push(err);
@@ -482,7 +448,6 @@ const ProductManagement = () => {
         return;
       }
 
-      // Try server bulk endpoint
       let ok = 0,
         failed = 0,
         failMsgs = [];
@@ -495,18 +460,13 @@ const ProductManagement = () => {
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify(payloads),
         });
+        const txt = await res.text();
+        if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
 
-        const text = await res.text();
-
-        if (!res.ok) {
-          // bulk endpoint responded with an error → fall back to per-row
-          throw new Error(tryParseError(text, res.statusText));
-        }
-
-        // Expecting { ok, failed, errors[] } from backend
+        // expect { ok, failed, errors }
         let serverReport;
         try {
-          serverReport = JSON.parse(text);
+          serverReport = JSON.parse(txt);
         } catch {
           serverReport = {
             ok: 0,
@@ -514,11 +474,10 @@ const ProductManagement = () => {
             errors: ["Invalid server response"],
           };
         }
-
         setBulkReport(serverReport);
         alertReport(serverReport, "Bulk upload (server report)");
-      } catch (bulkErr) {
-        // Fall back: create one by one
+      } catch {
+        // fallback per-row
         for (let i = 0; i < payloads.length; i++) {
           try {
             const r = await fetch(singleUrl, {
@@ -534,7 +493,6 @@ const ProductManagement = () => {
             failMsgs.push(`Row ${i + 2}: ${err.message}`);
           }
         }
-
         const rep = { ok, failed, errors: failMsgs };
         setBulkReport(rep);
         alertReport(rep, "Bulk upload (fallback per-row)");
@@ -547,77 +505,12 @@ const ProductManagement = () => {
       alertReport(rep, "Bulk upload (unexpected error)");
     } finally {
       setBulkBusy(false);
-      await reloadProducts();
     }
   }
-=======
-import React from 'react';
-
-
-import { useState } from 'react';
-import logo from '../assets/logo.png';
-
-const categories = ['Pain Relief', 'Antibiotics', 'Allergy', 'Vitamins'];
-const suppliers = ['HealthCorp', 'MediSupply'];
-
-function generateUniqueCode() {
-  return 'P' + Math.floor(Math.random() * 1000000);
-}
-
-function generateBarcode() {
-  return Math.floor(100000000000 + Math.random() * 900000000000).toString();
-}
-
-const ProductManagement = () => {
-  const [form, setForm] = useState({
-    category: '',
-    name: '',
-    generic: '',
-    supplier: '',
-    stock: '',
-    price: '',
-    expire: '',
-    code: '',
-    barcode: '',
-    image: '',
-  });
-  const [products, setProducts] = useState([]);
-  const [search, setSearch] = useState({ category: '', code: '', name: '', generic: '' });
-  const [page, setPage] = useState(1);
-  const pageSize = 5;
-
-  const handleChange = e => {
-    const { name, value, files } = e.target;
-    setForm(f => ({ ...f, [name]: files ? URL.createObjectURL(files[0]) : value }));
-  };
-
-  const handleAutoCode = () => setForm(f => ({ ...f, code: generateUniqueCode() }));
-  const handleAutoBarcode = () => setForm(f => ({ ...f, barcode: generateBarcode() }));
-
-  const handleAdd = e => {
-    e.preventDefault();
-    if (!form.category || !form.name || !form.generic || !form.supplier || !form.stock || !form.price || !form.expire) return;
-    setProducts([
-      ...products,
-      { ...form, id: Date.now() }
-    ]);
-    setForm({ category: '', name: '', generic: '', supplier: '', stock: '', price: '', expire: '', code: '', barcode: '', image: '' });
-  };
-
-  const filtered = products.filter(p =>
-    (!search.category || p.category === search.category) &&
-    (!search.code || p.code.includes(search.code)) &&
-    (!search.name || p.name.toLowerCase().includes(search.name.toLowerCase())) &&
-    (!search.generic || p.generic.toLowerCase().includes(search.generic.toLowerCase()))
-  );
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const totalPages = Math.ceil(filtered.length / pageSize);
->>>>>>> parent of 88f596c2 (Product CRUD completed)
 
   return (
     <div style={{ padding: 24 }}>
       <h2>Product Management</h2>
-<<<<<<< HEAD
 
       <form
         onSubmit={onSubmit}
@@ -653,18 +546,6 @@ const ProductManagement = () => {
         <div
           style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
         >
-=======
-      {/* Add Product Form */}
-      <form onSubmit={handleAdd} style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 32, background: '#f5f5f5', padding: 20, borderRadius: 8 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Category</label>
-          <select name="category" value={form.category} onChange={handleChange} required style={{ padding: 8 }}>
-            <option value="">Select Category</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
->>>>>>> parent of 88f596c2 (Product CRUD completed)
           <label>Product Name</label>
           <input
             name="name"
@@ -674,7 +555,6 @@ const ProductManagement = () => {
             style={{ padding: 8 }}
           />
         </div>
-<<<<<<< HEAD
 
         <div
           style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
@@ -778,7 +658,7 @@ const ProductManagement = () => {
                 }))
               }
               placeholder="Auto-generate if empty"
-              pattern="[A-Za-z]{2}\d{4}" // HTML5 validation
+              pattern="[A-Za-z]{2}\d{4}"
               title="Use 2 letters followed by 4 digits, e.g., AB1234"
               style={{ padding: 8, flex: 1 }}
               required
@@ -916,53 +796,9 @@ const ProductManagement = () => {
               Cancel
             </button>
           )}
-=======
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Generic Name</label>
-          <input name="generic" value={form.generic} onChange={handleChange} required style={{ padding: 8 }} />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Supplier</label>
-          <select name="supplier" value={form.supplier} onChange={handleChange} required style={{ padding: 8 }}>
-            <option value="">Select Supplier</option>
-            {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
-          <label>Stock</label>
-          <input name="stock" type="number" value={form.stock} onChange={handleChange} required style={{ padding: 8 }} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
-          <label>Sell Price</label>
-          <input name="price" type="number" value={form.price} onChange={handleChange} required style={{ padding: 8 }} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Expiry Date</label>
-          <input name="expire" type="date" value={form.expire} onChange={handleChange} required style={{ padding: 8 }} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Product Code</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input name="code" value={form.code} onChange={handleChange} style={{ padding: 8, flex: 1 }} placeholder="Auto-generate if empty" />
-            <button type="button" onClick={handleAutoCode}>Auto</button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Barcode</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input name="barcode" value={form.barcode} onChange={handleChange} style={{ padding: 8, flex: 1 }} placeholder="Auto-generate if empty" />
-            <button type="button" onClick={handleAutoBarcode}>Auto</button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-          <label>Product Image</label>
-          <input name="image" type="file" accept="image/*" onChange={handleChange} style={{ padding: 8 }} />
->>>>>>> parent of 88f596c2 (Product CRUD completed)
-        </div>
-  <button type="submit" style={{ marginTop: 24, padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Add Product</button>
       </form>
 
-<<<<<<< HEAD
       {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
       {loading && <div>Loading…</div>}
 
@@ -993,7 +829,7 @@ const ProductManagement = () => {
         {bulkBusy && <span>Uploading…</span>}
       </div>
 
-      {/* Bulk report */}
+      {/* Bulk report (also shown in alert) */}
       {(bulkReport.ok || bulkReport.failed || bulkReport.errors.length > 0) && (
         <div style={{ marginBottom: 12 }}>
           <div>
@@ -1045,7 +881,6 @@ const ProductManagement = () => {
         />
       </div>
 
-      
       {/* List */}
       <table
         style={{
@@ -1185,61 +1020,6 @@ const ProductManagement = () => {
         >
           Next
         </button>
-=======
-      {/* Search & Filter */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-        <input placeholder="Search by Category" value={search.category} onChange={e => setSearch(s => ({ ...s, category: e.target.value }))} style={{ padding: 8, minWidth: 140 }} />
-        <input placeholder="Search by Product Code" value={search.code} onChange={e => setSearch(s => ({ ...s, code: e.target.value }))} style={{ padding: 8, minWidth: 140 }} />
-        <input placeholder="Search by Name" value={search.name} onChange={e => setSearch(s => ({ ...s, name: e.target.value }))} style={{ padding: 8, minWidth: 140 }} />
-        <input placeholder="Search by Generic Name" value={search.generic} onChange={e => setSearch(s => ({ ...s, generic: e.target.value }))} style={{ padding: 8, minWidth: 140 }} />
-      </div>
-
-      {/* Product List with Pagination */}
-      <div style={{ marginBottom: 24 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fafafa' }}>
-          <thead>
-            <tr style={{ background: '#f0f0f0' }}>
-              <th>Image</th>
-              <th>Product Name</th>
-              <th>Generic Name</th>
-              <th>Category</th>
-              <th>Supplier</th>
-              <th>Stock</th>
-              <th>Sell Price</th>
-              <th>Expiry Date</th>
-              <th>Product Code</th>
-              <th>Barcode</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map(p => (
-              <tr key={p.id}>
-                <td><img src={p.image || logo} alt="Product" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4 }} /></td>
-                <td>{p.name}</td>
-                <td>{p.generic}</td>
-                <td>{p.category}</td>
-                <td>{p.supplier}</td>
-                <td>{p.stock}</td>
-                <td>{p.price}</td>
-                <td>{p.expire}</td>
-                <td>{p.code}</td>
-                <td>{p.barcode}</td>
-                <td>
-                  <button style={{ background: '#ffe066', color: '#333', border: 'none', borderRadius: 4, padding: '7px 14px' }}>Edit</button>
-                  <button style={{ marginLeft: 8, background: '#ff6b6b', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px' }}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {/* Pagination Controls */}
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-          <span>Page {page} of {totalPages || 1}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}>Next</button>
-        </div>
->>>>>>> parent of 88f596c2 (Product CRUD completed)
       </div>
     </div>
   );

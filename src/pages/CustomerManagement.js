@@ -1,57 +1,295 @@
-import React from 'react';
+// src/pages/CustomerManagement.js
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { AuthContext } from '../components/AuthContext';
 
-const mockCustomers = [
-  { id: 1, name: "John Doe", phone: "0771234567", email: "john@example.com", history: 5 },
-  { id: 2, name: "Jane Smith", phone: "0779876543", email: "jane@example.com", history: 2 },
-];
+const API_BASE = process.env.REACT_APP_API_BASE || '';
 
-const CustomerManagement = () => (
-  <div style={{ padding: 24 }}>
-    <h2>Customer Management</h2>
-    <form style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 32, background: '#f5f5f5', padding: 20, borderRadius: 8 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-        <label>Name</label>
-        <input type="text" placeholder="Enter customer name" style={{ padding: 8 }} />
+const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '' };
+
+const CustomerManagement = () => {
+  const { token: ctxToken } = useContext(AuthContext);
+
+  // normalize token (AuthContext or localStorage)
+  const token = useMemo(() => ctxToken || localStorage.getItem('token') || '', [ctxToken]);
+  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+
+  const [list, setList] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  // ---- helpers --------------------------------------------------------------
+  const tryParseError = (txt, fallback) => {
+    try {
+      const j = JSON.parse(txt);
+      return j?.message || j?.error || fallback || 'Request failed';
+    } catch {
+      return txt || fallback || 'Request failed';
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const reset = () => setForm(emptyForm);
+
+  const loadCustomers = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/customers`, { headers: { ...authHeaders } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to load customers');
+      setList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authHeaders]);
+
+  // ---- CRUD -----------------------------------------------------------------
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!form.name.trim()) {
+      setError('Name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        phone: form.phone?.trim() || null,
+        email: form.email?.trim() || null,
+        address: form.address?.trim() || null,
+      };
+
+      const isUpdate = !!form.customerId;
+      const url = isUpdate
+        ? `${API_BASE}/api/customers/${form.customerId}`
+        : `${API_BASE}/api/customers`;
+      const method = isUpdate ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
+
+      await loadCustomers();
+      reset();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onEdit = (c) => {
+    setForm({
+      customerId: c.customerId,
+      name: c.name || '',
+      phone: c.phone || '',
+      email: c.email || '',
+      address: c.address || '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const onDelete = async (id) => {
+    if (!window.confirm(`Delete customer #${id}?`)) return;
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders },
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
+      // server returns "Customer Deleted {id}"
+      await loadCustomers();
+      if (form.customerId === id) reset();
+      alert(text);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const filtered = list.filter((c) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div style={{ padding: 24 }}>
+      <h2>Customer Management</h2>
+
+      {/* Form */}
+      <form
+        onSubmit={onSubmit}
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 24,
+          marginBottom: 24,
+          background: '#f5f5f5',
+          padding: 20,
+          borderRadius: 8,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 200 }}>
+          <label>Name</label>
+          <input
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder="Enter customer name"
+            required
+            style={{ padding: 8 }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
+          <label>Phone</label>
+          <input
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="Enter phone number"
+            style={{ padding: 8 }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
+          <label>Email</label>
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            placeholder="Enter email"
+            style={{ padding: 8 }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 320, flex: 1 }}>
+          <label>Address</label>
+          <input
+            name="address"
+            value={form.address}
+            onChange={handleChange}
+            placeholder="Enter address"
+            style={{ padding: 8 }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <button
+            type="submit"
+            disabled={saving}
+            style={{
+              marginTop: 24,
+              padding: '7px 18px',
+              fontSize: 15,
+              background: '#43ea7a',
+              color: '#000',
+              border: '1px solid #0c0',
+              borderRadius: 4,
+            }}
+          >
+            {form.customerId ? (saving ? 'Updating…' : 'Update Customer') : (saving ? 'Adding…' : 'Add Customer')}
+          </button>
+          {form.customerId && (
+            <button
+              type="button"
+              onClick={reset}
+              disabled={saving}
+              style={{ marginTop: 24, padding: '7px 18px', background: '#eee', border: '1px solid #ccc', borderRadius: 4 }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* Errors / Loading */}
+      {error && <div style={{ color: 'red', marginBottom: 12 }}>{error}</div>}
+      {loading && <div>Loading…</div>}
+
+      {/* Search */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+        <input
+          placeholder="Search name / phone / email / address"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ padding: 8, minWidth: 260 }}
+        />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-        <label>Phone</label>
-        <input type="text" placeholder="Enter phone number" style={{ padding: 8 }} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-        <label>Email</label>
-        <input type="email" placeholder="Enter email" style={{ padding: 8 }} />
-      </div>
-  <button type="submit" style={{ marginTop: 24, padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Add Customer</button>
-    </form>
-    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24 }}>
-      <thead>
-        <tr style={{ background: '#f0f0f0' }}>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>Name</th>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>Phone</th>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>Email</th>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>Purchase History</th>
-          <th style={{ padding: 10, border: '1px solid #ccc' }}>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {mockCustomers.map(c => (
-          <tr key={c.id}>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.id}</td>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.name}</td>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.phone}</td>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.email}</td>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.history} orders</td>
-            <td style={{ padding: 10, border: '1px solid #ccc' }}>
-              <button style={{ background: '#ffe066', color: '#333', border: 'none', borderRadius: 4, padding: '7px 14px' }}>Edit</button>
-              <button style={{ marginLeft: 8, background: '#ff6b6b', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px' }}>Delete</button>
-            </td>
+
+      {/* Table */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fafafa', marginTop: 8 }}>
+        <thead>
+          <tr style={{ background: '#f0f0f0' }}>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Name</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Phone</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Email</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Address</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  <button style={{ marginTop: 20, padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Add Customer</button>
-  </div>
-);
+        </thead>
+        <tbody>
+          {filtered.map((c) => (
+            <tr key={c.customerId}>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.customerId}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.name}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.phone || '-'}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.email || '-'}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.address || '-'}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>
+                <button
+                  onClick={() => onEdit(c)}
+                  style={{ background: '#ffe066', color: '#333', border: 'none', borderRadius: 4, padding: '7px 14px' }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(c.customerId)}
+                  style={{ marginLeft: 8, background: '#ff6b6b', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px' }}
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+          {filtered.length === 0 && (
+            <tr>
+              <td colSpan={6} style={{ padding: 12, textAlign: 'center' }}>
+                No customers
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 export default CustomerManagement;

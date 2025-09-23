@@ -17,6 +17,8 @@ import BillingReport from './pages/reports/BillingReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
 import PurchaseOrder from './pages/PurchaseOrder';
+import PurchaseOrderDetails from './pages/PurchaseOrderDetails';
+import PurchaseOrderList from "./pages/PurchaseOrderList";
 import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Landing from './pages/Landing';
@@ -52,6 +54,8 @@ const AppContent = () => {
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alert" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
+            <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
+            <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
           </Routes>
         </div>
         {!isAuthPage && <Footer />}

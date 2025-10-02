@@ -1,179 +1,514 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-const suppliers = [
-  { id: 1, name: 'HealthCorp' },
-  { id: 2, name: 'MediSupply' },
-];
+const API_BASE = process.env.REACT_APP_API_BASE || "";
 
-const products = [
-  { id: 1, name: 'Paracetamol' },
-  { id: 2, name: 'Ibuprofen' },
-];
+function useDebounced(value, delay = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return v;
+}
 
 const PurchaseOrder = () => {
-  const [supplier, setSupplier] = useState('');
-  const [date, setDate] = useState('');
-  const [poNumber, setPoNumber] = useState('');
-  const [orderNumber, setOrderNumber] = useState('');
-  const [product, setProduct] = useState('');
-  const [costPrice, setCostPrice] = useState('');
-  const [sellPrice, setSellPrice] = useState('');
-  const [stock, setStock] = useState('');
-  const [barcode, setBarcode] = useState('');
-  const [discount, setDiscount] = useState('');
-  const [discountAmount, setDiscountAmount] = useState('');
-  const [expire, setExpire] = useState('');
-  const [productList, setProductList] = useState([]);
+  const navigate = useNavigate();
 
-  const handleAddProduct = () => {
-    if (!product || !costPrice || !sellPrice || !stock || !expire) return;
-    setProductList([
-      ...productList,
-      {
-        id: Date.now(),
-        product,
-        costPrice,
-        sellPrice,
-        stock,
-        barcode,
-        discount,
-        discountAmount,
-        expire,
-      },
-    ]);
-    setProduct('');
-    setCostPrice('');
-    setSellPrice('');
-    setStock('');
-    setBarcode('');
-    setDiscount('');
-    setDiscountAmount('');
-    setExpire('');
-  };
+  // Header
+  const [supplierId, setSupplierId] = useState("");
+  const [neededDate, setNeededDate] = useState("");
 
-  const handleDeleteProduct = (id) => {
-    setProductList(productList.filter((p) => p.id !== id));
-  };
+  // Suppliers
+  const [suppliers, setSuppliers] = useState([]);
+  const [loadingSup, setLoadingSup] = useState(false);
+  const [err, setErr] = useState("");
 
-  const handleSubmit = (e) => {
+  // Product search
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounced(query, 300);
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  // Selected product + quantity
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [qty, setQty] = useState("");
+
+  // Items in this PO
+  const [items, setItems] = useState([]);
+
+  // Auth headers
+  const token = localStorage.getItem("token") || "";
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // --------- ROLE GATE (reworked)
+  function readJwtRoles(jwtToken) {
+    try {
+      if (!jwtToken || !jwtToken.includes(".")) return [];
+      const base64 = jwtToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = atob(base64);
+      const payload = JSON.parse(json);
+      const raw =
+        payload.roles ??
+        payload.authorities ??
+        payload.scopes ??
+        payload.scope ??
+        payload.role ??
+        [];
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === "string") return raw.split(/[ ,;]+/);
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  function normalizeRole(r) {
+    return String(r)
+      .toLowerCase()
+      .replace(/^role_/, "")      // ROLE_ADMIN -> admin
+      .replace(/^super_/, "admin"); // SUPER_ADMIN -> admin
+  }
+
+  function readLocalRoles() {
+    const rolesStr = localStorage.getItem("roles") || "";
+    let list = [];
+    try {
+      const parsed = JSON.parse(rolesStr);
+      if (Array.isArray(parsed)) list = parsed;
+      else if (parsed) list = [parsed];
+    } catch {
+      list = rolesStr.split(/[ ,;]+/).filter(Boolean);
+    }
+    return list;
+  }
+
+  function getAllRoles() {
+    const fromStorage = readLocalRoles();
+    const fromJwt = readJwtRoles(token);
+    const all = [...fromStorage, ...fromJwt].map(normalizeRole);
+    return Array.from(new Set(all)); // de-dupe
+  }
+
+  const isAllowed = useMemo(() => {
+    const roles = getAllRoles();
+    const allowedSet = new Set(["admin"]);
+    return roles.some((r) => allowedSet.has(r));
+    // re-evaluate when token or local roles change
+  }, [token, localStorage.getItem("roles")]);
+  // --------- END ROLE GATE
+
+  // --- Load suppliers
+  useEffect(() => {
+    let abort = false;
+    async function load() {
+      setLoadingSup(true);
+      setErr("");
+      try {
+        const res = await fetch(`${API_BASE}/api/suppliers`, {
+          headers: { ...authHeaders },
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data?.message || "Failed to load suppliers");
+        if (!abort) setSuppliers(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!abort) setErr(e.message);
+      } finally {
+        if (!abort) setLoadingSup(false);
+      }
+    }
+    load();
+    return () => {
+      abort = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Product search (by name/generic/productCode on backend)
+  useEffect(() => {
+    let abort = false;
+    async function search() {
+      if (!debouncedQuery || debouncedQuery.trim().length < 2) {
+        setResults([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/products/search?q=${encodeURIComponent(debouncedQuery)}`,
+          { headers: { ...authHeaders } }
+        );
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data?.message || "Search failed");
+        if (!abort) setResults(Array.isArray(data) ? data : []);
+      } catch {
+        if (!abort) setResults([]);
+      } finally {
+        if (!abort) setSearching(false);
+      }
+    }
+    search();
+    return () => {
+      abort = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery]);
+
+  const canAdd = useMemo(
+    () => Boolean(selectedProduct && qty && Number(qty) > 0),
+    [selectedProduct, qty]
+  );
+
+  function addItem() {
+    if (!canAdd) return;
+    const exists = items.find((i) => i.productId === selectedProduct.productId);
+    if (exists) {
+      setItems((list) =>
+        list.map((i) =>
+          i.productId === selectedProduct.productId
+            ? { ...i, quantity: Number(i.quantity) + Number(qty) }
+            : i
+        )
+      );
+    } else {
+      setItems((list) => [
+        ...list,
+        {
+          productId: selectedProduct.productId,
+          productName: selectedProduct.name,
+          productCode: selectedProduct.productCode || "-",
+          quantity: Number(qty),
+        },
+      ]);
+    }
+    setSelectedProduct(null);
+    setQuery("");
+    setQty("");
+    setResults([]);
+  }
+
+  function removeItem(pid) {
+    setItems((list) => list.filter((i) => i.productId !== pid));
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
-    // Save purchase order logic here
-    alert('Purchase Order Submitted!');
-  };
+
+    // Block not allowed
+    if (!isAllowed) {
+      setErr("Only Admin can create a Purchase Order");
+      return;
+    }
+
+    if (!supplierId) return alert("Please select a supplier");
+    if (items.length === 0) return alert("Please add at least one product");
+
+    const supName =
+      suppliers.find((s) => String(s.supplierId) === String(supplierId))?.name || "";
+    const confirm = window.confirm(
+      `Create Purchase Order?\n\nSupplier: ${supName}\nNeeded Date: ${neededDate}\nItems: ${items.length}`
+    );
+    if (!confirm) return;
+
+    try {
+      const payload = {
+        supplierId: Number(supplierId),
+        neededDate,
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+        })),
+      };
+
+      const res = await fetch(`${API_BASE}/api/purchase-orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "Failed to create purchase order");
+
+      navigate(`/purchase-order/${data.id}`, {
+        state: { po: data },
+        replace: true,
+      });
+    } catch (e2) {
+      setErr(e2.message || "Failed to submit purchase order");
+    }
+  }
+
+  function updateQty(productId, value) {
+    const n = Math.max(1, Number(value) || 1); // force ≥ 1
+    setItems((list) =>
+      list.map((it) => (it.productId === productId ? { ...it, quantity: n } : it))
+    );
+  }
+
+  async function safeJson(res) {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { message: text };
+    }
+  }
 
   return (
     <div style={{ padding: 24 }}>
-      <h2>Create Purchase Order</h2>
-      <form onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: 24 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-            <label style={{ marginBottom: 6 }}>Supplier</label>
-            <select value={supplier} onChange={e => setSupplier(e.target.value)} required style={{ padding: 8, textAlign: 'left' }}>
-              <option value="">Select Supplier</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-            <label style={{ marginBottom: 6 }}>Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} required style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-            <label style={{ marginBottom: 6 }}>PO Number</label>
-            <input type="text" value={poNumber} onChange={e => setPoNumber(e.target.value)} placeholder="Auto-generated or enter manually" style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-            <label style={{ marginBottom: 6 }}>Order Number</label>
-            <input type="text" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-        </div>
-        <hr />
-        <h3 style={{ marginTop: 32 }}>Add Products</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: 24 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
-            <label style={{ marginBottom: 6 }}>Product</label>
-            <select value={product} onChange={e => setProduct(e.target.value)} style={{ padding: 8, textAlign: 'left' }}>
-              <option value="">Select Product</option>
-              {products.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
-            <label style={{ marginBottom: 6 }}>Cost Price</label>
-            <input type="number" value={costPrice} onChange={e => setCostPrice(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
-            <label style={{ marginBottom: 6 }}>Sell Price</label>
-            <input type="number" value={sellPrice} onChange={e => setSellPrice(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 100 }}>
-            <label style={{ marginBottom: 6 }}>Stock</label>
-            <input type="number" value={stock} onChange={e => setStock(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 140 }}>
-            <label style={{ marginBottom: 6 }}>Barcode</label>
-            <input type="text" value={barcode} onChange={e => setBarcode(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 140 }}>
-            <label style={{ marginBottom: 6 }}>Expiry Date</label>
-            <input type="date" value={expire} onChange={e => setExpire(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 100 }}>
-            <label style={{ marginBottom: 6 }}>Discount (%)</label>
-            <input type="number" value={discount} onChange={e => setDiscount(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 120 }}>
-            <label style={{ marginBottom: 6 }}>Discount Amount</label>
-            <input type="number" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} style={{ padding: 8, textAlign: 'left' }} />
-          </div>
-        </div>
-  {/* Only keep the green styled Add Product button below */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <h2>Create Purchase Order</h2>
         <button
           type="button"
-          onClick={handleAddProduct}
-          style={{ marginTop: 8, marginBottom: 16, padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}
-          disabled={!product || !costPrice || !sellPrice || !stock}
+          onClick={() => navigate("/purchase-orders")}
+          style={{
+            padding: "7px 14px",
+            borderRadius: 6,
+            border: "1px solid #ccc",
+            background: "#fff",
+          }}
         >
-          Add Product
+          View All Purchase Orders
         </button>
+      </div>
+
+      {err && <div style={{ color: "crimson", marginBottom: 12 }}>{err}</div>}
+
+      {/* Banner for users who are not admin/manager */}
+      {!isAllowed && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 12,
+            border: "1px solid #f0c36d",
+            background: "#fff8e5",
+            borderRadius: 6,
+            color: "#7a5d00",
+          }}
+        >
+          Only Admin can create a Purchase Order
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 24,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 240 }}>
+            <label style={{ marginBottom: 6 }}>Supplier *</label>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              required
+              disabled={loadingSup || !isAllowed}
+              style={{ padding: 8 }}
+            >
+              <option value="">Select Supplier</option>
+              {suppliers.map((s) => (
+                <option key={s.supplierId} value={s.supplierId}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 220 }}>
+            <label style={{ marginBottom: 6 }}>When Stock Needed</label>
+            <input
+              type="date"
+              value={neededDate}
+              onChange={(e) => setNeededDate(e.target.value)}
+              style={{ padding: 8 }}
+              disabled={!isAllowed}
+            />
+          </div>
+        </div>
+
         <hr />
-        <h3 style={{ marginTop: 32 }}>Products Added</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
+
+        {/* Product search + add */}
+        <h3 style={{ marginTop: 24 }}>Add Products</h3>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 16,
+            alignItems: "flex-start",
+            marginTop: 8,
+          }}
+        >
+          <div style={{ minWidth: 360, position: "relative" }}>
+            <label style={{ marginBottom: 6, display: "block" }}>
+              Search by name / generic / code
+            </label>
+            <input
+              placeholder="Type at least 2 characters…"
+              value={selectedProduct ? selectedProduct.name : query}
+              onChange={(e) => {
+                setSelectedProduct(null);
+                setQuery(e.target.value);
+              }}
+              style={{ padding: 8, width: "100%" }}
+              disabled={!isAllowed}
+            />
+            {!selectedProduct && results.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  zIndex: 10,
+                  background: "#fff",
+                  border: "1px solid #ddd",
+                  borderRadius: 6,
+                  width: "100%",
+                  maxHeight: 240,
+                  overflowY: "auto",
+                  marginTop: 4,
+                }}
+              >
+                {results.map((r) => (
+                  <div
+                    key={r.productId}
+                    onClick={() => {
+                      if (!isAllowed) return;
+                      setSelectedProduct(r);
+                      setResults([]);
+                    }}
+                    style={{
+                      padding: 8,
+                      cursor: isAllowed ? "pointer" : "not-allowed",
+                      opacity: isAllowed ? 1 : 0.6,
+                    }}
+                    title={`${r.name} (${r.productCode || "-"})`}
+                  >
+                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      {r.genericName || "-"} • Code: {r.productCode || "-"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {searching && (
+              <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>Searching…</div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 140 }}>
+            <label style={{ marginBottom: 6 }}>Quantity *</label>
+            <input
+              type="number"
+              min="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              style={{ padding: 8 }}
+              disabled={!isAllowed}
+            />
+          </div>
+
+          <div style={{ alignSelf: "flex-end" }}>
+            <button
+              type="button"
+              onClick={addItem}
+              disabled={!canAdd || !isAllowed}
+              style={{
+                padding: "8px 16px",
+                background: "#43ea7a",
+                color: "#000",
+                border: "1px solid #0c0",
+                borderRadius: 6,
+              }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Items table */}
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            marginTop: 16,
+            background: "#fafafa",
+          }}
+        >
           <thead>
-            <tr style={{ background: '#f0f0f0' }}>
-              <th>Product</th>
-              <th>Cost Price</th>
-              <th>Sell Price</th>
-              <th>Stock</th>
-              <th>Barcode</th>
-              <th>Expiry Date</th>
-              <th>Discount (%)</th>
-              <th>Discount Amount</th>
-              <th>Actions</th>
+            <tr style={{ background: "#f0f0f0" }}>
+              <th style={{ padding: 8, border: "1px solid #ddd" }}>Product</th>
+              <th style={{ padding: 8, border: "1px solid #ddd" }}>Code</th>
+              <th style={{ padding: 8, border: "1px solid #ddd" }}>Quantity</th>
+              <th style={{ padding: 8, border: "1px solid #ddd" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {productList.map(p => (
-              <tr key={p.id}>
-                <td>{p.product}</td>
-                <td>{p.costPrice}</td>
-                <td>{p.sellPrice}</td>
-                <td>{p.stock}</td>
-                <td>{p.barcode}</td>
-                <td>{p.expire}</td>
-                <td>{p.discount}</td>
-                <td>{p.discountAmount}</td>
-                <td>
-                  {/* Edit functionality can be added here */}
-                  <button onClick={() => handleDeleteProduct(p.id)} style={{ background: '#ff6b6b', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 14px' }}>Delete</button>
+            {items.map((i) => (
+              <tr key={i.productId}>
+                <td style={{ padding: 8, border: "1px solid #eee" }}>{i.productName}</td>
+                <td style={{ padding: 8, border: "1px solid #eee" }}>{i.productCode}</td>
+                <td style={{ padding: 8, border: "1px solid #eee", width: 140 }}>
+                  <input
+                    type="number"
+                    min="1"
+                    value={i.quantity}
+                    onChange={(e) => updateQty(i.productId, e.target.value)}
+                    onBlur={(e) => updateQty(i.productId, e.target.value)}
+                    style={{ width: "100%", padding: 0 }}
+                    disabled={!isAllowed}
+                  />
+                </td>
+                <td style={{ padding: 8, border: "1px solid #eee" }}>
+                  <button
+                    onClick={() => removeItem(i.productId)}
+                    style={{
+                      background: "#ff6b6b",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "6px 12px",
+                    }}
+                    disabled={!isAllowed}
+                  >
+                    Remove
+                  </button>
                 </td>
               </tr>
             ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ padding: 12, textAlign: "center" }}>
+                  No products added
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-  <button type="submit" style={{ marginTop: 24, padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Submit Purchase Order</button>
+
+        <button
+          type="submit"
+          style={{
+            marginTop: 24,
+            padding: "8px 18px",
+            background: "#43ea7a",
+            color: "#000",
+            border: "1px solid #0c0",
+            borderRadius: 6,
+          }}
+          disabled={!isAllowed}
+        >
+          Submit Purchase Order
+        </button>
       </form>
     </div>
   );

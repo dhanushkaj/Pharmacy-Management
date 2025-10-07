@@ -4,8 +4,9 @@ import logo from '../assets/logo.png';
 import { AuthContext } from './AuthContext';
 
 const Sidebar = () => {
-  const { role } = useContext(AuthContext);
-  const [reportsOpen, setReportsOpen] = useState(false);
+  const role = localStorage.getItem('role') 
+  const [reportsOpen, setReportsOpen] = useState(false)
+  console.log('User role:', role);
   return (
     <aside className="sidebar" style={{
       width: 220,

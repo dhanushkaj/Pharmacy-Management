@@ -215,6 +215,32 @@ const ProductManagement = () => {
     errors: [],
   });
 
+  // Inventory modal state
+  const [inventoryOpenFor, setInventoryOpenFor] = useState(null);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState("");
+
+  // Inventory form & saving
+  const [inventoryForm, setInventoryForm] = useState({
+    price: "",
+    costPrice: "",
+    stock: "",
+    batchNo: "",
+  });
+  const [inventorySaving, setInventorySaving] = useState(false);
+
+  // Inventory edit state: track which inventory id is being edited and a local draft
+  const [editingInventoryId, setEditingInventoryId] = useState(null);
+  const [editingInventoryDraft, setEditingInventoryDraft] = useState({
+    price: "",
+    costPrice: "",
+    stock: "",
+    batchNo: "",
+  });
+  const [inventoryActionError, setInventoryActionError] = useState("");
+
+
   useEffect(() => {
     let aborted = false;
     async function loadRefs() {
@@ -316,10 +342,6 @@ const ProductManagement = () => {
   const onSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!form.name || !form.price || !form.costPrice) {
-      setError("Name, Cost Price and Sell Price are required");
-      return;
-    }
     setSaving(true);
     try {
       const payload = {
@@ -329,9 +351,6 @@ const ProductManagement = () => {
         supplierId: form.supplierId ? Number(form.supplierId) : null,
         productCode: form.productCode?.trim() || null,
         barcode: form.barcode?.trim() || null,
-        costPrice: Number(form.costPrice),
-        price: Number(form.price),
-        stock: form.stock === "" ? 0 : Number(form.stock),
         minStock: form.minStock === "" ? null : Number(form.minStock),
         maxStock: form.maxStock === "" ? null : Number(form.maxStock),
         maxDiscount: form.maxDiscount === "" ? null : Number(form.maxDiscount),
@@ -357,9 +376,9 @@ const ProductManagement = () => {
       supplierId: p.supplierId || "",
       name: p.name || "",
       genericName: p.genericName || "",
-      stock: p.stock ?? "",
-      price: p.price ?? "",
-      costPrice: p.costPrice ?? "",
+      stock: p.totalStock ?? "",
+      price: p.lastPrice ?? "",
+      costPrice: p.lastCostPrice ?? "",
       expiryDate: p.expiryDate || "",
       productCode: p.productCode || "",
       barcode: p.barcode || "",
@@ -381,13 +400,178 @@ const ProductManagement = () => {
         headers: { ...authHeaders },
       });
       const text = await res.text();
-      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
+      if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
       setList((prev) => prev.filter((x) => x.productId !== id));
       if (form.productId === id) reset();
     } catch (e2) {
       setError(e2.message);
     }
   };
+  // ---------- Inventory APIs: fetch, create, update, delete ----------
+
+  // Fetch inventory buckets for a product (optional endpoint)
+  async function fetchInventory(productId) {
+    setInventoryLoading(true);
+    setInventoryError("");
+    setInventoryItems([]);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/products/${productId}/inventory`,
+        {
+          headers: { ...authHeaders },
+        }
+      );
+      const txt = await res.text();
+      if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
+      const data = JSON.parse(txt);
+      setInventoryItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setInventoryError(err.message || "Failed to load inventory");
+    } finally {
+      setInventoryLoading(false);
+    }
+  }
+
+  // Add a new inventory bucket (or increment existing bucket if same price)
+  async function addInventoryBucket(productId) {
+    setInventorySaving(true);
+    setInventoryError("");
+    try {
+      // validation
+      if (!inventoryForm.price || isNaN(Number(inventoryForm.price))) {
+        throw new Error("Price is required and must be a number");
+      }
+      if (inventoryForm.stock !== "" && isNaN(Number(inventoryForm.stock))) {
+        throw new Error("Stock must be a number");
+      }
+      const payload = {
+        price: Number(inventoryForm.price),
+        costPrice:
+          inventoryForm.costPrice === ""
+            ? null
+            : Number(inventoryForm.costPrice),
+        stock: inventoryForm.stock === "" ? 0 : Number(inventoryForm.stock),
+        batchNo: inventoryForm.batchNo || null,
+      };
+
+      const res = await fetch(
+        `${API_BASE}/api/products/${productId}/inventory`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const txt = await res.text();
+      if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
+
+      // refresh inventory and products to update totalStock/lastPrice
+      await fetchInventory(productId);
+      await reloadProducts();
+
+      // clear form
+      setInventoryForm({ price: "", costPrice: "", stock: "", batchNo: "" });
+    } catch (err) {
+      setInventoryError(err.message || "Failed to add inventory bucket");
+      throw err;
+    } finally {
+      setInventorySaving(false);
+    }
+  }
+
+  // update inventory bucket (PUT)
+  async function updateInventoryBucket(productId, inventoryId, draft) {
+    setInventoryActionError("");
+    try {
+      // basic validation
+      if (!draft.price || isNaN(Number(draft.price)))
+        throw new Error("Price required and must be a number");
+      if (draft.stock !== "" && isNaN(Number(draft.stock)))
+        throw new Error("Stock must be a number");
+      const payload = {
+        price: Number(draft.price),
+        costPrice: draft.costPrice === "" ? null : Number(draft.costPrice),
+        stock: draft.stock === "" ? 0 : Number(draft.stock),
+        batchNo: draft.batchNo || null,
+      };
+      const res = await fetch(
+        `${API_BASE}/api/products/${productId}/inventory/${inventoryId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify(payload),
+        }
+      );
+      const txt = await res.text();
+      if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
+      // refresh
+      await fetchInventory(productId);
+      await reloadProducts();
+      setEditingInventoryId(null);
+      setEditingInventoryDraft({
+        price: "",
+        costPrice: "",
+        stock: "",
+        batchNo: "",
+      });
+    } catch (err) {
+      setInventoryActionError(err.message || "Failed to update inventory");
+      throw err;
+    }
+  }
+
+  // delete inventory bucket
+  async function deleteInventoryBucket(productId, inventoryId) {
+    if (
+      !window.confirm(
+        "Delete this inventory bucket? This action cannot be undone."
+      )
+    )
+      return;
+    setInventoryActionError("");
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/products/${productId}/inventory/${inventoryId}`,
+        {
+          method: "DELETE",
+          headers: { ...authHeaders },
+        }
+      );
+      const txt = await res.text();
+      if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
+      await fetchInventory(productId);
+      await reloadProducts();
+    } catch (err) {
+      setInventoryActionError(err.message || "Failed to delete inventory");
+    }
+  }
+
+  // Open inventory modal and prefill form with last price/cost
+  function openInventoryModal(productId, product = null) {
+    setInventoryOpenFor(productId);
+    setInventoryItems([]);
+    setInventoryError("");
+    // prefill form with product's last known prices if provided
+    if (product) {
+      setInventoryForm({
+        price: product.lastPrice ?? "",
+        costPrice: product.lastCostPrice ?? "",
+        stock: "",
+        batchNo: "",
+      });
+    } else {
+      setInventoryForm({ price: "", costPrice: "", stock: "", batchNo: "" });
+    }
+    fetchInventory(productId);
+  }
+
+  function closeInventoryModal() {
+    setInventoryOpenFor(null);
+    setInventoryItems([]);
+    setInventoryError("");
+    setInventoryForm({ price: "", costPrice: "", stock: "", batchNo: "" });
+  }
 
   const filtered = list.filter(
     (p) =>
@@ -463,7 +647,6 @@ const ProductManagement = () => {
         const txt = await res.text();
         if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
 
-        // expect { ok, failed, errors }
         let serverReport;
         try {
           serverReport = JSON.parse(txt);
@@ -585,49 +768,6 @@ const ProductManagement = () => {
               </option>
             ))}
           </select>
-        </div>
-
-        <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 120 }}
-        >
-          <label>Stock</label>
-          <input
-            type="number"
-            name="stock"
-            value={form.stock}
-            onChange={handleChange}
-            style={{ padding: 8 }}
-          />
-        </div>
-
-        <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 140 }}
-        >
-          <label>Cost Price</label>
-          <input
-            type="number"
-            step="0.01"
-            name="costPrice"
-            value={form.costPrice}
-            onChange={handleChange}
-            required
-            style={{ padding: 8 }}
-          />
-        </div>
-
-        <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 140 }}
-        >
-          <label>Sell Price</label>
-          <input
-            type="number"
-            step="0.01"
-            name="price"
-            value={form.price}
-            onChange={handleChange}
-            required
-            style={{ padding: 8 }}
-          />
         </div>
 
         <div
@@ -829,7 +969,6 @@ const ProductManagement = () => {
         {bulkBusy && <span>Uploading…</span>}
       </div>
 
-      {/* Bulk report (also shown in alert) */}
       {(bulkReport.ok || bulkReport.failed || bulkReport.errors.length > 0) && (
         <div style={{ marginBottom: 12 }}>
           <div>
@@ -896,8 +1035,6 @@ const ProductManagement = () => {
             <th>Category</th>
             <th>Supplier</th>
             <th>Stock</th>
-            <th>Cost</th>
-            <th>Sell</th>
             <th>Expiry</th>
             <th>Product Code</th>
             <th>Barcode</th>
@@ -926,13 +1063,7 @@ const ProductManagement = () => {
                   {p.supplierName || "-"}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
-                  {p.stock ?? 0}
-                </td>
-                <td style={{ padding: 6, border: "1px solid #ddd" }}>
-                  {p.costPrice}
-                </td>
-                <td style={{ padding: 6, border: "1px solid #ddd" }}>
-                  {p.price}
+                  {p.totalStock ?? 0}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.expiryDate || "-"}
@@ -983,6 +1114,20 @@ const ProductManagement = () => {
                   >
                     Delete
                   </button>
+                  <button
+                    onClick={() => openInventoryModal(p.productId, p)}
+                    style={{
+                      marginLeft: 8,
+                      background: "#63b3ed",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "6px 12px",
+                    }}
+                    title="View inventory buckets (price/stock)"
+                  >
+                    Inventory
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1021,6 +1166,329 @@ const ProductManagement = () => {
           Next
         </button>
       </div>
+
+      {/* Inventory modal (simple) */}
+      {inventoryOpenFor && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              width: 760,
+              maxHeight: "80vh",
+              overflow: "auto",
+              background: "#fff",
+              padding: 16,
+              borderRadius: 8,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <h3>Inventory for product #{inventoryOpenFor}</h3>
+              <div>
+                <button onClick={closeInventoryModal}>Close</button>
+              </div>
+            </div>
+
+            {inventoryLoading && <div>Loading inventory…</div>}
+            {inventoryError && (
+              <div style={{ color: "crimson" }}>{inventoryError}</div>
+            )}
+            {!inventoryLoading &&
+              !inventoryError &&
+              inventoryItems.length === 0 && (
+                <div>No inventory buckets found.</div>
+              )}
+
+            {!inventoryLoading && inventoryItems.length > 0 && (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f0f0f0" }}>
+                    <th>Price</th>
+                    <th>Cost</th>
+                    <th>Stock</th>
+                    <th>Batch</th>
+                    <th>Created At</th>
+                    <th>Updated At</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryItems.map((it) => (
+                    <tr key={it.id}>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {editingInventoryId === it.id ? (
+                          <input
+                            style={{ width: 100, padding: 6 }}
+                            value={editingInventoryDraft.price}
+                            onChange={(e) =>
+                              setEditingInventoryDraft((d) => ({
+                                ...d,
+                                price: e.target.value,
+                              }))
+                            }
+                          />
+                        ) : (
+                          it.price ?? "-"
+                        )}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {editingInventoryId === it.id ? (
+                          <input
+                            style={{ width: 100, padding: 6 }}
+                            value={editingInventoryDraft.costPrice}
+                            onChange={(e) =>
+                              setEditingInventoryDraft((d) => ({
+                                ...d,
+                                costPrice: e.target.value,
+                              }))
+                            }
+                          />
+                        ) : (
+                          it.costPrice ?? "-"
+                        )}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {editingInventoryId === it.id ? (
+                          <input
+                            style={{ width: 80, padding: 6 }}
+                            value={editingInventoryDraft.stock}
+                            onChange={(e) =>
+                              setEditingInventoryDraft((d) => ({
+                                ...d,
+                                stock: e.target.value,
+                              }))
+                            }
+                          />
+                        ) : (
+                          it.stock ?? 0
+                        )}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {editingInventoryId === it.id ? (
+                          <input
+                            style={{ width: 140, padding: 6 }}
+                            value={editingInventoryDraft.batchNo}
+                            onChange={(e) =>
+                              setEditingInventoryDraft((d) => ({
+                                ...d,
+                                batchNo: e.target.value,
+                              }))
+                            }
+                          />
+                        ) : (
+                          it.batchNo ?? "-"
+                        )}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {it.createdAt
+                          ? new Date(it.createdAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {it.updatedAt
+                          ? new Date(it.updatedAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                        {editingInventoryId === it.id ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateInventoryBucket(
+                                  inventoryOpenFor,
+                                  it.id,
+                                  editingInventoryDraft
+                                )
+                              }
+                              disabled={inventorySaving || !isAdmin}
+                              style={{ marginRight: 6 }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingInventoryId(null);
+                                setEditingInventoryDraft({
+                                  price: "",
+                                  costPrice: "",
+                                  stock: "",
+                                  batchNo: "",
+                                });
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingInventoryId(it.id);
+                                setEditingInventoryDraft({
+                                  price: it.price ?? "",
+                                  costPrice: it.costPrice ?? "",
+                                  stock: it.stock ?? "",
+                                  batchNo: it.batchNo ?? "",
+                                });
+                              }}
+                              style={{ marginRight: 6 }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() =>
+                                deleteInventoryBucket(inventoryOpenFor, it.id)
+                              }
+                              disabled={!isAdmin}
+                              style={{ background: "#ff6b6b", color: "#fff" }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Add / Receive form */}
+            <div
+              style={{
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: "1px solid #eee",
+              }}
+            >
+              <h4 style={{ margin: "8px 0" }}>
+                Add / Receive stock (price-level)
+              </h4>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label>Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={inventoryForm.price}
+                    onChange={(e) =>
+                      setInventoryForm((f) => ({ ...f, price: e.target.value }))
+                    }
+                    style={{ padding: 8, minWidth: 120 }}
+                    placeholder="e.g. 15.00"
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label>Cost Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={inventoryForm.costPrice}
+                    onChange={(e) =>
+                      setInventoryForm((f) => ({
+                        ...f,
+                        costPrice: e.target.value,
+                      }))
+                    }
+                    style={{ padding: 8, minWidth: 120 }}
+                    placeholder="e.g. 10.00"
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label>Stock</label>
+                  <input
+                    type="number"
+                    value={inventoryForm.stock}
+                    onChange={(e) =>
+                      setInventoryForm((f) => ({ ...f, stock: e.target.value }))
+                    }
+                    style={{ padding: 8, minWidth: 80 }}
+                    placeholder="Qty"
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label>Batch</label>
+                  <input
+                    value={inventoryForm.batchNo}
+                    onChange={(e) =>
+                      setInventoryForm((f) => ({
+                        ...f,
+                        batchNo: e.target.value,
+                      }))
+                    }
+                    style={{ padding: 8, minWidth: 160 }}
+                    placeholder="Optional batch"
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
+                  <button
+                    onClick={() => addInventoryBucket(inventoryOpenFor)}
+                    disabled={inventorySaving || !isAdmin}
+                    style={{
+                      marginTop: 20,
+                      padding: "8px 12px",
+                      background: "#48bb78",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                    }}
+                    title={
+                      !isAdmin ? "Only admins can receive stock" : undefined
+                    }
+                  >
+                    {inventorySaving ? "Saving…" : "Add / Receive"}
+                  </button>
+                  <button
+                    onClick={() =>
+                      setInventoryForm({
+                        price: "",
+                        costPrice: "",
+                        stock: "",
+                        batchNo: "",
+                      })
+                    }
+                    disabled={inventorySaving}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {inventoryError && (
+                <div style={{ color: "crimson", marginTop: 8 }}>
+                  {inventoryError}
+                </div>
+              )}
+              {inventoryActionError && (
+                <div style={{ color: "crimson", marginTop: 8 }}>
+                  {inventoryActionError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

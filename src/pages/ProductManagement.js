@@ -311,24 +311,22 @@ const ProductManagement = () => {
   const autoBarcode = () => setForm((f) => ({ ...f, barcode: genBarcode() }));
   const reset = () => setForm(emptyForm);
 
-  async function createOrUpdate(payload, id) {
-    const url = id
-      ? `${API_BASE}/api/products/${id}`
-      : `${API_BASE}/api/products`;
-    const method = id ? "PUT" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify(payload),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(tryParseError(text, res.statusText));
+async function createOrUpdate(payload, id) {
+  const url = id ? `/api/products/${id}` : `/api/products`;
+  const res = await fetch(url, { method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json", ...authHeaders }, body: JSON.stringify(payload) });
+  const text = await res.text();
+  console.log('Response text:', text);
+  if (!res.ok) {
     try {
-      return JSON.parse(text);
-    } catch {
-      return text;
+      const json = JSON.parse(text);
+      const details = json.details && Array.isArray(json.details) ? json.details.join("\n") : (json.error || text);
+      throw new Error(details);
+    } catch (err) {
+      throw new Error(text || res.statusText);
     }
   }
+  return JSON.parse(text);
+}
 
   async function reloadProducts() {
     const res = await fetch(`${API_BASE}/api/products`, {
@@ -363,7 +361,15 @@ const ProductManagement = () => {
       await reloadProducts();
       reset();
     } catch (e2) {
-      setError(e2.message);
+      
+      if (e2 && Array.isArray(e2.details) && e2.details.length) {
+        setFormErrors([]); 
+        setError(String(e2.details[0])); 
+      } else if (e2 && e2.details) {
+        setError(String(e2.details));
+      } else {
+        setError(e2.message || String(e2));
+      }
     } finally {
       setSaving(false);
     }

@@ -8,10 +8,12 @@
     "build": "react-scripts build"
   },
   "dependencies": {
+    "antd": "^5.27.6",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "react-scripts": "^5.0.0",
-    "react-router-dom": "^6.0.0"
+    "react-router-dom": "^6.0.0",
+    "react-scripts": "5.0.1",
+    "xlsx": "^0.18.5"
   },
   "browserslist": {
     "production": [
@@ -25,5 +27,8 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:8080"
+  "proxy": "http://localhost:8080",
+  "devDependencies": {
+    "eslint-plugin-react-hooks": "^5.2.0"
+  }
 }

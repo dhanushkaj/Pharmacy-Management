@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -22,6 +23,7 @@ import PurchaseOrderList from "./pages/PurchaseOrderList";
 import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Landing from './pages/Landing';
+import AuditTrail from './pages/AuditTrail';
 import './App.css';
 import GRNListView from './pages/GRNListView';
 
@@ -29,9 +31,7 @@ const AppContent = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/logout';
 
-  // Import PrivateRoute
-  // ...existing code...
-  const PrivateRoute = require('./components/PrivateRoute').default;
+
   return (
     <div className="app-shell">
       {!isAuthPage && <Sidebar />}
@@ -54,6 +54,7 @@ const AppContent = () => {
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alert" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
+            <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}

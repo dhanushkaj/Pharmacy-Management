@@ -1,0 +1,280 @@
+// Example: Adding Audit History to ProductManagement.js
+// This shows how to integrate audit functionality into existing pages
+
+/* 
+STEP 1: Add import for audit history modal
+Add this import at the top of ProductManagement.js:
+*/
+// import EntityHistory from '../components/EntityHistory';
+
+/*
+STEP 2: Add state for history modal
+Add this state to your ProductManagement component:
+*/
+const [historyModal, setHistoryModal] = useState({
+  show: false,
+  entityType: '',
+  entityId: null
+});
+
+/*
+STEP 3: Add History Button to Product Table
+In the actions column of your product table, add a history button:
+*/
+<td style={{ padding: 12 }}>
+  {/* Existing edit/delete buttons */}
+  <button 
+    onClick={() => handleEdit(product)}
+    style={{ marginRight: 8, padding: '4px 8px', background: '#2196f3', color: 'white', border: 'none', borderRadius: 4 }}
+  >
+    Edit
+  </button>
+  <button 
+    onClick={() => handleDelete(product.id)}
+    style={{ marginRight: 8, padding: '4px 8px', background: '#f44336', color: 'white', border: 'none', borderRadius: 4 }}
+  >
+    Delete
+  </button>
+  
+  {/* NEW: Add History Button */}
+  <button 
+    onClick={() => setHistoryModal({
+      show: true, 
+      entityType: 'Product', 
+      entityId: product.id
+    })}
+    style={{ 
+      padding: '4px 8px', 
+      background: '#ff9800', 
+      color: 'white', 
+      border: 'none', 
+      borderRadius: 4,
+      cursor: 'pointer'
+    }}
+    title="View Change History"
+  >
+    📋 History
+  </button>
+</td>
+
+/*
+STEP 4: Add History Modal Component
+Add this at the end of your component's return statement, after the closing </div>:
+*/
+{historyModal.show && (
+  <EntityHistory 
+    entityType={historyModal.entityType}
+    entityId={historyModal.entityId}
+    onClose={() => setHistoryModal({show: false, entityType: '', entityId: null})}
+  />
+)}
+
+/*
+STEP 5: Create EntityHistory Component
+Create src/components/EntityHistory.js with this basic structure:
+*/
+
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from './AuthContext';
+
+const EntityHistory = ({ entityType, entityId, onClose }) => {
+  const { token } = useContext(AuthContext);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Sample history data
+  const sampleHistory = [
+    {
+      id: 1,
+      actionTimestamp: '2025-11-05T14:30:00',
+      action: 'UPDATE',
+      actionBy: 'admin',
+      description: 'Updated product price from Rs.100 to Rs.120',
+      oldValue: '{"price": 100}',
+      newValue: '{"price": 120}'
+    },
+    {
+      id: 2,
+      actionTimestamp: '2025-11-04T10:15:00',
+      action: 'CREATE',
+      actionBy: 'manager',
+      description: 'Created product',
+      newValue: '{"name": "Paracetamol", "price": 100}'
+    }
+  ];
+
+  const loadHistory = async () => {
+    setLoading(true);
+    // TODO: Replace with actual API call
+    // const response = await api(`/api/audit/entity/${entityType}/${entityId}`, { token });
+    setTimeout(() => {
+      setHistory(sampleHistory);
+      setLoading(false);
+    }, 500);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getActionColor = (action) => {
+    const colors = {
+      CREATE: '#4caf50',
+      UPDATE: '#2196f3',
+      DELETE: '#f44336'
+    };
+    return colors[action] || '#9e9e9e';
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, [entityType, entityId]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: 8,
+        padding: 24,
+        maxWidth: '70%',
+        maxHeight: '70%',
+        overflow: 'auto',
+        minWidth: 500
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: 20,
+          borderBottom: '1px solid #eee',
+          paddingBottom: 16
+        }}>
+          <h3 style={{ margin: 0 }}>
+            Change History: {entityType} #{entityId}
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: 4,
+              padding: '8px 16px',
+              cursor: 'pointer'
+            }}
+          >
+            ✕ Close
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>
+            Loading history...
+          </div>
+        ) : history.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>
+            No change history found
+          </div>
+        ) : (
+          <div style={{ maxHeight: 400, overflow: 'auto' }}>
+            {history.map((entry, index) => (
+              <div key={entry.id} style={{
+                border: '1px solid #eee',
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 12,
+                background: index === 0 ? '#f9f9f9' : 'white'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{
+                      padding: '3px 8px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      color: 'white',
+                      backgroundColor: getActionColor(entry.action)
+                    }}>
+                      {entry.action}
+                    </span>
+                    <span style={{ fontWeight: 'bold' }}>
+                      {entry.actionBy}
+                    </span>
+                  </div>
+                  <span style={{ color: '#666', fontSize: 14 }}>
+                    {formatDate(entry.actionTimestamp)}
+                  </span>
+                </div>
+                
+                <div style={{ marginBottom: 8, color: '#333' }}>
+                  {entry.description}
+                </div>
+
+                {(entry.oldValue || entry.newValue) && (
+                  <div style={{ fontSize: 12 }}>
+                    {entry.oldValue && (
+                      <div style={{ 
+                        background: '#ffebee', 
+                        padding: 8, 
+                        borderRadius: 4, 
+                        marginBottom: 4 
+                      }}>
+                        <strong>Before:</strong> {entry.oldValue}
+                      </div>
+                    )}
+                    {entry.newValue && (
+                      <div style={{ 
+                        background: '#e8f5e8', 
+                        padding: 8, 
+                        borderRadius: 4 
+                      }}>
+                        <strong>After:</strong> {entry.newValue}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EntityHistory;
+
+/*
+STEP 6: Update App.js Routes
+Add the audit trail route to your App.js:
+*/
+// Import AuditTrail component
+import AuditTrail from './pages/AuditTrail';
+
+// Add route in your Routes component
+<Route path="/audit-trail" element={<AuditTrail />} />
+
+/*
+STEP 7: Test Integration
+1. Start your React app
+2. Navigate to Products page
+3. Click "History" button on any product
+4. View the change history modal
+5. Navigate to /audit-trail to see the main audit page
+*/

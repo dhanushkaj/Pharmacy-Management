@@ -31,6 +31,45 @@ function sheetToObjects(workbook) {
   return XLSX.utils.sheet_to_json(sheet, { defval: "" });
 }
 
+// Helper function to parse Excel dates
+function parseExcelDate(value) {
+  if (!value) return null;
+
+  // If already a valid date string (YYYY-MM-DD), return as-is
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+
+  // If it's a number (Excel date serial), convert it
+  if (typeof value === "number" || !isNaN(Number(value))) {
+    const excelEpoch = new Date(1899, 11, 30); // Excel's epoch
+    const days = Number(value);
+    const date = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+
+    // Format as YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // Try to parse as Date object
+  try {
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {
+    // Ignore parsing errors
+  }
+
+  return null;
+}
+
+// 1. UPDATE normalizeRow function - make fields optional for updates
 function normalizeRow(r) {
   const pick = (key) => {
     const foundKey = Object.keys(r).find(
@@ -40,33 +79,99 @@ function normalizeRow(r) {
     );
     return foundKey ? r[foundKey] : "";
   };
-  return {
-    name: String(pick("name")).trim(),
-    genericName: String(pick("genericName")).trim() || null,
-    categoryId: pick("categoryId") === "" ? null : Number(pick("categoryId")),
-    supplierId: pick("supplierId") === "" ? null : Number(pick("supplierId")),
-    productCode: String(pick("productCode")).trim().toUpperCase() || null,
-    barcode: String(pick("barcode")).trim() || null,
-    costPrice: Number(pick("costPrice")),
-    price: Number(pick("price")),
-    stock: pick("stock") === "" ? 0 : Number(pick("stock")),
-    minStock: pick("minStock") === "" ? null : Number(pick("minStock")),
-    maxStock: pick("maxStock") === "" ? null : Number(pick("maxStock")),
-    maxDiscount:
-      pick("maxDiscount") === "" ? null : Number(pick("maxDiscount")),
-    expiryDate: String(pick("expiryDate")).trim() || null,
-    patientInstructions: String(pick("patientInstructions")).trim() || null,
-    binLocation: String(pick("binLocation")).trim() || null,
-  };
+
+  const obj = {};
+
+  // Required for both create and update
+  const code = String(pick("productCode")).trim().toUpperCase();
+  if (code) obj.productCode = code;
+
+  // Optional fields - only include if provided
+  const name = String(pick("name")).trim();
+  if (name) obj.name = name;
+
+  const genericName = String(pick("genericName")).trim();
+  if (genericName) obj.genericName = genericName;
+
+  const barcode = String(pick("barcode")).trim();
+  if (barcode) obj.barcode = barcode;
+
+  // Numeric fields - only include if not empty
+  const categoryId = pick("categoryId");
+  if (categoryId !== "" && categoryId !== null && categoryId !== undefined) {
+    obj.categoryId = Number(categoryId);
+  }
+
+  const supplierId = pick("supplierId");
+  if (supplierId !== "" && supplierId !== null && supplierId !== undefined) {
+    obj.supplierId = Number(supplierId);
+  }
+
+  const costPrice = pick("costPrice");
+  if (costPrice !== "" && costPrice !== null && costPrice !== undefined) {
+    obj.costPrice = Number(costPrice);
+  }
+
+  const price = pick("price");
+  if (price !== "" && price !== null && price !== undefined) {
+    obj.price = Number(price);
+  }
+
+  const stock = pick("stock");
+  if (stock !== "" && stock !== null && stock !== undefined) {
+    obj.stock = Number(stock);
+  }
+
+  const minStock = pick("minStock");
+  if (minStock !== "" && minStock !== null && minStock !== undefined) {
+    obj.minStock = Number(minStock);
+  }
+
+  const maxStock = pick("maxStock");
+  if (maxStock !== "" && maxStock !== null && maxStock !== undefined) {
+    obj.maxStock = Number(maxStock);
+  }
+
+  const maxDiscount = pick("maxDiscount");
+  if (maxDiscount !== "" && maxDiscount !== null && maxDiscount !== undefined) {
+    obj.maxDiscount = Number(maxDiscount);
+  }
+
+  const expiryDate = pick("expiryDate");
+  if (expiryDate) obj.expiryDate = parseExcelDate(expiryDate);
+
+  const patientInstructions = String(pick("patientInstructions")).trim();
+  if (patientInstructions) obj.patientInstructions = patientInstructions;
+
+  const binLocation = String(pick("binLocation")).trim();
+  if (binLocation) obj.binLocation = binLocation;
+
+  return obj;
 }
 
+// 2. UPDATE validateRow function - simpler validation
 function validateRow(obj, idx) {
-  if (!obj.name) return `Row ${idx}: "name" is required`;
-  if (Number.isNaN(obj.costPrice))
-    return `Row ${idx}: "costPrice" must be a number`;
-  if (Number.isNaN(obj.price)) return `Row ${idx}: "price" must be a number`;
-  if (obj.productCode && !PRODUCT_CODE_RE.test(obj.productCode))
-    return `Row ${idx}: "productCode" must match AA9999`;
+  // productCode is ALWAYS required
+  if (!obj.productCode || !obj.productCode.trim()) {
+    return `Row ${idx}: "productCode" is required`;
+  }
+
+  // Validate numeric fields if provided
+  if (obj.price !== undefined && (isNaN(obj.price) || obj.price < 0)) {
+    return `Row ${idx}: "price" must be a valid number >= 0`;
+  }
+
+  if (
+    obj.costPrice !== undefined &&
+    (isNaN(obj.costPrice) || obj.costPrice < 0)
+  ) {
+    return `Row ${idx}: "costPrice" must be a valid number >= 0`;
+  }
+
+  if (obj.stock !== undefined && (isNaN(obj.stock) || obj.stock < 0)) {
+    return `Row ${idx}: "stock" must be a valid number >= 0`;
+  }
+
   return null;
 }
 
@@ -86,7 +191,7 @@ function downloadTemplate() {
       "10",
       "300",
       "5",
-      "2026-12-31",
+      "31-12-2026", // expiryDate
       "After meals",
       "A1-03",
     ],
@@ -240,7 +345,6 @@ const ProductManagement = () => {
   });
   const [inventoryActionError, setInventoryActionError] = useState("");
 
-
   useEffect(() => {
     let aborted = false;
     async function loadRefs() {
@@ -311,22 +415,29 @@ const ProductManagement = () => {
   const autoBarcode = () => setForm((f) => ({ ...f, barcode: genBarcode() }));
   const reset = () => setForm(emptyForm);
 
-async function createOrUpdate(payload, id) {
-  const url = id ? `/api/products/${id}` : `/api/products`;
-  const res = await fetch(url, { method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json", ...authHeaders }, body: JSON.stringify(payload) });
-  const text = await res.text();
-  console.log('Response text:', text);
-  if (!res.ok) {
-    try {
-      const json = JSON.parse(text);
-      const details = json.details && Array.isArray(json.details) ? json.details.join("\n") : (json.error || text);
-      throw new Error(details);
-    } catch (err) {
-      throw new Error(text || res.statusText);
+  async function createOrUpdate(payload, id) {
+    const url = id ? `/api/products/${id}` : `/api/products`;
+    const res = await fetch(url, {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    console.log("Response text:", text);
+    if (!res.ok) {
+      try {
+        const json = JSON.parse(text);
+        const details =
+          json.details && Array.isArray(json.details)
+            ? json.details.join("\n")
+            : json.error || text;
+        throw new Error(details);
+      } catch (err) {
+        throw new Error(text || res.statusText);
+      }
     }
+    return JSON.parse(text);
   }
-  return JSON.parse(text);
-}
 
   async function reloadProducts() {
     const res = await fetch(`${API_BASE}/api/products`, {
@@ -361,10 +472,9 @@ async function createOrUpdate(payload, id) {
       await reloadProducts();
       reset();
     } catch (e2) {
-      
       if (e2 && Array.isArray(e2.details) && e2.details.length) {
-        setFormErrors([]); 
-        setError(String(e2.details[0])); 
+        setFormErrors([]);
+        setError(String(e2.details[0]));
       } else if (e2 && e2.details) {
         setError(String(e2.details));
       } else {
@@ -599,7 +709,6 @@ async function createOrUpdate(payload, id) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
 
-  // ⬇️ Bulk upload with alert popups
   async function handleBulkFile(file) {
     setBulkReport({ ok: 0, failed: 0, errors: [] });
     if (!file) return;
@@ -623,6 +732,7 @@ async function createOrUpdate(payload, id) {
 
       const payloads = [];
       const errors = [];
+
       rows.forEach((r, i) => {
         const idx = i + 2; // +2 because row 1 is header
         const obj = normalizeRow(r);
@@ -638,11 +748,8 @@ async function createOrUpdate(payload, id) {
         return;
       }
 
-      let ok = 0,
-        failed = 0,
-        failMsgs = [];
+      // Call the bulk endpoint
       const bulkUrl = `${API_BASE}/api/products/bulk`;
-      const singleUrl = `${API_BASE}/api/products`;
 
       try {
         const res = await fetch(bulkUrl, {
@@ -650,48 +757,49 @@ async function createOrUpdate(payload, id) {
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify(payloads),
         });
-        const txt = await res.text();
-        if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
 
+        const txt = await res.text();
+
+        if (!res.ok) {
+          throw new Error(tryParseError(txt, res.statusText));
+        }
+
+        // Parse server response
         let serverReport;
         try {
           serverReport = JSON.parse(txt);
         } catch {
           serverReport = {
-            ok: 0,
+            ok: payloads.length,
             failed: 0,
-            errors: ["Invalid server response"],
+            errors: [],
           };
         }
-        setBulkReport(serverReport);
-        alertReport(serverReport, "Bulk upload (server report)");
-      } catch {
-        // fallback per-row
-        for (let i = 0; i < payloads.length; i++) {
-          try {
-            const r = await fetch(singleUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...authHeaders },
-              body: JSON.stringify(payloads[i]),
-            });
-            const txt = await r.text();
-            if (!r.ok) throw new Error(tryParseError(txt, r.statusText));
-            ok++;
-          } catch (err) {
-            failed++;
-            failMsgs.push(`Row ${i + 2}: ${err.message}`);
-          }
-        }
-        const rep = { ok, failed, errors: failMsgs };
-        setBulkReport(rep);
-        alertReport(rep, "Bulk upload (fallback per-row)");
-      }
 
-      await reloadProducts();
+        setBulkReport(serverReport);
+        alertReport(serverReport, "Bulk upload completed");
+
+        // Reload products if any succeeded
+        if (serverReport.ok > 0) {
+          await reloadProducts();
+        }
+      } catch (err) {
+        const rep = {
+          ok: 0,
+          failed: payloads.length,
+          errors: [`Server error: ${err.message}`],
+        };
+        setBulkReport(rep);
+        alertReport(rep, "Bulk upload failed");
+      }
     } catch (err) {
-      const rep = { ok: 0, failed: 1, errors: [err.message] };
+      const rep = {
+        ok: 0,
+        failed: 1,
+        errors: [`File processing error: ${err.message}`],
+      };
       setBulkReport(rep);
-      alertReport(rep, "Bulk upload (unexpected error)");
+      alertReport(rep, "Bulk upload error");
     } finally {
       setBulkBusy(false);
     }

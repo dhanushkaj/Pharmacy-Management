@@ -1,0 +1,159 @@
+// Simple Audit Trail Page - Basic Implementation
+// Copy this code into src/pages/AuditTrail.js
+
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../components/AuthContext';
+
+const AuditTrail = () => {
+  const { token } = useContext(AuthContext);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    entityType: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  // Sample data structure for audit logs
+  const sampleData = [
+    {
+      id: 1,
+      actionTimestamp: '2025-11-05T10:30:00',
+      action: 'CREATE',
+      entityType: 'Product',
+      entityId: 123,
+      actionBy: 'admin',
+      ipAddress: '192.168.1.1',
+      description: 'Created new product Paracetamol 500mg'
+    },
+    {
+      id: 2,
+      actionTimestamp: '2025-11-05T11:15:00',
+      action: 'UPDATE',
+      entityType: 'Customer',
+      entityId: 456,
+      actionBy: 'manager',
+      ipAddress: '192.168.1.2',
+      description: 'Updated customer phone number'
+    }
+  ];
+
+  const entityTypes = ['Product', 'Customer', 'Category', 'Supplier', 'PurchaseOrder', 'Grn'];
+
+  const loadAuditLogs = async () => {
+    setLoading(true);
+    // TODO: Replace with actual API call
+    // const response = await api(`/api/audit/logs`, { token });
+    setTimeout(() => {
+      setAuditLogs(sampleData);
+      setLoading(false);
+    }, 1000);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getActionColor = (action) => {
+    const colors = {
+      CREATE: '#4caf50',
+      UPDATE: '#2196f3', 
+      DELETE: '#f44336',
+      VIEW: '#9e9e9e'
+    };
+    return colors[action] || '#9e9e9e';
+  };
+
+  useEffect(() => {
+    loadAuditLogs();
+  }, []);
+
+  return (
+    <div style={{ padding: 24 }}>
+      <h2>Audit Trail</h2>
+      
+      {/* Simple Filters */}
+      <div style={{ 
+        background: '#f5f5f5', 
+        padding: 16, 
+        borderRadius: 8, 
+        marginBottom: 24,
+        display: 'flex',
+        gap: 16
+      }}>
+        <select
+          value={filters.entityType}
+          onChange={(e) => setFilters(prev => ({ ...prev, entityType: e.target.value }))}
+          style={{ padding: 8, borderRadius: 4, border: '1px solid #ddd' }}
+        >
+          <option value="">All Entity Types</option>
+          {entityTypes.map(type => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+        
+        <input
+          type="date"
+          value={filters.startDate}
+          onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+          style={{ padding: 8, borderRadius: 4, border: '1px solid #ddd' }}
+        />
+        
+        <input
+          type="date" 
+          value={filters.endDate}
+          onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+          style={{ padding: 8, borderRadius: 4, border: '1px solid #ddd' }}
+        />
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          Loading audit logs...
+        </div>
+      )}
+
+      {/* Audit Logs Table */}
+      {!loading && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
+          <thead>
+            <tr style={{ background: '#f0f0f0' }}>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '1px solid #ddd' }}>Timestamp</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '1px solid #ddd' }}>Action</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '1px solid #ddd' }}>Entity</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '1px solid #ddd' }}>User</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '1px solid #ddd' }}>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {auditLogs.map((log) => (
+              <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: 12 }}>{formatDate(log.actionTimestamp)}</td>
+                <td style={{ padding: 12 }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    color: 'white',
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    backgroundColor: getActionColor(log.action)
+                  }}>
+                    {log.action}
+                  </span>
+                </td>
+                <td style={{ padding: 12 }}>
+                  {log.entityType} #{log.entityId}
+                </td>
+                <td style={{ padding: 12 }}>{log.actionBy}</td>
+                <td style={{ padding: 12 }}>{log.description}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+export default AuditTrail;

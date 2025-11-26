@@ -65,6 +65,12 @@ export default function PurchaseOrdersList() {
   const [err, setErr] = useState("");
   const [deletingId, setDeletingId] = useState(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 20;
+
   // filters
   const [orderCodeFilter, setOrderCodeFilter] = useState("");
   const [supplierIdFilter, setSupplierIdFilter] = useState(""); // '' = all
@@ -93,13 +99,19 @@ export default function PurchaseOrdersList() {
       setLoading(true);
       setErr("");
       try {
-        const res = await fetch(`${API_BASE}/api/purchase-orders`, {
+        const res = await fetch(`${API_BASE}/api/purchase-orders?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`, {
           headers: { ...authHeaders },
         });
         const data = await safeJson(res);
         if (!res.ok)
           throw new Error(data?.message || "Failed to load purchase orders");
-        if (!abort) setOrders(Array.isArray(data) ? data : []);
+        // Handle paginated response
+        const orderList = data.content || [];
+        if (!abort) {
+          setOrders(orderList);
+          setTotalPages(data.totalPages || 0);
+          setTotalElements(data.totalElements || 0);
+        }
       } catch (e) {
         if (!abort) setErr(e.message || "Failed to load purchase orders");
       } finally {
@@ -110,7 +122,7 @@ export default function PurchaseOrdersList() {
       abort = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentPage]);
 
   // Load suppliers for dropdown
   useEffect(() => {
@@ -360,6 +372,79 @@ export default function PurchaseOrdersList() {
           )}
         </tbody>
       </table>
+
+      {/* Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center", 
+          marginTop: 20,
+          padding: "12px 0"
+        }}>
+          <div style={{ color: "#666", fontSize: 14 }}>
+            Showing page {currentPage + 1} of {totalPages} ({totalElements} total orders)
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setCurrentPage(0)}
+              disabled={currentPage === 0}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 4,
+                border: "1px solid #007bff",
+                background: currentPage === 0 ? "#e0e0e0" : "#007bff",
+                color: currentPage === 0 ? "#999" : "#fff",
+                cursor: currentPage === 0 ? "not-allowed" : "pointer"
+              }}
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 0}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 4,
+                border: "1px solid #007bff",
+                background: currentPage === 0 ? "#e0e0e0" : "#007bff",
+                color: currentPage === 0 ? "#999" : "#fff",
+                cursor: currentPage === 0 ? "not-allowed" : "pointer"
+              }}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage >= totalPages - 1}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 4,
+                border: "1px solid #007bff",
+                background: currentPage >= totalPages - 1 ? "#e0e0e0" : "#007bff",
+                color: currentPage >= totalPages - 1 ? "#999" : "#fff",
+                cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer"
+              }}
+            >
+              Next
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages - 1)}
+              disabled={currentPage >= totalPages - 1}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 4,
+                border: "1px solid #007bff",
+                background: currentPage >= totalPages - 1 ? "#e0e0e0" : "#007bff",
+                color: currentPage >= totalPages - 1 ? "#999" : "#fff",
+                cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer"
+              }}
+            >
+              Last
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
 
 const Header = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { username, token, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const handleLogout = () => {
     logout();
@@ -23,8 +23,13 @@ const Header = () => {
     }}>
       <span>Pharmacy Management System</span>
       <nav>
-        {!user && <Link to="/login" style={{ color: '#fff', marginRight: 24, textDecoration: 'none', fontSize: '1rem' }}>Login</Link>}
-        {user && <button onClick={handleLogout} style={{ color: '#1976d2', background: '#fff', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 'bold', fontSize: '1rem' }}>Logout</button>}
+        {!token && <Link to="/login" style={{ color: '#fff', marginRight: 24, textDecoration: 'none', fontSize: '1rem' }}>Login</Link>}
+        {token && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {username && <span style={{ color: '#fff', fontSize: '0.9rem' }}>Welcome, {username}</span>}
+            <button onClick={handleLogout} style={{ color: '#1976d2', background: '#fff', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>Logout</button>
+          </div>
+        )}
       </nav>
     </header>
   );

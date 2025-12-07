@@ -79,6 +79,12 @@ export default function PurchaseOrdersList() {
   // sorting (by orderCode)
   const [sortAsc, setSortAsc] = useState(true);
 
+  // Edit modal state
+  const [editingPO, setEditingPO] = useState(null);
+  const [editSupplier, setEditSupplier] = useState("");
+  const [editNeededDate, setEditNeededDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const token = localStorage.getItem("token") || "";
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -185,6 +191,48 @@ export default function PurchaseOrdersList() {
       setErr(e.message || "Failed to delete purchase order");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function openEditModal(po) {
+    setEditingPO(po);
+    setEditSupplier(po.supplierId || "");
+    setEditNeededDate(po.neededDate || "");
+    setErr("");
+  }
+
+  function closeEditModal() {
+    setEditingPO(null);
+    setEditSupplier("");
+    setEditNeededDate("");
+  }
+
+  async function handleUpdate() {
+    if (!editingPO) return;
+    setSaving(true);
+    setErr("");
+    try {
+      const body = {};
+      if (editSupplier) body.supplierId = parseInt(editSupplier);
+      if (editNeededDate) body.neededDate = editNeededDate;
+
+      const res = await fetch(`${API_BASE}/api/purchase-orders/${editingPO.id}`, {
+        method: "PUT",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "Failed to update purchase order");
+
+      // Update the order in the list
+      setOrders((prev) =>
+        prev.map((o) => (o.id === editingPO.id ? { ...o, ...data } : o))
+      );
+      closeEditModal();
+    } catch (e) {
+      setErr(e.message || "Failed to update purchase order");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -342,25 +390,39 @@ export default function PurchaseOrdersList() {
                       </button>
                     </Link>
                     {isAdmin && (
-                    <button
-                      onClick={() => handleDelete(po.id, po.orderCode)}
-                      disabled={deletingId === po.id}
-                      style={{
-                        marginLeft: 8,
-                        padding: "6px 12px",
-                        borderRadius: 4,
-                        border: "1px solid #d33",
-                        background: "#ff6b6b",
-                        color: "#fff",
-                      }}
-                      title="Delete this purchase order"
-                    >
-                      {deletingId === po.id ? "Deleting…" : "Delete"}
-                    </button>
+                      <>
+                        <button
+                          onClick={() => openEditModal(po)}
+                          style={{
+                            marginLeft: 8,
+                            padding: "6px 12px",
+                            borderRadius: 4,
+                            border: "1px solid #17a2b8",
+                            background: "#17a2b8",
+                            color: "#fff",
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(po.id, po.orderCode)}
+                          disabled={deletingId === po.id}
+                          style={{
+                            marginLeft: 8,
+                            padding: "6px 12px",
+                            borderRadius: 4,
+                            border: "1px solid #d33",
+                            background: "#ff6b6b",
+                            color: "#fff",
+                          }}
+                          title="Delete this purchase order"
+                        >
+                          {deletingId === po.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </>
                     )}
                   </td>
-                
-              </tr>
+                </tr>
             ))}
 
           {!loading && filtered.length === 0 && (
@@ -442,6 +504,97 @@ export default function PurchaseOrdersList() {
             >
               Last
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingPO && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={closeEditModal}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 500,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Edit Purchase Order: {editingPO.orderCode}</h3>
+            {err && <div style={{ color: "crimson", marginBottom: 12 }}>{err}</div>}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", marginBottom: 6 }}>
+                Supplier
+              </label>
+              <select
+                value={editSupplier}
+                onChange={(e) => setEditSupplier(e.target.value)}
+                style={{ width: "100%", padding: 8 }}
+              >
+                <option value="">-- Select Supplier --</option>
+                {suppliers.map((s) => (
+                  <option key={s.supplierId} value={s.supplierId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", marginBottom: 6 }}>
+                Needed Date
+              </label>
+              <input
+                type="date"
+                value={editNeededDate}
+                onChange={(e) => setEditNeededDate(e.target.value)}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={closeEditModal}
+                disabled={saving}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 4,
+                  border: "1px solid #ccc",
+                  background: "#f5f5f5",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                disabled={saving}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 4,
+                  border: "1px solid #28a745",
+                  background: "#28a745",
+                  color: "#fff",
+                }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}

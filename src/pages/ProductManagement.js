@@ -8,10 +8,8 @@ const pageSize = 10;
 const BULK_COLUMNS = [
   "name",
   "genericName",
-  "categoryId",
-  "supplierId",
-  "productCode",
-  "barcode",
+  "categoryName",
+  "supplierName",
   "costPrice",
   "price",
   "stock",
@@ -82,31 +80,20 @@ function normalizeRow(r) {
 
   const obj = {};
 
-  // Required for both create and update
-  const code = String(pick("productCode")).trim().toUpperCase();
-  if (code) obj.productCode = code;
-
-  // Optional fields - only include if provided
+  // Mandatory fields for CSV upload
   const name = String(pick("name")).trim();
   if (name) obj.name = name;
 
   const genericName = String(pick("genericName")).trim();
   if (genericName) obj.genericName = genericName;
 
-  const barcode = String(pick("barcode")).trim();
-  if (barcode) obj.barcode = barcode;
+  const categoryName = String(pick("categoryName")).trim();
+  if (categoryName) obj.categoryName = categoryName;
 
-  // Numeric fields - only include if not empty
-  const categoryId = pick("categoryId");
-  if (categoryId !== "" && categoryId !== null && categoryId !== undefined) {
-    obj.categoryId = Number(categoryId);
-  }
+  const supplierName = String(pick("supplierName")).trim();
+  if (supplierName) obj.supplierName = supplierName;
 
-  const supplierId = pick("supplierId");
-  if (supplierId !== "" && supplierId !== null && supplierId !== undefined) {
-    obj.supplierId = Number(supplierId);
-  }
-
+  // Optional numeric fields - only include if not empty
   const costPrice = pick("costPrice");
   if (costPrice !== "" && costPrice !== null && costPrice !== undefined) {
     obj.costPrice = Number(costPrice);
@@ -151,49 +138,103 @@ function normalizeRow(r) {
 
 // 2. UPDATE validateRow function - simpler validation
 function validateRow(obj, idx) {
-  // productCode is ALWAYS required
-  if (!obj.productCode || !obj.productCode.trim()) {
-    return `Row ${idx}: "productCode" is required`;
+  // Validate mandatory fields for CSV upload
+  if (!obj.name || !obj.name.trim()) {
+    return `Row ${idx}: "name" is required`;
+  }
+
+  if (!obj.genericName || !obj.genericName.trim()) {
+    return `Row ${idx}: "genericName" is required`;
+  }
+
+  if (!obj.categoryName || !obj.categoryName.trim()) {
+    return `Row ${idx}: "categoryName" is required`;
+  }
+
+  if (!obj.supplierName || !obj.supplierName.trim()) {
+    return `Row ${idx}: "supplierName" is required`;
   }
 
   // Validate numeric fields if provided
-  if (obj.price !== undefined && (isNaN(obj.price) || obj.price < 0)) {
+  if (obj.price !== undefined && obj.price !== "" && (isNaN(obj.price) || obj.price < 0)) {
     return `Row ${idx}: "price" must be a valid number >= 0`;
   }
 
   if (
-    obj.costPrice !== undefined &&
+    obj.costPrice !== undefined && 
+    obj.costPrice !== "" && 
     (isNaN(obj.costPrice) || obj.costPrice < 0)
   ) {
     return `Row ${idx}: "costPrice" must be a valid number >= 0`;
   }
 
-  if (obj.stock !== undefined && (isNaN(obj.stock) || obj.stock < 0)) {
+  if (obj.stock !== undefined && obj.stock !== "" && (isNaN(obj.stock) || obj.stock < 0)) {
     return `Row ${idx}: "stock" must be a valid number >= 0`;
+  }
+
+  if (obj.minStock !== undefined && obj.minStock !== "" && (isNaN(obj.minStock) || obj.minStock < 0)) {
+    return `Row ${idx}: "minStock" must be a valid number >= 0`;
+  }
+
+  if (obj.maxStock !== undefined && obj.maxStock !== "" && (isNaN(obj.maxStock) || obj.maxStock < 0)) {
+    return `Row ${idx}: "maxStock" must be a valid number >= 0`;
+  }
+
+  if (obj.maxDiscount !== undefined && obj.maxDiscount !== "" && (isNaN(obj.maxDiscount) || obj.maxDiscount < 0)) {
+    return `Row ${idx}: "maxDiscount" must be a valid number >= 0`;
   }
 
   return null;
 }
 
+
 function downloadTemplate() {
   const data = [
     BULK_COLUMNS,
     [
-      "Paracetamol",
-      "Acetaminophen",
-      "1",
-      "2",
-      "PA1234",
-      "1234567890123",
-      "12.50",
-      "18.00",
-      "100",
+      "Paracetamol 500mg",       // name (mandatory)
+      "Acetaminophen",           // genericName (mandatory)
+      "Pain Relief",             // categoryName (mandatory)
+      "ABC Pharma",              // supplierName (mandatory)
+      "10.50",                   // costPrice (optional)
+      "15.00",                   // price (optional)
+      "100",                     // stock (optional)
+      "20",                      // minStock (optional)
+      "500",                     // maxStock (optional)
+      "10",                      // maxDiscount (optional)
+      "2026-12-31",              // expiryDate (optional, YYYY-MM-DD)
+      "Take after meals",        // patientInstructions (optional)
+      "A1-B2",                   // binLocation (optional)
+    ],
+    [
+      "Amoxicillin 250mg",
+      "Amoxicillin",
+      "Antibiotics",
+      "XYZ Medical",
+      "25.00",
+      "35.00",
+      "50",
       "10",
-      "300",
+      "200",
       "5",
-      "31-12-2026", // expiryDate
-      "After meals",
-      "A1-03",
+      "2027-06-30",
+      "Complete the full course",
+      "C3-D4",
+    ],
+    [
+      "Ibuprofen 400mg",
+      "Ibuprofen",
+      "Pain Relief",
+      "ABC Pharma",
+      "8.00",
+      "12.00",
+      "75",
+      "15",
+      "300",
+      "15",
+      "2026-09-15",
+      "Take with food",
+      "A1-B3",
     ],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
@@ -322,6 +363,7 @@ const ProductManagement = () => {
 
   // Inventory modal state
   const [inventoryOpenFor, setInventoryOpenFor] = useState(null);
+  const [inventoryProduct, setInventoryProduct] = useState(null);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
@@ -666,6 +708,7 @@ const ProductManagement = () => {
   // Open inventory modal and prefill form with last price/cost
   function openInventoryModal(productId, product = null) {
     setInventoryOpenFor(productId);
+    setInventoryProduct(product);
     setInventoryItems([]);
     setInventoryError("");
     // prefill form with product's last known prices if provided
@@ -684,6 +727,7 @@ const ProductManagement = () => {
 
   function closeInventoryModal() {
     setInventoryOpenFor(null);
+    setInventoryProduct(null);
     setInventoryItems([]);
     setInventoryError("");
     setInventoryForm({ price: "", costPrice: "", stock: "", batchNo: "" });
@@ -748,8 +792,8 @@ const ProductManagement = () => {
         return;
       }
 
-      // Call the bulk endpoint
-      const bulkUrl = `${API_BASE}/api/products/bulk`;
+      // Call the bulk CSV endpoint
+      const bulkUrl = `${API_BASE}/api/products/bulk-csv`;
 
       try {
         const res = await fetch(bulkUrl, {
@@ -1200,7 +1244,7 @@ const ProductManagement = () => {
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.binLocation || "-"}
                 </td>
-                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                <td style={{ padding: 6, border: "1px solid #ddd", whiteSpace: "nowrap" }}>
                   <button
                     onClick={() => onEdit(p)}
                     style={{
@@ -1208,7 +1252,8 @@ const ProductManagement = () => {
                       color: "#333",
                       border: "none",
                       borderRadius: 4,
-                      padding: "6px 12px",
+                      padding: "4px 8px",
+                      fontSize: "12px",
                     }}
                   >
                     Edit
@@ -1218,29 +1263,31 @@ const ProductManagement = () => {
                     disabled={!isAdmin}
                     title={!isAdmin ? "Only admins can delete" : undefined}
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 4,
                       background: "#ff6b6b",
                       color: "#fff",
                       border: "none",
                       borderRadius: 4,
-                      padding: "6px 12px",
+                      padding: "4px 8px",
+                      fontSize: "12px",
                     }}
                   >
-                    Delete
+                    Del
                   </button>
                   <button
                     onClick={() => openInventoryModal(p.productId, p)}
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 4,
                       background: "#63b3ed",
                       color: "#fff",
                       border: "none",
                       borderRadius: 4,
-                      padding: "6px 12px",
+                      padding: "4px 8px",
+                      fontSize: "12px",
                     }}
                     title="View inventory buckets (price/stock)"
                   >
-                    Inventory
+                    Inv
                   </button>
                 </td>
               </tr>
@@ -1306,7 +1353,10 @@ const ProductManagement = () => {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <h3>Inventory for product #{inventoryOpenFor}</h3>
+              <h3>
+                Inventory for: {inventoryProduct?.name || `Product #${inventoryOpenFor}`}
+                {inventoryProduct?.productCode && ` (${inventoryProduct.productCode})`}
+              </h3>
               <div>
                 <button onClick={closeInventoryModal}>Close</button>
               </div>

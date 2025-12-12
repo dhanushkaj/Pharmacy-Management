@@ -35,23 +35,34 @@ export default function Billing() {
   const fetchCustomers = async () => {
     try {
       const data = await api('/api/customers', { token });
-      setAllCustomers(Array.isArray(data.content) ? data.content : []);
+      console.log('Fetched customers:', data);
+      // Handle paginated response or direct array
+      const customers = data?.content ? data.content : Array.isArray(data) ? data : [];
+      console.log('Setting customers:', customers);
+      setAllCustomers(customers);
     } catch (err) {
       console.error('Failed to load customers:', err);
+      setError('Failed to load customers: ' + err.message);
     }
   };
 
   const fetchProducts = async () => {
     try {
       const data = await api('/api/products', { token });
-      setAllProducts(Array.isArray(data.content) ? data.content : []);
+      console.log('Fetched products:', data);
+      // Handle paginated response or direct array
+      const products = data?.content ? data.content : Array.isArray(data) ? data : [];
+      console.log('Setting products:', products);
+      setAllProducts(products);
     } catch (err) {
       console.error('Failed to load products:', err);
+      setError('Failed to load products: ' + err.message);
     }
   };
 
   // Customer search filter
   useEffect(() => {
+    console.log('Customer search triggered:', customerSearch, 'Total customers:', allCustomers.length);
     if (!customerSearch.trim()) {
       setFilteredCustomers([]);
       return;
@@ -63,11 +74,13 @@ export default function Billing() {
         c.phone?.toLowerCase().includes(lower) ||
         c.address?.toLowerCase().includes(lower)
     );
+    console.log('Filtered customers:', filtered);
     setFilteredCustomers(filtered);
   }, [customerSearch, allCustomers]);
 
   // Product search filter
   useEffect(() => {
+    console.log('Product search triggered:', productSearch, 'Total products:', allProducts.length);
     if (!productSearch.trim()) {
       setFilteredProducts([]);
       return;
@@ -80,6 +93,7 @@ export default function Billing() {
         p.category?.categoryName?.toLowerCase().includes(lower) ||
         p.productCode?.toLowerCase().includes(lower)
     );
+    console.log('Filtered products:', filtered);
     setFilteredProducts(filtered);
   }, [productSearch, allProducts]);
 

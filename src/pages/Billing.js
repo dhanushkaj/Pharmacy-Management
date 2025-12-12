@@ -500,9 +500,16 @@ export default function Billing() {
   };
 
   const handlePrintAndClose = () => {
-    window.print();
-    resetForm();
-    setShowBillPreview(false);
+    // Auto-print with slight delay for modal to render
+    setTimeout(() => {
+      window.print();
+    }, 300);
+    
+    // Close modal after print dialog (or immediate in kiosk mode)
+    setTimeout(() => {
+      resetForm();
+      setShowBillPreview(false);
+    }, 1000);
   };
 
   const handleCloseWithoutPrint = () => {

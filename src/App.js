@@ -27,6 +27,7 @@ import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
+import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
 import GRNListView from './pages/GRNListView';
 
@@ -68,6 +69,7 @@ const AppContent = () => {
           </Routes>
         </div>
         {!isAuthPage && <Footer />}
+        {!isAuthPage && <PrintSetupGuide />}
       </div>
     </div>
   );

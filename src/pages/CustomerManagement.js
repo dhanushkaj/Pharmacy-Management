@@ -4,7 +4,7 @@ import { AuthContext } from '../components/AuthContext';
 
 const API_BASE = process.env.REACT_APP_API_BASE || '';
 
-const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '' };
+const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0' };
 
 const CustomerManagement = () => {
   const { token: ctxToken } = useContext(AuthContext);
@@ -74,6 +74,7 @@ const CustomerManagement = () => {
         phone: form.phone?.trim() || null,
         email: form.email?.trim() || null,
         address: form.address?.trim() || null,
+        discountPercentage: parseFloat(form.discountPercentage) || 0,
       };
 
       const isUpdate = !!form.customerId;
@@ -106,6 +107,7 @@ const CustomerManagement = () => {
       phone: c.phone || '',
       email: c.email || '',
       address: c.address || '',
+      discountPercentage: c.discountPercentage || '0',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -199,6 +201,20 @@ const CustomerManagement = () => {
             style={{ padding: 8 }}
           />
         </div>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150 }}>
+          <label>Discount %</label>
+          <input
+            type="number"
+            name="discountPercentage"
+            value={form.discountPercentage}
+            onChange={handleChange}
+            placeholder="0.00"
+            min="0"
+            max="100"
+            step="0.01"
+            style={{ padding: 8 }}
+          />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
           <button
@@ -252,6 +268,7 @@ const CustomerManagement = () => {
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Phone</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Email</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Address</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Discount %</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Actions</th>
           </tr>
         </thead>
@@ -263,6 +280,7 @@ const CustomerManagement = () => {
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.phone || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.email || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.address || '-'}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.discountPercentage || 0}%</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>
                 <button
                   onClick={() => onEdit(c)}

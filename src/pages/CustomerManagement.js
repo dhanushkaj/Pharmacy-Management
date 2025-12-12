@@ -44,7 +44,8 @@ const CustomerManagement = () => {
       const res = await fetch(`${API_BASE}/api/customers`, { headers: { ...authHeaders } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to load customers');
-      setList(Array.isArray(data) ? data : []);
+      // Handle paginated response (data.content) or direct array
+      setList(Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e.message);
     } finally {

@@ -28,6 +28,7 @@ const Sidebar = () => {
           {role === 'admin' && <li><NavLink to="/grn" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Approve GRN</NavLink></li>}
           <li><NavLink to="/inventory-returns" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Inventory Returns</NavLink></li>
           <li><NavLink to="/billing" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Billing</NavLink></li>
+          <li><NavLink to="/billing-history" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Billing History</NavLink></li>
           <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Customers</NavLink></li>
           <li><NavLink to="/bin" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Product Bin</NavLink></li>
           {(role === 'admin' || role === 'manager') && (
@@ -48,6 +49,7 @@ const Sidebar = () => {
               )}
             </li>
           )}
+          <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>🏪 Store Settings</NavLink></li>
           <li><NavLink to="/settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Settings & Security</NavLink></li>
         </ul>
       </nav>

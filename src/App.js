@@ -10,10 +10,12 @@ import SupplierManagement from './pages/SupplierManagement';
 import ProductManagement from './pages/ProductManagement';
 import GRNManagement from './pages/GRNManagement';
 import Billing from './pages/Billing';
+import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
 import ReportsAlerts from './pages/ReportsAlerts';
 import SettingsSecurity from './pages/SettingsSecurity';
+import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
@@ -49,6 +51,7 @@ const AppContent = () => {
             <Route path="/purchase-order" element={<PrivateRoute><PurchaseOrder /></PrivateRoute>} />
             <Route path="/grn" element={<PrivateRoute><GRNManagement /></PrivateRoute>} />
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+            <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             <Route path="/reports" element={<PrivateRoute><ReportsAlerts /></PrivateRoute>} />
@@ -58,6 +61,7 @@ const AppContent = () => {
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
+            <Route path="/store-settings" element={<PrivateRoute><StoreSettings /></PrivateRoute>} />
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />

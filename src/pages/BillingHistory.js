@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
-import api from '../utill/api';
+import { api } from '../utill/api';
 
 export default function BillingHistory() {
   const { token } = useContext(AuthContext);

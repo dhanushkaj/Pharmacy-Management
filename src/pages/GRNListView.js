@@ -389,6 +389,7 @@ const GRNListView = () => {
                   <th style={th}>Product</th>
                   <th style={th}>Quantity</th>
                   <th style={th}>Unit Cost</th>
+                  <th style={th}>Selling Price</th>
                   <th style={th}>Total Cost</th>
                 </tr>
               </thead>
@@ -398,6 +399,7 @@ const GRNListView = () => {
                     <td style={td}>{item.productName}</td>
                     <td style={td}>{item.receivedQuantity}</td>
                     <td style={td}>Rs.{item.unitCost.toFixed(2)}</td>
+                    <td style={td}>Rs.{item.sellingPrice ? item.sellingPrice.toFixed(2) : 'N/A'}</td>
                     <td style={td}>
                       Rs.{(item.receivedQuantity * item.unitCost).toFixed(2)}
                     </td>
@@ -406,7 +408,7 @@ const GRNListView = () => {
               </tbody>
               <tfoot>
                 <tr style={{ background: "#f8f9fa", fontWeight: "bold" }}>
-                  <td style={td} colSpan="3">Total</td>
+                  <td style={td} colSpan="4">Total</td>
                   <td style={td}>
                     Rs. 
                     {selectedGrn.items

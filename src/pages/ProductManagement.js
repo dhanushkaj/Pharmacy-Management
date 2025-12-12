@@ -1376,8 +1376,8 @@ const ProductManagement = () => {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#f0f0f0" }}>
-                    <th>Price</th>
-                    <th>Cost</th>
+                    <th>Selling Price</th>
+                    <th>Unit Cost</th>
                     <th>Stock</th>
                     <th>Batch</th>
                     <th>Created At</th>
@@ -1547,7 +1547,7 @@ const ProductManagement = () => {
                 }}
               >
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  <label>Price</label>
+                  <label>Selling Price</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1561,7 +1561,7 @@ const ProductManagement = () => {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  <label>Cost Price</label>
+                  <label>Unit Cost</label>
                   <input
                     type="number"
                     step="0.01"

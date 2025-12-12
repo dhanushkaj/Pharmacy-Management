@@ -2,6 +2,29 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
+// Print styles for thermal printer
+const printStyles = `
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #billing-thermal-print, #billing-thermal-print * {
+      visibility: visible;
+    }
+    #billing-thermal-print {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 80mm !important;
+      margin: 0;
+      padding: 10mm !important;
+    }
+    .no-print {
+      display: none !important;
+    }
+  }
+`;
+
 export default function Billing() {
   const { token } = useContext(AuthContext);
   const [error, setError] = useState(null);
@@ -19,6 +42,10 @@ export default function Billing() {
   const [productSearch, setProductSearch] = useState('');
   const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
+  const [showPriceOptions, setShowPriceOptions] = useState(false);
+  const [priceOptions, setPriceOptions] = useState([]);
 
   // Cart Section
   const [cartItems, setCartItems] = useState([]);
@@ -26,19 +53,38 @@ export default function Billing() {
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
 
-  // Load customers and products on mount
+  // Bill Preview Modal
+  const [showBillPreview, setShowBillPreview] = useState(false);
+  const [createdBilling, setCreatedBilling] = useState(null);
+  const [storeSettings, setStoreSettings] = useState(null);
+
+  // Load store settings, customers and products on mount, inject print styles
   useEffect(() => {
+    const saved = localStorage.getItem('storeSettings');
+    if (saved) {
+      setStoreSettings(JSON.parse(saved));
+    }
+    
+    // Inject print styles
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = printStyles;
+    document.head.appendChild(styleEl);
+    
     fetchCustomers();
     fetchProducts();
+    
+    return () => {
+      if (styleEl.parentNode) {
+        document.head.removeChild(styleEl);
+      }
+    };
   }, []);
 
   const fetchCustomers = async () => {
     try {
       const data = await api('/api/customers', { token });
-      console.log('Fetched customers:', data);
       // Handle paginated response or direct array
       const customers = data?.content ? data.content : Array.isArray(data) ? data : [];
-      console.log('Setting customers:', customers);
       setAllCustomers(customers);
     } catch (err) {
       console.error('Failed to load customers:', err);
@@ -49,21 +95,46 @@ export default function Billing() {
   const fetchProducts = async () => {
     try {
       const data = await api('/api/products', { token });
-      console.log('Fetched products:', data);
       // Handle paginated response or direct array
       const products = data?.content ? data.content : Array.isArray(data) ? data : [];
-      console.log('Setting products:', products);
-      setAllProducts(products);
+      
+      // Fetch inventory for each product to get selling prices
+      const productsWithPrices = await Promise.all(
+        products.map(async (product) => {
+          try {
+            const inventory = await api(`/api/products/${product.productId}/inventory`, { token });
+            // Get unique selling prices from inventory (price is returned as string, convert to number)
+            const prices = [...new Set(inventory.map(item => parseFloat(item.price) || 0))].filter(p => p > 0);
+            // Calculate total stock from all inventory items
+            const totalStock = inventory.reduce((sum, item) => sum + (item.stock || 0), 0);
+            return {
+              ...product,
+              sellingPrices: prices.length > 0 ? prices : null,
+              hasMultiplePrices: prices.length > 1,
+              totalStock: totalStock
+            };
+          } catch (err) {
+            console.warn(`⚠️ Failed to fetch inventory for product ${product.name}:`, err.message);
+            return {
+              ...product,
+              sellingPrices: null,
+              hasMultiplePrices: false,
+              totalStock: 0
+            };
+          }
+        })
+      );
+      
+      setAllProducts(productsWithPrices);
     } catch (err) {
-      console.error('Failed to load products:', err);
+      console.error('❌ Failed to load products:', err);
       setError('Failed to load products: ' + err.message);
     }
   };
 
   // Customer search filter
   useEffect(() => {
-    console.log('Customer search triggered:', customerSearch, 'Total customers:', allCustomers.length);
-    if (!customerSearch.trim()) {
+    if (!customerSearch || !customerSearch.trim()) {
       setFilteredCustomers([]);
       return;
     }
@@ -74,27 +145,26 @@ export default function Billing() {
         c.phone?.toLowerCase().includes(lower) ||
         c.address?.toLowerCase().includes(lower)
     );
-    console.log('Filtered customers:', filtered);
     setFilteredCustomers(filtered);
   }, [customerSearch, allCustomers]);
 
   // Product search filter
   useEffect(() => {
-    console.log('Product search triggered:', productSearch, 'Total products:', allProducts.length);
-    if (!productSearch.trim()) {
+    if (!productSearch || !productSearch.trim()) {
       setFilteredProducts([]);
+      setSelectedProductIndex(-1);
       return;
     }
     const lower = productSearch.toLowerCase();
     const filtered = allProducts.filter(
       (p) =>
-        p.productName?.toLowerCase().includes(lower) ||
+        p.name?.toLowerCase().includes(lower) ||
         p.genericName?.toLowerCase().includes(lower) ||
-        p.category?.categoryName?.toLowerCase().includes(lower) ||
+        p.category?.name?.toLowerCase().includes(lower) ||
         p.productCode?.toLowerCase().includes(lower)
     );
-    console.log('Filtered products:', filtered);
     setFilteredProducts(filtered);
+    setSelectedProductIndex(-1);
   }, [productSearch, allProducts]);
 
   const handleSelectCustomer = (customer) => {
@@ -126,37 +196,196 @@ export default function Billing() {
     }
   };
 
-  // Parse quantity multiplier (e.g., "12*" means 12 units)
+  // Parse quantity multiplier (e.g., "paracetamol *12" means 12 units)
   const parseQuantityMultiplier = (text) => {
-    const match = text.trim().match(/^(\d+)\*$/);
-    return match ? parseInt(match[1], 10) : null;
+    if (!text) return 1;
+    const match = text.trim().match(/\*(\d+)\s*$/);
+    return match ? parseInt(match[1], 10) : 1;
   };
 
-  const handleProductSearchKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // Check if input is quantity multiplier
-      const qty = parseQuantityMultiplier(productSearch);
-      if (qty !== null) {
-        // If last search result exists, add it with this quantity
-        if (filteredProducts.length > 0) {
-          addProductToCart(filteredProducts[0], qty);
-          setProductSearch('');
-          setFilteredProducts([]);
-        }
-      }
+  // Extract product name without quantity multiplier
+  const getProductNameFromSearch = (text) => {
+    if (!text) return '';
+    return text.trim().replace(/\*\d+\s*$/, '').trim();
+  };
+
+  const handleSelectProductFromDropdown = async (product) => {
+    // Validate product is not null
+    if (!product || !product.productId) {
+      console.error('Invalid product passed to handleSelectProductFromDropdown:', product);
+      setFilteredProducts([]);
+      setProductSearch('');
+      return;
+    }
+    
+    // Parse quantity from search box (if user typed "*12" etc)
+    const quantity = parseQuantityMultiplier(productSearch);
+    
+    // Close dropdown immediately
+    setFilteredProducts([]);
+    setSelectedProductIndex(-1);
+    
+    // Check if product has inventory and prices
+    if (!product.sellingPrices || product.sellingPrices.length === 0) {
+      alert('No inventory found for this product! Please add inventory first.');
+      setProductSearch('');
+      return;
+    }
+    
+    // If product has multiple prices, show price selection modal
+    if (product.hasMultiplePrices && product.sellingPrices.length > 1) {
+      await fetchInventoryForProduct(product, quantity);
+      // Don't clear selectedProduct here - it's needed for the price modal
+      setProductSearch('');
+    } else {
+      // Single price - add directly to cart
+      const price = product.sellingPrices[0];
+      addProductToCart(product, quantity, price);
+      // Clear search box and selected product after adding to cart
+      setProductSearch('');
+      setSelectedProduct(null);
     }
   };
 
-  const addProductToCart = (product, quantity = 1) => {
+  const handleProductSearchKeyDown = async (e) => {
+    // Handle arrow key navigation
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (filteredProducts.length > 0) {
+        setSelectedProductIndex((prev) => (prev < filteredProducts.length - 1 ? prev + 1 : prev));
+      }
+      return;
+    }
+    
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedProductIndex((prev) => (prev > 0 ? prev - 1 : -1));
+      return;
+    }
+    
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      
+      // If a product is highlighted with arrow keys, select it
+      if (selectedProductIndex >= 0 && filteredProducts[selectedProductIndex]) {
+        handleSelectProductFromDropdown(filteredProducts[selectedProductIndex]);
+        return;
+      }
+      
+      const quantity = parseQuantityMultiplier(productSearch);
+      const productName = getProductNameFromSearch(productSearch);
+      
+      // Find product by name
+      let product = selectedProduct;
+      if (!product) {
+        product = allProducts.find(p => 
+          p.name?.toLowerCase() === productName.toLowerCase()
+        );
+      }
+      
+      if (!product && filteredProducts.length > 0) {
+        product = filteredProducts[0];
+      }
+      
+      if (!product) {
+        alert('Product not found! Please select a product from the dropdown first.');
+        return;
+      }
+      
+      // Fetch inventory items for this product to show price options
+      await fetchInventoryForProduct(product, quantity);
+    }
+  };
+
+  const fetchInventoryForProduct = async (product, quantity) => {
+    if (!product || !product.productId) {
+      console.error('Invalid product in fetchInventoryForProduct:', product);
+      return;
+    }
+    
+    try {
+      const data = await api(`/api/products/${product.productId}/inventory`, { token });
+      
+      if (!data || data.length === 0) {
+        alert('No inventory found for this product! Please add inventory first.');
+        return;
+      }
+      
+      // Group by selling price (price is returned as string, convert to number)
+      const priceGroups = {};
+      data.forEach(item => {
+        const price = parseFloat(item.price) || 0;
+        if (!priceGroups[price]) {
+          priceGroups[price] = {
+            price,
+            totalStock: 0,
+            items: []
+          };
+        }
+        priceGroups[price].totalStock += item.stock || 0;
+        priceGroups[price].items.push(item);
+      });
+      
+      const options = Object.values(priceGroups);
+      console.log('Price options:', options);
+      
+      if (options.length === 1) {
+        // Only one price, add directly to cart
+        addProductToCart(product, quantity, options[0].price);
+      } else {
+        // Multiple prices, show selection modal
+        setPriceOptions(options.map(opt => ({ ...opt, quantity })));
+        setSelectedProduct(product);
+        setShowPriceOptions(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch inventory:', err);
+      alert('Failed to fetch inventory: ' + err.message);
+    }
+  };
+
+  const handleSelectPriceOption = (priceOption) => {
+    if (!selectedProduct) {
+      console.error('No product selected');
+      setShowPriceOptions(false);
+      setPriceOptions([]);
+      return;
+    }
+    addProductToCart(selectedProduct, priceOption.quantity, priceOption.price);
+    setShowPriceOptions(false);
+    setPriceOptions([]);
+    setSelectedProduct(null);
+    setProductSearch('');
+  };
+
+  const addProductToCart = (product, quantity = 1, unitPrice = null) => {
+    console.log('Adding to cart:', product, 'Quantity:', quantity, 'Unit Price:', unitPrice);
+    
+    // Validate product is not null
+    if (!product || !product.productId) {
+      console.error('Invalid product:', product);
+      alert('Error: Invalid product data. Please try again.');
+      return;
+    }
+    
     // Validate quantity is positive
     if (quantity <= 0) {
       alert('Quantity must be positive!');
       return;
     }
 
-    // Check if product already in cart
-    const existingIndex = cartItems.findIndex((item) => item.product.productId === product.productId);
+    // Use provided price or fallback to product price
+    const finalPrice = unitPrice !== null ? unitPrice : (product.retailPrice || product.sellingPrice || product.price || 0);
+    console.log('Final price:', finalPrice, 'Product:', product);
+    
+    if (finalPrice === 0) {
+      alert('Warning: Product has no price set! Please check product configuration.');
+    }
+
+    // Check if product already in cart with same price
+    const existingIndex = cartItems.findIndex((item) => 
+      item && item.product && item.product.productId === product.productId && item.unitPrice === finalPrice
+    );
     if (existingIndex >= 0) {
       // Update quantity
       const updated = [...cartItems];
@@ -165,7 +394,6 @@ export default function Billing() {
       setCartItems(updated);
     } else {
       // Add new item
-      const unitPrice = product.retailPrice || 0;
       setCartItems([
         ...cartItems,
         {
@@ -178,6 +406,7 @@ export default function Billing() {
     }
     setProductSearch('');
     setFilteredProducts([]);
+    setSelectedProduct(null);
   };
 
   const updateCartItemQuantity = (index, newQuantity) => {
@@ -253,21 +482,43 @@ export default function Billing() {
         token,
       });
 
-      alert(`Billing created successfully!\nBilling Number: ${response.billingNumber}\n\n(Auto-print will be implemented)`);
+      // Reload store settings from localStorage to ensure latest data
+      const savedSettings = localStorage.getItem('storeSettings');
+      if (savedSettings) {
+        setStoreSettings(JSON.parse(savedSettings));
+      }
 
-      // Reset form
-      setSelectedCustomer(null);
-      setCartItems([]);
-      setDiscountPercentage(0);
-      setPaymentMethod('CASH');
-      setNotes('');
-      setCustomerSearch('');
-      setProductSearch('');
+      // Show bill preview modal
+      setCreatedBilling(response);
+      setShowBillPreview(true);
+
     } catch (err) {
       setError(err.message || 'Failed to create billing');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePrintAndClose = () => {
+    window.print();
+    resetForm();
+    setShowBillPreview(false);
+  };
+
+  const handleCloseWithoutPrint = () => {
+    resetForm();
+    setShowBillPreview(false);
+  };
+
+  const resetForm = () => {
+    setSelectedCustomer(null);
+    setCartItems([]);
+    setDiscountPercentage(0);
+    setPaymentMethod('CASH');
+    setNotes('');
+    setCustomerSearch('');
+    setProductSearch('');
+    setCreatedBilling(null);
   };
 
   return (
@@ -350,28 +601,104 @@ export default function Billing() {
           <h3>Product Search & Add</h3>
           <input
             type="text"
-            placeholder="Search product (name, code, category) or enter qty multiplier (e.g., 12*)"
+            placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
             value={productSearch}
             onChange={(e) => setProductSearch(e.target.value)}
             onKeyDown={handleProductSearchKeyDown}
             style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8 }}
           />
-          <small style={{ color: '#666' }}>Tip: Type product name, then press Enter. Or type "12*" and press Enter to add 12 units of the last searched product.</small>
+          <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
+            <strong>Quick Add Instructions:</strong><br />
+            1. Type product name - dropdown appears<br />
+            2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
+            3. Product automatically added to cart (qty: 1)<br />
+            4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />
+            5. If multiple prices available, a selection dialog will appear
+            <br />
+            <span style={{ fontSize: 10, color: '#999' }}>
+              {allProducts.length} total products | {filteredProducts.length} filtered
+            </span>
+          </small>
           {filteredProducts.length > 0 && (
             <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
-              {filteredProducts.map((p) => (
-                <div
-                  key={p.productId}
-                  onClick={() => addProductToCart(p, 1)}
-                  style={{ padding: 10, cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                >
-                  <strong>{p.productName}</strong> ({p.productCode}) - Rs. {p.retailPrice?.toFixed(2) || '0.00'}
-                  <br />
-                  <small>
-                    Generic: {p.genericName || 'N/A'} | Category: {p.category?.categoryName || 'N/A'} | Stock: {p.currentStock || 0}
-                  </small>
-                </div>
-              ))}
+              {filteredProducts.filter(p => p != null).map((p, idx) => {
+                const isSelected = idx === selectedProductIndex;
+                
+                // If product has multiple prices, show each price as a separate row
+                if (p.hasMultiplePrices && p.sellingPrices && p.sellingPrices.length > 1) {
+                  return p.sellingPrices.map((price, priceIdx) => (
+                    <div
+                      key={`${p.productId}-${priceIdx}`}
+                      onClick={() => handleSelectProductFromDropdown(p)}
+                      style={{
+                        padding: 12,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        background: isSelected && priceIdx === 0 ? '#e3f2fd' : '#fff'
+                      }}
+                      onMouseEnter={() => setSelectedProductIndex(idx)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
+                            {p.name || 'N/A'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                            {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
+                            Rs. {price.toFixed(2)}
+                          </div>
+                          {priceIdx > 0 && (
+                            <div style={{ fontSize: 10, color: '#999' }}>
+                              Option {priceIdx + 1}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                }
+                
+                // Single price product - show in one row
+                return (
+                  <div
+                    key={p.productId}
+                    onClick={() => handleSelectProductFromDropdown(p)}
+                    style={{
+                      padding: 12,
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #eee',
+                      background: isSelected ? '#e3f2fd' : '#fff'
+                    }}
+                    onMouseEnter={() => setSelectedProductIndex(idx)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
+                          {p.name || 'N/A'}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                          {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
+                        {p.sellingPrices && p.sellingPrices.length > 0 ? (
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
+                            Rs. {p.sellingPrices[0].toFixed(2)}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: '#ff9800' }}>
+                            No Price
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -383,29 +710,36 @@ export default function Billing() {
             <p style={{ color: '#999' }}>No items added yet</p>
           ) : (
             <div style={{ marginBottom: 16 }}>
-              {cartItems.map((item, idx) => (
+              {cartItems.filter(item => item && item.product).map((item, idx) => (
                 <div key={idx} style={{ padding: 10, background: '#fff', border: '1px solid #ddd', borderRadius: 4, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
-                      <strong>{item.product.productName}</strong> ({item.product.productCode})
-                      <br />
-                      <small>
-                        Unit Price: Rs. {item.unitPrice.toFixed(2)} | Qty:{' '}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4, wordWrap: 'break-word', whiteSpace: 'normal' }}>
+                        {item.product.name}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
+                        Code: {item.product.productCode}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13 }}>Unit Price: Rs. {item.unitPrice.toFixed(2)}</span>
+                        <span style={{ fontSize: 13 }}>|</span>
+                        <span style={{ fontSize: 13 }}>Qty:</span>
                         <input
                           type="number"
                           min="1"
                           value={item.quantity}
                           onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
-                          style={{ width: 60, padding: 4 }}
+                          style={{ width: 60, padding: 4, fontSize: 13 }}
                         />
-                      </small>
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <strong>Rs. {item.subtotal.toFixed(2)}</strong>
-                      <br />
+                    <div style={{ textAlign: 'right', minWidth: 100 }}>
+                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#2196f3', marginBottom: 8 }}>
+                        Rs. {item.subtotal.toFixed(2)}
+                      </div>
                       <button
                         onClick={() => removeCartItem(idx)}
-                        style={{ marginTop: 4, padding: '4px 8px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        style={{ padding: '6px 12px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
                       >
                         Remove
                       </button>
@@ -531,6 +865,330 @@ export default function Billing() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Price Options Modal */}
+      {showPriceOptions && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowPriceOptions(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 500 }}>
+            <h3>Select Selling Price</h3>
+            <p style={{ color: '#666', marginBottom: 16 }}>
+              This product has multiple selling prices in inventory. Please select one:
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              {priceOptions.map((option, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleSelectPriceOption(option)}
+                  style={{
+                    padding: 16,
+                    border: '2px solid #2196f3',
+                    borderRadius: 8,
+                    marginBottom: 12,
+                    cursor: 'pointer',
+                    background: '#f0f8ff',
+                    ':hover': { background: '#e3f2fd' }
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#2196f3' }}>
+                        Rs. {option.price.toFixed(2)}
+                      </div>
+                      <div style={{ color: '#666', fontSize: 14 }}>
+                        Available Stock: {option.totalStock} units
+                      </div>
+                      <div style={{ color: '#666', fontSize: 12 }}>
+                        Quantity to add: {option.quantity}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#4caf50' }}>
+                      Total: Rs. {(option.price * option.quantity).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPriceOptions(false)}
+              style={{ padding: '8px 16px', background: '#ccc', border: 'none', borderRadius: 4, width: '100%' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bill Preview Modal after successful billing creation */}
+      {showBillPreview && createdBilling && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              maxWidth: 450,
+              maxHeight: '95vh',
+              overflow: 'auto',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Success Header */}
+            <div
+              className="no-print"
+              style={{
+                padding: 20,
+                background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+                color: '#fff',
+                textAlign: 'center',
+                borderTopLeftRadius: 12,
+                borderTopRightRadius: 12,
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 8 }}>✓</div>
+              <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
+                Billing Created Successfully!
+              </div>
+              <div style={{ fontSize: 14, opacity: 0.9 }}>
+                Bill #{createdBilling.billingNumber}
+              </div>
+            </div>
+
+            {/* Thermal Bill Content */}
+            <div
+              id="billing-thermal-print"
+              style={{
+                width: 320,
+                margin: '0 auto',
+                padding: '24px 20px',
+                fontFamily: 'monospace',
+                fontSize: 11,
+                lineHeight: 1.5,
+                background: '#fff',
+              }}
+            >
+              {/* Store Header */}
+              {storeSettings?.logo && (
+                <div style={{ textAlign: 'center', marginBottom: 10 }}>
+                  <img
+                    src={storeSettings.logo}
+                    alt="Logo"
+                    style={{ maxWidth: 140, maxHeight: 70 }}
+                  />
+                </div>
+              )}
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>
+                {storeSettings?.storeName || 'PHARMACY'}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                {storeSettings?.address || 'Store Address'}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                Tel: {storeSettings?.phone || 'N/A'}
+              </div>
+              {storeSettings?.email && (
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                  {storeSettings.email}
+                </div>
+              )}
+              {storeSettings?.taxId && (
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                  Tax ID: {storeSettings.taxId}
+                </div>
+              )}
+
+              <div style={{ borderTop: '2px solid #000', margin: '10px 0' }}></div>
+
+              {/* Bill Details */}
+              <div style={{ fontSize: 11, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Invoice #:</strong>
+                  <span>{createdBilling.billingNumber}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Date:</strong>
+                  <span>{new Date(createdBilling.billingDate).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Customer:</strong>
+                  <span>{createdBilling.customerName}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Phone:</strong>
+                  <span>{createdBilling.customerPhone}</span>
+                </div>
+                {createdBilling.paymentMethod && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <strong>Payment:</strong>
+                    <span>{createdBilling.paymentMethod}</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+
+              {/* Items Table */}
+              <table style={{ width: '100%', fontSize: 10, marginBottom: 10, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #000' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 'bold' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '6px 0', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {createdBilling.items.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px dotted #ccc' }}>
+                      <td style={{ padding: '6px 0', fontSize: 10 }}>
+                        <div style={{ fontWeight: 'bold' }}>{item.productName}</div>
+                        {item.productCode && (
+                          <div style={{ fontSize: 8, color: '#666' }}>Code: {item.productCode}</div>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '6px 0' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '6px 0' }}>
+                        {item.unitPrice.toFixed(2)}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>
+                        {item.subtotal.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+
+              {/* Totals */}
+              <div style={{ fontSize: 11 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span>Subtotal:</span>
+                  <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
+                </div>
+                {createdBilling.discountPercentage > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#d32f2f' }}>
+                    <span>Discount ({createdBilling.discountPercentage}%):</span>
+                    <span>- Rs. {createdBilling.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    paddingTop: 10,
+                    borderTop: '2px solid #000',
+                    fontWeight: 'bold',
+                    fontSize: 14,
+                    marginTop: 6,
+                  }}
+                >
+                  <span>GRAND TOTAL:</span>
+                  <span>Rs. {createdBilling.grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {createdBilling.notes && (
+                <>
+                  <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+                  <div style={{ fontSize: 9, fontStyle: 'italic', wordWrap: 'break-word' }}>
+                    <strong>Notes:</strong> {createdBilling.notes}
+                  </div>
+                </>
+              )}
+
+              <div style={{ borderTop: '2px solid #000', margin: '12px 0' }}></div>
+
+              {/* Footer */}
+              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 12 }}>
+                <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Thank You!</div>
+                <div style={{ fontSize: 9 }}>Please keep this bill for warranty claims</div>
+              </div>
+
+              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 10, color: '#999' }}>
+                Powered by Pharmacy Management System
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div
+              className="no-print"
+              style={{
+                padding: 20,
+                borderTop: '1px solid #ddd',
+                display: 'flex',
+                gap: 12,
+                justifyContent: 'center',
+                background: '#f9f9f9',
+                borderBottomLeftRadius: 12,
+                borderBottomRightRadius: 12,
+              }}
+            >
+              <button
+                onClick={handlePrintAndClose}
+                style={{
+                  padding: '12px 32px',
+                  background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 16,
+                  boxShadow: '0 2px 8px rgba(76,175,80,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 20 }}>🖨️</span>
+                Print & Close
+              </button>
+              <button
+                onClick={handleCloseWithoutPrint}
+                style={{
+                  padding: '12px 32px',
+                  background: '#fff',
+                  color: '#666',
+                  border: '2px solid #ddd',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 16,
+                }}
+              >
+                Close Without Print
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -49,6 +49,7 @@ const Sidebar = () => {
               )}
             </li>
           )}
+          <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>🏪 Store Settings</NavLink></li>
           <li><NavLink to="/settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Settings & Security</NavLink></li>
         </ul>
       </nav>

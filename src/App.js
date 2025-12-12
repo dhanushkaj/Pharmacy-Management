@@ -15,6 +15,7 @@ import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
 import ReportsAlerts from './pages/ReportsAlerts';
 import SettingsSecurity from './pages/SettingsSecurity';
+import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
@@ -60,6 +61,7 @@ const AppContent = () => {
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
+            <Route path="/store-settings" element={<PrivateRoute><StoreSettings /></PrivateRoute>} />
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />

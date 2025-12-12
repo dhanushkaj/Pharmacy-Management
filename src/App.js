@@ -10,6 +10,7 @@ import SupplierManagement from './pages/SupplierManagement';
 import ProductManagement from './pages/ProductManagement';
 import GRNManagement from './pages/GRNManagement';
 import Billing from './pages/Billing';
+import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
 import ReportsAlerts from './pages/ReportsAlerts';
@@ -49,6 +50,7 @@ const AppContent = () => {
             <Route path="/purchase-order" element={<PrivateRoute><PurchaseOrder /></PrivateRoute>} />
             <Route path="/grn" element={<PrivateRoute><GRNManagement /></PrivateRoute>} />
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+            <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             <Route path="/reports" element={<PrivateRoute><ReportsAlerts /></PrivateRoute>} />

@@ -251,6 +251,75 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
+function exportToCSV(products) {
+  if (!products || products.length === 0) {
+    alert('No products to export');
+    return;
+  }
+
+  // CSV header
+  const headers = [
+    'Product Code',
+    'Name',
+    'Generic Name',
+    'Category',
+    'Supplier',
+    'Cost Price',
+    'Price',
+    'Stock',
+    'Min Stock',
+    'Max Stock',
+    'Max Discount',
+    'Expiry Date',
+    'Barcode',
+    'Bin Location',
+    'Patient Instructions'
+  ];
+
+  // CSV rows
+  const rows = products.map(p => [
+    p.productCode || '',
+    p.name || '',
+    p.genericName || '',
+    p.categoryName || '',
+    p.supplierName || '',
+    p.costPrice || '',
+    p.price || '',
+    p.stock || '',
+    p.minStock || '',
+    p.maxStock || '',
+    p.maxDiscount || '',
+    p.expiryDate || '',
+    p.barcode || '',
+    p.binLocation || '',
+    (p.patientInstructions || '').replace(/[\r\n]+/g, ' ') // Remove line breaks
+  ]);
+
+  // Escape CSV values
+  const escapeCSV = (value) => {
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  // Build CSV content
+  const csvContent = [
+    headers.map(escapeCSV).join(','),
+    ...rows.map(row => row.map(escapeCSV).join(','))
+  ].join('\n');
+
+  // Download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `products_export_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // UI helpers
 function normalizeProductCode(value) {
   return (value || "").toUpperCase();
@@ -1123,6 +1192,20 @@ const ProductManagement = () => {
         />
         <button type="button" onClick={downloadTemplate}>
           Download template
+        </button>
+        <button 
+          type="button" 
+          onClick={() => exportToCSV(filtered)}
+          style={{
+            background: '#4caf50',
+            color: '#fff',
+            padding: '6px 12px',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer'
+          }}
+        >
+          Export to CSV
         </button>
         {bulkBusy && <span>Uploading…</span>}
       </div>

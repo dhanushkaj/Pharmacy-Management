@@ -1,48 +1,99 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { 
+  FaBoxes, 
+  FaTruck, 
+  FaPills, 
+  FaShoppingCart, 
+  FaClipboardList, 
+  FaFileInvoiceDollar, 
+  FaHistory, 
+  FaUsers, 
+  FaTrashAlt, 
+  FaChartBar, 
+  FaListAlt, 
+  FaUndo, 
+  FaCog 
+} from 'react-icons/fa';
 
 const links = [
   {
     to: '/categories',
     label: 'Categories',
-    color: '#388e3c', // dark green
-    icon: 'category' // Suggest: FaBoxes or category SVG
+    color: '#388e3c',
+    icon: <FaBoxes size={40} />
   },
   {
     to: '/suppliers',
     label: 'Suppliers',
-    color: '#66bb6a', // light green
-    icon: 'local_shipping' // Suggest: FaUserMd or truck SVG
+    color: '#66bb6a',
+    icon: <FaTruck size={40} />
   },
   {
     to: '/products',
     label: 'Products',
-    color: '#1976d2', // dark blue
-    icon: 'medication' // Suggest: FaPills or medication SVG
+    color: '#1976d2',
+    icon: <FaPills size={40} />
+  },
+  {
+    to: '/purchase-order',
+    label: 'Purchase Order',
+    color: '#1565c0',
+    icon: <FaShoppingCart size={40} />
+  },
+  {
+    to: '/grn',
+    label: 'GRN',
+    color: '#2e7d32',
+    icon: <FaClipboardList size={40} />
   },
   {
     to: '/billing',
     label: 'Billing',
-    color: '#0288d1', // light blue
-    icon: 'receipt_long' // Suggest: FaFileInvoiceDollar or receipt SVG
+    color: '#0288d1',
+    icon: <FaFileInvoiceDollar size={40} />
+  },
+  {
+    to: '/billing-history',
+    label: 'Billing History',
+    color: '#0277bd',
+    icon: <FaHistory size={40} />
   },
   {
     to: '/customers',
     label: 'Customers',
-    color: '#c62828', // red
-    icon: 'group' // Suggest: FaUsers or group SVG
-  },
-  {
-    to: '/reports',
-    label: 'Reports',
-    color: '#8e24aa', // purple
-    icon: 'bar_chart' // Suggest: FaChartBar or chart SVG
+    color: '#c62828',
+    icon: <FaUsers size={40} />
   },
   {
     to: '/bin',
     label: 'Product Bin',
-    color: '#455a64', // dark gray
-    icon: 'delete' // Suggest: FaTrashAlt or delete SVG
+    color: '#455a64',
+    icon: <FaTrashAlt size={40} />
+  },
+  {
+    to: '/reports',
+    label: 'Reports',
+    color: '#8e24aa',
+    icon: <FaChartBar size={40} />
+  },
+  {
+    to: '/audit-trail',
+    label: 'Audit Trail',
+    color: '#5e35b1',
+    icon: <FaListAlt size={40} />
+  },
+  {
+    to: '/inventory-returns',
+    label: 'Returns',
+    color: '#d32f2f',
+    icon: <FaUndo size={40} />
+  },
+  {
+    to: '/settings',
+    label: 'Settings',
+    color: '#616161',
+    icon: <FaCog size={40} />
   },
 ];
 
@@ -61,12 +112,15 @@ const Landing = () => (
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 16,
-              boxShadow: '0 2px 12px #0002'
-            }}>
-              {/* Remove the icon text placeholder below */}
-              {/* <span style={{ color: '#fff', fontSize: 38, fontWeight: 600 }}>
+              boxShadow: '0 2px 12px #0002',
+              transition: 'transform 0.2s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <span style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {link.icon}
-              </span> */}
+              </span>
             </div>
             <span style={{ fontSize: 18, fontWeight: 500 }}>{link.label}</span>
           </div>

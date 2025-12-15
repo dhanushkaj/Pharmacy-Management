@@ -160,6 +160,67 @@ export default function BillingHistory() {
     }
   };
 
+  const exportToCSV = () => {
+    if (!billings || billings.length === 0) {
+      alert('No billing records to export');
+      return;
+    }
+
+    // CSV header
+    const headers = [
+      'Billing #',
+      'Date',
+      'Customer Name',
+      'Customer Phone',
+      'Total Amount (Rs.)',
+      'Paid Amount (Rs.)',
+      'Change (Rs.)',
+      'Discount %',
+      'Payment Method',
+      'Items Count',
+      'Printed'
+    ];
+
+    // CSV rows
+    const rows = billings.map(b => [
+      b.billingId || '',
+      b.billingDate ? new Date(b.billingDate).toLocaleString() : '',
+      b.customerName || 'Walk-in Customer',
+      b.customerPhone || 'N/A',
+      b.totalAmount?.toFixed(2) || '0.00',
+      b.paidAmount?.toFixed(2) || '0.00',
+      b.changeAmount?.toFixed(2) || '0.00',
+      b.discountPercentage?.toFixed(2) || '0.00',
+      b.paymentMethod || 'N/A',
+      b.items?.length || 0,
+      b.printed ? 'Yes' : 'No'
+    ]);
+
+    // Escape CSV values
+    const escapeCSV = (value) => {
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Build CSV content
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `billing_history_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
       <h2>Billing History</h2>
@@ -221,6 +282,12 @@ export default function BillingHistory() {
             style={{ padding: '8px 16px', background: '#757575', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
           >
             Reset
+          </button>
+          <button
+            onClick={exportToCSV}
+            style={{ padding: '8px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+          >
+            Export to CSV
           </button>
         </div>
       </div>

@@ -37,6 +37,17 @@ const PurchaseOrder = () => {
   // Items in this PO
   const [items, setItems] = useState([]);
 
+  // Quick Product Creation Modal state
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [newProduct, setNewProduct] = useState({
+    productCode: "",
+    name: "",
+    categoryId: "",
+    description: "",
+  });
+  const [creatingProduct, setCreatingProduct] = useState(false);
+
   // Auth headers
   const token = localStorage.getItem("token") || "";
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -97,6 +108,27 @@ const PurchaseOrder = () => {
     // re-evaluate when token or local roles change
   }, [token, localStorage.getItem("roles")]);
   // --------- END ROLE GATE
+
+  // --- Load categories for product modal
+  useEffect(() => {
+    let abort = false;
+    async function loadCategories() {
+      try {
+        const res = await fetch(`${API_BASE}/api/categories`, {
+          headers: { ...authHeaders },
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data?.message || "Failed to load categories");
+        if (!abort) setCategories(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load categories:", e.message);
+      }
+    }
+    loadCategories();
+    return () => {
+      abort = true;
+    };
+  }, [token]);
 
   // --- Load suppliers
   useEffect(() => {
@@ -237,6 +269,74 @@ const PurchaseOrder = () => {
     }
   }
 
+  // --- Open product modal
+  function openProductModal() {
+    setNewProduct({
+      productCode: "",
+      name: "",
+      categoryId: "",
+      description: "",
+    });
+    setShowProductModal(true);
+  }
+
+  // --- Close product modal
+  function closeProductModal() {
+    setShowProductModal(false);
+    setNewProduct({
+      productCode: "",
+      name: "",
+      categoryId: "",
+      description: "",
+    });
+  }
+
+  // --- Create new product
+  async function handleCreateProduct(e) {
+    e.preventDefault();
+    
+    if (!newProduct.productCode.trim()) return alert("Product code is required");
+    if (!newProduct.name.trim()) return alert("Product name is required");
+    if (!newProduct.categoryId) return alert("Category is required");
+
+    setCreatingProduct(true);
+    try {
+      const payload = {
+        productCode: newProduct.productCode.trim(),
+        name: newProduct.name.trim(),
+        categoryId: Number(newProduct.categoryId),
+        description: newProduct.description.trim() || null,
+      };
+
+      const res = await fetch(`${API_BASE}/api/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "Failed to create product");
+
+      // Close modal
+      closeProductModal();
+
+      // Auto-select the newly created product
+      setSelectedProduct({
+        productId: data.productId,
+        name: data.name,
+        productCode: data.productCode,
+        genericName: data.genericName || "",
+      });
+      setQuery("");
+      setResults([]);
+
+      alert(`Product "${data.name}" created successfully!`);
+    } catch (e) {
+      alert(`Failed to create product: ${e.message}`);
+    } finally {
+      setCreatingProduct(false);
+    }
+  }
+
   function updateQty(productId, value) {
     const n = Math.max(1, Number(value) || 1); // force ≥ 1
     setItems((list) =>
@@ -350,9 +450,29 @@ const PurchaseOrder = () => {
           }}
         >
           <div style={{ minWidth: 360, position: "relative" }}>
-            <label style={{ marginBottom: 6, display: "block" }}>
-              Search by name / generic / code
-            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label style={{ display: "block" }}>
+                Search by name / generic / code
+              </label>
+              <button
+                type="button"
+                onClick={openProductModal}
+                disabled={!isAllowed}
+                style={{
+                  padding: "4px 12px",
+                  background: "#1890ff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  fontSize: 13,
+                  cursor: isAllowed ? "pointer" : "not-allowed",
+                  opacity: isAllowed ? 1 : 0.6,
+                }}
+                title="Create new product"
+              >
+                + New Product
+              </button>
+            </div>
             <input
               placeholder="Type at least 2 characters…"
               value={selectedProduct ? selectedProduct.name : query}
@@ -510,6 +630,143 @@ const PurchaseOrder = () => {
           Submit Purchase Order
         </button>
       </form>
+
+      {/* Quick Product Creation Modal */}
+      {showProductModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={closeProductModal}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 8,
+              padding: 24,
+              width: "90%",
+              maxWidth: 500,
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 24 }}>Create New Product</h2>
+            <form onSubmit={handleCreateProduct}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+                  Product Code *
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.productCode}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, productCode: e.target.value })
+                  }
+                  placeholder="e.g., MED001"
+                  style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
+                  disabled={creatingProduct}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+                  Product Name *
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  placeholder="e.g., Paracetamol 500mg"
+                  style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
+                  disabled={creatingProduct}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+                  Category *
+                </label>
+                <select
+                  value={newProduct.categoryId}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, categoryId: e.target.value })
+                  }
+                  style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
+                  disabled={creatingProduct}
+                  required
+                >
+                  <option value="">-- Select Category --</option>
+                  {categories.map((cat) => (
+                    <option key={cat.categoryId} value={cat.categoryId}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+                  Description
+                </label>
+                <textarea
+                  value={newProduct.description}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, description: e.target.value })
+                  }
+                  placeholder="Optional product description"
+                  rows={3}
+                  style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
+                  disabled={creatingProduct}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={closeProductModal}
+                  disabled={creatingProduct}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#f0f0f0",
+                    color: "#333",
+                    border: "1px solid #ddd",
+                    borderRadius: 4,
+                    cursor: creatingProduct ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingProduct}
+                  style={{
+                    padding: "8px 16px",
+                    background: creatingProduct ? "#ccc" : "#1890ff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: creatingProduct ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {creatingProduct ? "Creating..." : "Create Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

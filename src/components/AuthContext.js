@@ -10,19 +10,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const t = localStorage.getItem('token');
-    const r = localStorage.getItem('roles');     // stored as JSON string
+    const r = localStorage.getItem('roles');     // stored as JSON string or plain string
     const u = localStorage.getItem('username');
     if (t) setToken(t);
-    if (r) setRoles(JSON.parse(r));
+    if (r) {
+      try {
+        const parsed = JSON.parse(r);
+        setRoles(Array.isArray(parsed) ? parsed : [parsed]);
+      } catch (e) {
+        // fallback: treat as single role string
+        setRoles([r]);
+      }
+    }
     if (u) setUsername(u);
   }, []);
 
   const login = (token, rolesArr = [], user = null) => {
+    const normalizedRoles = Array.isArray(rolesArr) ? rolesArr : [rolesArr];
     setToken(token);
-    setRoles(rolesArr);
+    setRoles(normalizedRoles);
     setUsername(user);
     localStorage.setItem('token', token);
-    localStorage.setItem('roles', JSON.stringify(rolesArr));
+    localStorage.setItem('roles', JSON.stringify(normalizedRoles));
     if (user) localStorage.setItem('username', user);
     console.log(token);
   };
@@ -36,7 +45,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('username');
   };
 
-  const hasRole = (role) => roles.map(r => r.toLowerCase()).includes(role.toLowerCase());
+  const hasRole = (role) => {
+    if (!role) return false;
+    if (!roles) return false;
+    if (Array.isArray(roles)) {
+      return roles.map(r => String(r).toLowerCase()).includes(role.toLowerCase());
+    }
+    return String(roles).toLowerCase() === role.toLowerCase();
+  };
 
   return (
     <AuthContext.Provider value={{ token, roles, username, login, logout, hasRole }}>

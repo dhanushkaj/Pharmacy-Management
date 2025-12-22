@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useContext, useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   FaBoxes, 
   FaTruck, 
@@ -13,8 +13,11 @@ import {
   FaChartBar, 
   FaListAlt, 
   FaUndo, 
-  FaCog 
+  FaCog,
+  FaExclamationTriangle
 } from 'react-icons/fa';
+import { AuthContext } from '../components/AuthContext';
+import { getAlertSummary } from '../utill/alertApi';
 
 const links = [
   {
@@ -97,37 +100,133 @@ const links = [
   },
 ];
 
-const Landing = () => (
-  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f5f5' }}>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 48, width: '80%', maxWidth: 900, justifyItems: 'center' }}>
-      {links.map(link => (
-        <Link key={link.to} to={link.to} style={{ textDecoration: 'none', color: '#333' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{
-              width: 90,
-              height: 90,
-              borderRadius: '50%',
-              background: link.color,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-              boxShadow: '0 2px 12px #0002',
-              transition: 'transform 0.2s',
+const Landing = () => {
+  const { token } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const [alertSummary, setAlertSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (token) {
+      fetchAlertSummary();
+    }
+  }, [token]);
+
+  const fetchAlertSummary = async () => {
+    try {
+      const summary = await getAlertSummary(token);
+      setAlertSummary(summary);
+    } catch (error) {
+      console.error('Failed to fetch alert summary:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAlertClick = () => {
+    navigate('/reports/alerts');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#f5f5f5', padding: '32px' }}>
+      {/* Alert Widget */}
+      {alertSummary && alertSummary.totalActive > 0 && (
+        <div style={{
+          maxWidth: 900,
+          margin: '0 auto 32px',
+          width: '80%'
+        }}>
+          <div
+            onClick={handleAlertClick}
+            style={{
+              background: 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)',
+              color: '#fff',
+              padding: '20px 32px',
+              borderRadius: 12,
+              boxShadow: '0 4px 16px rgba(255, 68, 68, 0.3)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              <span style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {link.icon}
-              </span>
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(255, 68, 68, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 68, 68, 0.3)';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <FaExclamationTriangle size={32} />
+                <div>
+                  <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
+                    {alertSummary.totalActive} Active Alert{alertSummary.totalActive !== 1 ? 's' : ''}
+                  </div>
+                  <div style={{ fontSize: 14, opacity: 0.9 }}>
+                    Products requiring attention
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 24 }}>
+                {alertSummary.criticalCount > 0 && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.criticalCount}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>CRITICAL</div>
+                  </div>
+                )}
+                {alertSummary.warningCount > 0 && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.warningCount}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>WARNING</div>
+                  </div>
+                )}
+                {alertSummary.infoCount > 0 && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.infoCount}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>INFO</div>
+                  </div>
+                )}
+              </div>
             </div>
-            <span style={{ fontSize: 18, fontWeight: 500 }}>{link.label}</span>
           </div>
-        </Link>
-      ))}
+        </div>
+      )}
+
+      {/* Dashboard Grid */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 48, width: '80%', maxWidth: 900, justifyItems: 'center' }}>
+          {links.map(link => (
+            <Link key={link.to} to={link.to} style={{ textDecoration: 'none', color: '#333' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{
+                  width: 90,
+                  height: 90,
+                  borderRadius: '50%',
+                  background: link.color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                  boxShadow: '0 2px 12px #0002',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <span style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {link.icon}
+                  </span>
+                </div>
+                <span style={{ fontSize: 18, fontWeight: 500 }}>{link.label}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Landing;

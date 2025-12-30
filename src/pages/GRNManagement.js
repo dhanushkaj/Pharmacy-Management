@@ -168,6 +168,7 @@ const GRNManagement = () => {
           productId: i.productId,
           receivedQuantity: Number(i.receivedQuantity),
           unitCost: Number(i.unitCost),
+          price: Number(i.sellPrice), // Add selling price to payload
         })),
       };
 

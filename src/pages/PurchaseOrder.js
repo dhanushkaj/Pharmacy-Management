@@ -45,6 +45,7 @@ const PurchaseOrder = () => {
     name: "",
     categoryId: "",
     description: "",
+    barcode: "",
   });
   const [creatingProduct, setCreatingProduct] = useState(false);
 
@@ -301,11 +302,14 @@ const PurchaseOrder = () => {
 
     setCreatingProduct(true);
     try {
+      // Auto-generate barcode if blank
+      const barcode = newProduct.barcode?.trim() || String(Math.floor(100000000000 + Math.random() * 900000000000));
       const payload = {
         productCode: newProduct.productCode.trim(),
         name: newProduct.name.trim(),
         categoryId: Number(newProduct.categoryId),
         description: newProduct.description.trim() || null,
+        barcode,
       };
 
       const res = await fetch(`${API_BASE}/api/products`, {
@@ -314,7 +318,12 @@ const PurchaseOrder = () => {
         body: JSON.stringify(payload),
       });
       const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to create product");
+      if (!res.ok) {
+        // Prefer 'error' field, then 'message', then fallback
+        const errorMsg = data?.error || data?.message || "Unknown error";
+        alert(`Failed to create product: ${errorMsg}`);
+        return;
+      }
 
       // Close modal
       closeProductModal();
@@ -449,7 +458,7 @@ const PurchaseOrder = () => {
             marginTop: 8,
           }}
         >
-          <div style={{ minWidth: 360, position: "relative" }}>
+          <div style={{ minWidth: 240, flex: 2, position: "relative" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <label style={{ display: "block" }}>
                 Search by name / generic / code
@@ -525,7 +534,7 @@ const PurchaseOrder = () => {
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 140 }}>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 120, flex: 1, marginLeft: 12 }}>
             <label style={{ marginBottom: 6 }}>Quantity *</label>
             <input
               type="number"
@@ -537,7 +546,7 @@ const PurchaseOrder = () => {
             />
           </div>
 
-          <div style={{ alignSelf: "flex-end" }}>
+          <div style={{ alignSelf: "flex-end", marginLeft: 12 }}>
             <button
               type="button"
               onClick={addItem}
@@ -672,7 +681,7 @@ const PurchaseOrder = () => {
                   onChange={(e) =>
                     setNewProduct({ ...newProduct, productCode: e.target.value })
                   }
-                  placeholder="e.g., MED001"
+                  placeholder="e.g., AA1234"
                   style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
                   disabled={creatingProduct}
                   required
@@ -717,6 +726,29 @@ const PurchaseOrder = () => {
               </div>
 
               <div style={{ marginBottom: 24 }}>
+                              <div style={{ marginBottom: 16 }}>
+                                <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+                                  Barcode
+                                </label>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <input
+                                    type="text"
+                                    value={newProduct.barcode}
+                                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
+                                    placeholder="Auto-generated if blank"
+                                    style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
+                                    disabled={creatingProduct}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewProduct({ ...newProduct, barcode: String(Math.floor(100000000000 + Math.random() * 900000000000)) })}
+                                    style={{ padding: "8px 12px", borderRadius: 4, border: "1px solid #1890ff", background: "#1890ff", color: "#fff" }}
+                                    disabled={creatingProduct}
+                                  >
+                                    Generate Barcode
+                                  </button>
+                                </div>
+                              </div>
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
                   Description
                 </label>

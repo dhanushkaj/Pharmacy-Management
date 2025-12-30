@@ -11,6 +11,7 @@ const InventoryReturn = () => {
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
+  const [productInventories, setProductInventories] = useState([]);
   const [reason, setReason] = useState('');
   const [batchNo, setBatchNo] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -161,7 +162,7 @@ const InventoryReturn = () => {
 
       await api('/api/inventory-returns', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload, // Pass object, api utility will stringify
         token
       });
 
@@ -169,7 +170,13 @@ const InventoryReturn = () => {
       resetForm();
       loadReturns();
     } catch (err) {
-      setError(err.message || 'Failed to record inventory return');
+      let errorMsg = 'Failed to record inventory return';
+      if (err && err.message) {
+        errorMsg = err.message;
+      } else if (typeof err === 'string') {
+        errorMsg = err;
+      }
+      setError(errorMsg);
     }
   };
 
@@ -187,14 +194,23 @@ const InventoryReturn = () => {
     setNotes('');
   };
 
-  const handleProductChange = (e) => {
+  const handleProductChange = async (e) => {
     const pid = e.target.value;
     setProductId(pid);
-    
-    // Auto-populate unit price based on product
-    const product = products.find(p => p.productId === parseInt(pid));
-    if (product && product.price) {
-      setUnitPrice(product.price);
+    setUnitPrice('');
+    setProductInventories([]);
+    if (pid) {
+      // Fetch inventory buckets for this product
+      try {
+        const inventories = await api(`/api/products/${pid}/inventory`, { token });
+        setProductInventories(inventories);
+        // If only one inventory, auto-select its price (as string)
+        if (inventories.length === 1) {
+          setUnitPrice(inventories[0].price.toString());
+        }
+      } catch (err) {
+        setProductInventories([]);
+      }
     }
   };
 
@@ -245,11 +261,15 @@ const InventoryReturn = () => {
                 style={{ width: '100%', padding: '8px' }}
               >
                 <option value="">-- Select Product --</option>
-                {filteredProducts.map(p => (
-                  <option key={p.productId} value={p.productId}>
-                    {p.productCode} - {p.name}
-                  </option>
-                ))}
+                {filteredProducts && filteredProducts.length > 0 ? (
+                  filteredProducts.map(p => (
+                    <option key={p.productId} value={p.productId}>
+                      {p.productCode} - {p.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>No products found</option>
+                )}
               </select>
               {productId && (
                 <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
@@ -270,17 +290,32 @@ const InventoryReturn = () => {
               />
             </div>
 
-            {/* Unit Price */}
+            {/* Unit Price (select from inventory if TO_SUPPLIER) */}
             <div>
               <label>Unit Price *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                style={{ width: '100%', padding: '8px' }}
-              />
+              {productInventories.length > 0 ? (
+                <select
+                  value={unitPrice}
+                  onChange={e => setUnitPrice(e.target.value)}
+                  style={{ width: '100%', padding: '8px' }}
+                >
+                  <option value="">-- Select Price --</option>
+                  {productInventories.map(inv => (
+                    <option key={inv.id} value={inv.price.toString()}>
+                      {inv.price} (Stock: {inv.stock})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(e.target.value)}
+                  style={{ width: '100%', padding: '8px' }}
+                />
+              )}
             </div>
 
             {/* Batch No */}

@@ -143,16 +143,8 @@ function validateRow(obj, idx) {
     return `Row ${idx}: "name" is required`;
   }
 
-  if (!obj.genericName || !obj.genericName.trim()) {
-    return `Row ${idx}: "genericName" is required`;
-  }
-
   if (!obj.categoryName || !obj.categoryName.trim()) {
     return `Row ${idx}: "categoryName" is required`;
-  }
-
-  if (!obj.supplierName || !obj.supplierName.trim()) {
-    return `Row ${idx}: "supplierName" is required`;
   }
 
   // Validate numeric fields if provided

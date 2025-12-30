@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../components/AuthContext';
 import { api } from '../../utill/api';
+import Modal from '../../components/Modal';
 
 const SalesReport = () => {
   const { token } = useContext(AuthContext);
@@ -13,8 +14,9 @@ const SalesReport = () => {
   const [endDate, setEndDate] = useState('');
   const [productFilter, setProductFilter] = useState('');
   
-  // Aggregated sales data
-  const [salesData, setSalesData] = useState([]);
+  // Grouped by transaction (billing)
+  const [groupedSales, setGroupedSales] = useState([]);
+  const [selectedBilling, setSelectedBilling] = useState(null);
   
   useEffect(() => {
     fetchBillings();
@@ -24,58 +26,41 @@ const SalesReport = () => {
     setLoading(true);
     setError(null);
     try {
-      let url = '/api/billings?page=0&size=10000'; // Get all billings
-      
+      let url = '/api/billings?page=0&size=10000';
       if (startDate && endDate) {
         const startDateTime = `${startDate}T00:00:00`;
         const endDateTime = `${endDate}T23:59:59`;
         url = `/api/billings/date-range?startDate=${startDateTime}&endDate=${endDateTime}&page=0&size=10000`;
       }
-
       const data = await api(url, { token });
-      
       if (data.content) {
         setBillings(data.content);
-        aggregateSalesData(data.content);
+        // Group by billing (transaction)
+        const grouped = data.content.map(bill => {
+          const totalQuantity = bill.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+          const totalSales = bill.items?.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) || 0;
+          return {
+            billingId: bill.billingId,
+            billingNumber: bill.billingNumber,
+            billingDate: bill.billingDate,
+            customerName: bill.customerName,
+            totalQuantity,
+            totalSales,
+            items: bill.items || [],
+          };
+        });
+        setGroupedSales(grouped);
       } else {
         setBillings([]);
-        setSalesData([]);
+        setGroupedSales([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to load billing data');
       setBillings([]);
-      setSalesData([]);
+      setGroupedSales([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const aggregateSalesData = (billingList) => {
-    const productMap = {};
-
-    billingList.forEach(billing => {
-      if (billing.items && Array.isArray(billing.items)) {
-        billing.items.forEach(item => {
-          const productName = item.productName || 'Unknown Product';
-          
-          if (!productMap[productName]) {
-            productMap[productName] = {
-              product: productName,
-              totalQuantity: 0,
-              totalSales: 0,
-              transactionCount: 0
-            };
-          }
-          
-          productMap[productName].totalQuantity += item.quantity || 0;
-          productMap[productName].totalSales += (item.quantity || 0) * (item.price || 0);
-          productMap[productName].transactionCount += 1;
-        });
-      }
-    });
-
-    const aggregated = Object.values(productMap);
-    setSalesData(aggregated);
   };
 
   const handleSearch = () => {
@@ -88,54 +73,50 @@ const SalesReport = () => {
     setProductFilter('');
   };
 
-  const filteredSales = salesData.filter(s => 
-    !productFilter || s.product.toLowerCase().includes(productFilter.toLowerCase())
+  // Filter by customer or billing number if needed
+  const filteredSales = groupedSales.filter(s =>
+    !productFilter ||
+    (s.customerName && s.customerName.toLowerCase().includes(productFilter.toLowerCase())) ||
+    (s.billingNumber && s.billingNumber.toLowerCase().includes(productFilter.toLowerCase()))
   );
 
   const totalSales = filteredSales.reduce((sum, s) => sum + s.totalSales, 0);
   const totalQuantity = filteredSales.reduce((sum, s) => sum + s.totalQuantity, 0);
-  const totalTransactions = billings.length;
+  const totalTransactions = filteredSales.length;
 
-  const exportToCSV = () => {
-    if (!filteredSales || filteredSales.length === 0) {
-      alert('No sales data to export');
-      return;
-    }
-
-    const headers = ['Product Name', 'Quantity Sold', 'Total Sales (Rs.)', 'Transactions'];
-    
-    const rows = filteredSales.map(s => [
-      s.product,
-      s.totalQuantity,
-      s.totalSales.toFixed(2),
-      s.transactionCount
+  const handleExportCSV = () => {
+    const headers = [
+      'Billing No',
+      'Customer',
+      'Date',
+      'Quantity Sold',
+      'Total Sales (Rs.)',
+      'Details'
+    ];
+    const rows = groupedSales.map(group => [
+      group.billingNumber,
+      group.customerName,
+      group.billingDate,
+      group.totalQuantity,
+      group.totalSales.toFixed(2),
+      group.items && group.items.length > 0
+        ? group.items.map(item => `${item.productName} x${item.quantity}`).join('; ')
+        : ''
     ]);
-
-    const escapeCSV = (value) => {
-      const str = String(value);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
-    const csvContent = [
-      headers.map(escapeCSV).join(','),
-      ...rows.map(row => row.map(escapeCSV).join(','))
-    ].join('\n');
-
+    let csvContent = [headers, ...rows].map(e => e.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `sales_report_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
     <div style={{ padding: 24, fontFamily: 'Arial, sans-serif' }}>
-      <h2>Sales Report</h2>
+      <h2>Sales Report <span style={{ fontSize: 18, color: '#1976d2', marginLeft: 16 }}>(Total: Rs. {totalSales.toFixed(2)})</span></h2>
 
       {/* Filters */}
       <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 20 }}>
@@ -182,7 +163,7 @@ const SalesReport = () => {
             Reset
           </button>
           <button
-            onClick={exportToCSV}
+            onClick={handleExportCSV}
             style={{ padding: '8px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
           >
             Export to CSV
@@ -229,43 +210,75 @@ const SalesReport = () => {
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
           <thead>
             <tr style={{ background: '#e3f2fd' }}>
-              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Product Name</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Billing No</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Customer</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Date</th>
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Quantity Sold</th>
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Total Sales (Rs.)</th>
-              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Avg Price (Rs.)</th>
-              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Transactions</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Details</th>
             </tr>
           </thead>
           <tbody>
             {filteredSales.map((s, idx) => (
-              <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                <td style={{ padding: 10, border: '1px solid #e0e0e0' }}>{s.product}</td>
+              <tr key={s.billingId} style={{ background: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0' }}>{s.billingNumber}</td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0' }}>{s.customerName || '-'}</td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>{s.billingDate ? new Date(s.billingDate).toLocaleDateString() : '-'}</td>
                 <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{s.totalQuantity}</td>
-                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>
-                  {s.totalSales.toFixed(2)}
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{s.totalSales.toFixed(2)}</td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                  <button onClick={() => setSelectedBilling(s)} style={{ padding: '4px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    View
+                  </button>
                 </td>
-                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>
-                  {(s.totalSales / s.totalQuantity).toFixed(2)}
-                </td>
-                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>{s.transactionCount}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr style={{ background: '#f0f0f0', fontWeight: 'bold' }}>
               <td style={{ padding: 10, border: '1px solid #e0e0e0' }}>TOTAL</td>
+              <td></td>
+              <td></td>
               <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{totalQuantity}</td>
-              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>
-                {totalSales.toFixed(2)}
-              </td>
-              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>
-                {totalQuantity > 0 ? (totalSales / totalQuantity).toFixed(2) : '0.00'}
-              </td>
-              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>{totalTransactions}</td>
+              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{totalSales.toFixed(2)}</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
       )}
+          {/* Modal for transaction breakdown */}
+          <Modal open={!!selectedBilling} title={selectedBilling ? `Billing Details - ${selectedBilling.billingNumber}` : ''} onClose={() => setSelectedBilling(null)}>
+            {selectedBilling && (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Date:</strong> {selectedBilling.billingDate ? new Date(selectedBilling.billingDate).toLocaleString() : '-'}<br />
+                  <strong>Customer:</strong> {selectedBilling.customerName || '-'}
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5' }}>
+                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Product</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Quantity</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Unit Price</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Subtotal</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Batch No</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedBilling.items.map((item, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: 8, border: '1px solid #eee' }}>{item.productName}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.quantity}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.unitPrice?.toFixed(2)}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.subtotal?.toFixed(2)}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee' }}>{item.batchNo || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </Modal>
     </div>
   );
 };

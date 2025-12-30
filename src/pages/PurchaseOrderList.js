@@ -267,28 +267,30 @@ export default function PurchaseOrdersList() {
 
       {/* Filters */}
       <div
-        style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}
+        style={{
+          display: "flex",
+          gap: 20,
+          marginTop: 16,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+        }}
       >
-        <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
-        >
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 220, flex: 1 }}>
           <label style={{ marginBottom: 6 }}>Search by Order Code</label>
           <input
             placeholder="e.g., PO-20250923-0001"
             value={orderCodeFilter}
             onChange={(e) => setOrderCodeFilter(e.target.value)}
-            style={{ padding: 8 }}
+            style={{ padding: 8, width: "100%" }}
           />
         </div>
 
-        <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
-        >
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 220, flex: 1 }}>
           <label style={{ marginBottom: 6 }}>Supplier</label>
           <select
             value={supplierIdFilter}
             onChange={(e) => setSupplierIdFilter(e.target.value)}
-            style={{ padding: 8 }}
+            style={{ padding: 8, width: "100%" }}
           >
             <option value="">All suppliers</option>
             {suppliers.map((s) => (
@@ -299,13 +301,14 @@ export default function PurchaseOrdersList() {
           </select>
         </div>
 
-        <div style={{ alignSelf: "flex-end" }}>
+        <div style={{ minWidth: 180 }}>
           <button
             onClick={() => setSortAsc((s) => !s)}
             style={{
               padding: "7px 16px",
               borderRadius: 6,
               border: "1px solid #ccc",
+              width: "100%",
             }}
             title="Toggle sort by Order Code"
           >

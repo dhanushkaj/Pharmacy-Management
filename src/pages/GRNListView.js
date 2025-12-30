@@ -399,7 +399,7 @@ const GRNListView = () => {
                     <td style={td}>{item.productName}</td>
                     <td style={td}>{item.receivedQuantity}</td>
                     <td style={td}>Rs.{item.unitCost.toFixed(2)}</td>
-                    <td style={td}>Rs.{item.sellingPrice ? item.sellingPrice.toFixed(2) : 'N/A'}</td>
+                    <td style={td}>Rs.{item.price ? item.price.toFixed(2) : 'N/A'}</td>
                     <td style={td}>
                       Rs.{(item.receivedQuantity * item.unitCost).toFixed(2)}
                     </td>

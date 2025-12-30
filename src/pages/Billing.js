@@ -148,20 +148,29 @@ export default function Billing() {
     setFilteredCustomers(filtered);
   }, [customerSearch, allCustomers]);
 
-  // Product search filter
+  // Product search filter (ignore quantity prefix like 14*panadol)
   useEffect(() => {
     if (!productSearch || !productSearch.trim()) {
       setFilteredProducts([]);
       setSelectedProductIndex(-1);
       return;
     }
-    const lower = productSearch.toLowerCase();
+    // Support search when user types '12*' then product name (e.g., '12*panadol')
+    let searchName = productSearch;
+    // If input starts with quantity and '*', remove it for search
+    searchName = searchName.replace(/^\s*\d+\s*\*\s*/, '');
+    searchName = searchName.trim().toLowerCase();
+    if (!searchName) {
+      setFilteredProducts([]);
+      setSelectedProductIndex(-1);
+      return;
+    }
     const filtered = allProducts.filter(
       (p) =>
-        p.name?.toLowerCase().includes(lower) ||
-        p.genericName?.toLowerCase().includes(lower) ||
-        p.category?.name?.toLowerCase().includes(lower) ||
-        p.productCode?.toLowerCase().includes(lower)
+        p.name?.toLowerCase().includes(searchName) ||
+        p.genericName?.toLowerCase().includes(searchName) ||
+        p.category?.name?.toLowerCase().includes(searchName) ||
+        p.productCode?.toLowerCase().includes(searchName)
     );
     setFilteredProducts(filtered);
     setSelectedProductIndex(-1);
@@ -197,16 +206,23 @@ export default function Billing() {
   };
 
   // Parse quantity multiplier (e.g., "paracetamol *12" means 12 units)
+  // Parse quantity multiplier (supports both '12*panadol' and 'panadol*12')
   const parseQuantityMultiplier = (text) => {
     if (!text) return 1;
-    const match = text.trim().match(/\*(\d+)\s*$/);
-    return match ? parseInt(match[1], 10) : 1;
+    // Match '12*panadol' or 'panadol*12' or '12 * panadol' or 'panadol * 12'
+    let match = text.trim().match(/^(\d+)\s*\*/);
+    if (match) return parseInt(match[1], 10);
+    match = text.trim().match(/\*(\d+)\s*$/);
+    if (match) return parseInt(match[1], 10);
+    return 1;
   };
 
   // Extract product name without quantity multiplier
+  // Extract product name without quantity multiplier (supports both '12*panadol' and 'panadol*12')
   const getProductNameFromSearch = (text) => {
     if (!text) return '';
-    return text.trim().replace(/\*\d+\s*$/, '').trim();
+    // Remove '12*' from start or '*12' from end
+    return text.trim().replace(/^(\d+)\s*\*/, '').replace(/\*\d+\s*$/, '').trim();
   };
 
   const handleSelectProductFromDropdown = async (product) => {

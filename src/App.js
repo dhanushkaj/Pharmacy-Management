@@ -1,3 +1,4 @@
+import AlertConfig from './pages/reports/AlertConfig';
 import React from 'react';
 import { useLocation, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
@@ -13,7 +14,6 @@ import Billing from './pages/Billing';
 import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
-import ReportsAlerts from './pages/ReportsAlerts';
 import SettingsSecurity from './pages/SettingsSecurity';
 import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
@@ -56,11 +56,12 @@ const AppContent = () => {
             <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
-            <Route path="/reports" element={<PrivateRoute><ReportsAlerts /></PrivateRoute>} />
+            {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
+            <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />

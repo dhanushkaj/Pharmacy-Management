@@ -1,3 +1,13 @@
+  const handleDeleteAlert = async (alertId) => {
+    if (!window.confirm('Are you sure you want to delete this alert?')) return;
+    try {
+      await api(`/api/alerts/${alertId}`, { method: 'DELETE', token });
+      alert('Alert deleted successfully');
+      fetchAlerts();
+    } catch (error) {
+      alert('Failed to delete alert');
+    }
+  };
 import React, { useState, useEffect, useContext } from 'react';
 import { FaExclamationTriangle, FaCheckCircle, FaExclamationCircle, FaInfoCircle } from 'react-icons/fa';
 import { AuthContext } from '../../components/AuthContext';
@@ -387,16 +397,20 @@ const AlertReport = () => {
                       <td style={{ padding: 12 }}>
                         {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : '-'}
                       </td>
-                      <td style={{ padding: 12, textAlign: 'center' }}>
+                      <td style={{ padding: 12, textAlign: 'center', minWidth: 90 }}>
                         <span style={{
-                          padding: '4px 12px',
+                          display: 'inline-block',
+                          minWidth: 70,
+                          padding: '4px 0',
                           borderRadius: 12,
                           background: alert.daysUntilExpiry <= 30 ? '#d32f2f' : alert.daysUntilExpiry <= 60 ? '#ff9800' : '#2196f3',
                           color: '#fff',
                           fontWeight: 'bold',
-                          fontSize: 14
+                          fontSize: 15,
+                          letterSpacing: 1,
+                          textAlign: 'center',
                         }}>
-                          {alert.daysUntilExpiry !== null ? `${alert.daysUntilExpiry} days` : '-'}
+                          {alert.daysUntilExpiry !== null && alert.daysUntilExpiry !== undefined ? `${alert.daysUntilExpiry} days` : '-'}
                         </span>
                       </td>
                       <td style={{ padding: 12 }}>
@@ -422,10 +436,27 @@ const AlertReport = () => {
                               border: 'none',
                               borderRadius: 4,
                               cursor: 'pointer',
-                              fontSize: 12
+                              fontSize: 12,
+                              marginRight: 8
                             }}
                           >
                             Acknowledge
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeleteAlert(alert.alertLogId)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#d32f2f',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 4,
+                              cursor: 'pointer',
+                              fontSize: 12
+                            }}
+                          >
+                            Delete
                           </button>
                         )}
                       </td>

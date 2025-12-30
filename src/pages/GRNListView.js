@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../components/AuthContext";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "";
@@ -13,6 +14,7 @@ const safeJson = async (res) => {
 };
 
 const GRNListView = () => {
+  const navigate = useNavigate();
   const [grns, setGrns] = useState([]);
   const [filteredGrns, setFilteredGrns] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,6 +22,12 @@ const GRNListView = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 20;
 
   const { token: ctxToken } = useContext(AuthContext);
   const token = useMemo(
@@ -35,16 +43,28 @@ const GRNListView = () => {
   useEffect(() => {
     loadGrns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentPage]);
 
   // Filter GRNs when search term changes
   useEffect(() => {
     if (searchTerm.trim() === "") {
       setFilteredGrns(grns);
     } else {
-      const filtered = grns.filter((grn) =>
-        grn.grnCode.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const searchLower = searchTerm.toLowerCase();
+      const filtered = grns.filter((grn) => {
+        // Search in GRN Code
+        const grnCodeMatch = grn.grnCode.toLowerCase().includes(searchLower);
+        
+        // Search in PO Code
+        const poCodeMatch = grn.purchaseOrderCode && 
+          grn.purchaseOrderCode.toLowerCase().includes(searchLower);
+        
+        // Search in Date (formatted)
+        const dateStr = formatDate(grn.createdAt);
+        const dateMatch = dateStr && dateStr.toLowerCase().includes(searchLower);
+        
+        return grnCodeMatch || poCodeMatch || dateMatch;
+      });
       setFilteredGrns(filtered);
     }
   }, [searchTerm, grns]);
@@ -53,15 +73,19 @@ const GRNListView = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns`, {
+      const res = await fetch(`${API_BASE}/api/grns?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`, {
         headers: { ...authHeaders },
       });
       const data = await safeJson(res);
       if (!res.ok) {
         throw new Error(data?.message || "Failed to load GRNs");
       }
-      setGrns(Array.isArray(data) ? data : []);
-      setFilteredGrns(Array.isArray(data) ? data : []);
+      // Handle paginated response
+      const grnList = data.content || [];
+      setGrns(grnList);
+      setFilteredGrns(grnList);
+      setTotalPages(data.totalPages || 0);
+      setTotalElements(data.totalElements || 0);
     } catch (err) {
       console.error("Error fetching GRNs:", err);
       setError(err.message || "Failed to load GRNs");
@@ -94,6 +118,38 @@ const GRNListView = () => {
   const closeDetailsModal = () => {
     setShowDetailsModal(false);
     setSelectedGrn(null);
+  };
+
+  const deleteGrn = async (grnId, grnCode) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete GRN: ${grnCode}?\n\nThis action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/grns/${grnId}`, {
+        method: "DELETE",
+        headers: { ...authHeaders },
+      });
+
+      if (!res.ok) {
+        const data = await safeJson(res);
+        throw new Error(data?.message || "Failed to delete GRN");
+      }
+
+      alert(`GRN ${grnCode} deleted successfully`);
+      // Reload the GRN list
+      loadGrns();
+    } catch (err) {
+      console.error("Error deleting GRN:", err);
+      setError(err.message || "Failed to delete GRN");
+      alert("Error deleting GRN: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -139,7 +195,7 @@ const GRNListView = () => {
       <div style={{ marginBottom: 24 }}>
         <input
           type="text"
-          placeholder="Search by GRN Code..."
+          placeholder="Search by GRN Code, PO Code, or Date..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={searchInput}
@@ -179,12 +235,29 @@ const GRNListView = () => {
                   <td style={td}>{grn.approvedUser || "N/A"}</td>
                   <td style={td}>{formatDate(grn.approvedDate)}</td>
                   <td style={td}>
-                    <button
-                      onClick={() => viewGrnDetails(grn.id)}
-                      style={btnView}
-                    >
-                      View Details
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => viewGrnDetails(grn.id)}
+                        style={btnView}
+                      >
+                        View Details
+                      </button>
+                      {grn.status === "PENDING" && (
+                        <button
+                          onClick={() => navigate(`/grn?grnId=${grn.id}`)}
+                          style={btnApprove}
+                        >
+                          Approve/Reject
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteGrn(grn.id, grn.grnCode)}
+                        style={btnDelete}
+                        title="Delete GRN"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -197,6 +270,67 @@ const GRNListView = () => {
       {!loading && filteredGrns.length === 0 && (
         <div style={{ textAlign: "center", padding: 40, color: "#666" }}>
           {searchTerm ? "No GRNs found matching your search." : "No GRNs available."}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center", 
+          marginTop: 20,
+          padding: "12px 0"
+        }}>
+          <div style={{ color: "#666", fontSize: 14 }}>
+            Showing page {currentPage + 1} of {totalPages} ({totalElements} total GRNs)
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setCurrentPage(0)}
+              disabled={currentPage === 0}
+              style={{
+                ...btnPrimary,
+                opacity: currentPage === 0 ? 0.5 : 1,
+                cursor: currentPage === 0 ? "not-allowed" : "pointer"
+              }}
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 0}
+              style={{
+                ...btnPrimary,
+                opacity: currentPage === 0 ? 0.5 : 1,
+                cursor: currentPage === 0 ? "not-allowed" : "pointer"
+              }}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage >= totalPages - 1}
+              style={{
+                ...btnPrimary,
+                opacity: currentPage >= totalPages - 1 ? 0.5 : 1,
+                cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer"
+              }}
+            >
+              Next
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages - 1)}
+              disabled={currentPage >= totalPages - 1}
+              style={{
+                ...btnPrimary,
+                opacity: currentPage >= totalPages - 1 ? 0.5 : 1,
+                cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer"
+              }}
+            >
+              Last
+            </button>
+          </div>
         </div>
       )}
 
@@ -255,6 +389,7 @@ const GRNListView = () => {
                   <th style={th}>Product</th>
                   <th style={th}>Quantity</th>
                   <th style={th}>Unit Cost</th>
+                  <th style={th}>Selling Price</th>
                   <th style={th}>Total Cost</th>
                 </tr>
               </thead>
@@ -264,6 +399,7 @@ const GRNListView = () => {
                     <td style={td}>{item.productName}</td>
                     <td style={td}>{item.receivedQuantity}</td>
                     <td style={td}>Rs.{item.unitCost.toFixed(2)}</td>
+                    <td style={td}>Rs.{item.price ? item.price.toFixed(2) : 'N/A'}</td>
                     <td style={td}>
                       Rs.{(item.receivedQuantity * item.unitCost).toFixed(2)}
                     </td>
@@ -272,7 +408,7 @@ const GRNListView = () => {
               </tbody>
               <tfoot>
                 <tr style={{ background: "#f8f9fa", fontWeight: "bold" }}>
-                  <td style={td} colSpan="3">Total</td>
+                  <td style={td} colSpan="4">Total</td>
                   <td style={td}>
                     Rs. 
                     {selectedGrn.items
@@ -349,6 +485,28 @@ const btnView = {
   padding: "6px 12px",
   cursor: "pointer",
   fontSize: 13,
+};
+
+const btnApprove = {
+  background: "#28a745",
+  color: "#fff",
+  border: "none",
+  borderRadius: 4,
+  padding: "6px 12px",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const btnDelete = {
+  background: "#dc3545",
+  color: "#fff",
+  border: "none",
+  borderRadius: 4,
+  padding: "6px 12px",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 500,
 };
 
 const btnSecondary = {

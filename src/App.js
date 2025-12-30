@@ -1,3 +1,4 @@
+import AlertConfig from './pages/reports/AlertConfig';
 import React from 'react';
 import { useLocation, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
@@ -10,13 +11,15 @@ import SupplierManagement from './pages/SupplierManagement';
 import ProductManagement from './pages/ProductManagement';
 import GRNManagement from './pages/GRNManagement';
 import Billing from './pages/Billing';
+import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
 import ProductBin from './pages/ProductBin';
-import ReportsAlerts from './pages/ReportsAlerts';
 import SettingsSecurity from './pages/SettingsSecurity';
+import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
+import InventoryReport from './pages/reports/InventoryReport';
 import PurchaseOrder from './pages/PurchaseOrder';
 import PurchaseOrderDetails from './pages/PurchaseOrderDetails';
 import PurchaseOrderList from "./pages/PurchaseOrderList";
@@ -24,6 +27,8 @@ import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
+import InventoryReturn from './pages/InventoryReturn';
+import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
 import GRNListView from './pages/GRNListView';
 
@@ -48,20 +53,26 @@ const AppContent = () => {
             <Route path="/purchase-order" element={<PrivateRoute><PurchaseOrder /></PrivateRoute>} />
             <Route path="/grn" element={<PrivateRoute><GRNManagement /></PrivateRoute>} />
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+            <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
-            <Route path="/reports" element={<PrivateRoute><ReportsAlerts /></PrivateRoute>} />
+            {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
-            <Route path="/reports/alert" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
+            <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
+            <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
+            <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
+            <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
+            <Route path="/store-settings" element={<PrivateRoute><StoreSettings /></PrivateRoute>} />
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}
+        {!isAuthPage && <PrintSetupGuide />}
       </div>
     </div>
   );

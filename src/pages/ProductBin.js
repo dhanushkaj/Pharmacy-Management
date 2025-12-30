@@ -1,81 +1,137 @@
-import React, { useState } from 'react';
-
-const mockProducts = [
-  "Paracetamol 500mg",
-  "Amoxicillin 250mg",
-  "Vitamin C 100mg"
-];
+import React, { useState, useEffect, useContext } from 'react';
+import ProductSearchDropdown from '../components/ProductSearchDropdown';
+import { api } from '../utill/api';
+import { AuthContext } from '../components/AuthContext';
 
 const mockAudit = [
   { id: 1, product: "Paracetamol 500mg", action: "Added stock", qty: 100, date: "2025-08-20", by: "Admin" },
   { id: 2, product: "Amoxicillin 250mg", action: "Removed expired", qty: -20, date: "2025-08-23", by: "Manager" },
 ];
 
-const mockPurchaseOrders = [
-  { id: 101, product: "Paracetamol 500mg", type: "Purchase Order", qty: 50, date: "2025-08-10", supplier: "HealthCorp" },
-  { id: 102, product: "Amoxicillin 250mg", type: "Purchase Order", qty: 30, date: "2025-08-12", supplier: "MediSupply" },
-];
-
-const mockBills = [
-  { id: 201, product: "Paracetamol 500mg", type: "Bill", qty: -10, date: "2025-08-15", customer: "John Doe" },
-  { id: 202, product: "Vitamin C 100mg", type: "Bill", qty: -5, date: "2025-08-18", customer: "Jane Smith" },
-];
-
 
 const ProductBin = () => {
-  const [selectedProduct, setSelectedProduct] = useState('');
+  const { token } = useContext(AuthContext);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewDoc, setViewDoc] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [inventorySummary, setInventorySummary] = useState([]);
 
-  // Combine all transactions for the selected product
-  const transactions = [
-    ...mockPurchaseOrders.filter(t => t.product === selectedProduct),
-    ...mockBills.filter(t => t.product === selectedProduct),
-    ...mockAudit.filter(t => t.product === selectedProduct)
-  ];
+  useEffect(() => {
+    // fetch categories
+    (async () => {
+      try {
+        const list = await api('/api/categories', { token });
+        setCategories(list || []);
+      } catch (e) {
+        console.error('Failed to load categories', e.message);
+      }
+    })();
+  }, [token]);
+
+  const onProductSelect = async (product) => {
+    setSelectedProduct(product);
+
+    // fetch bin movements and inventory summary
+    try {
+      const movementsPage = await api(`/api/products/${product.productId}/bin-movements`, { token });
+      // movementsPage has content array
+      setTransactions(movementsPage.content || []);
+    } catch (e) {
+      console.error('Failed to fetch movements', e.message);
+      setTransactions([]);
+    }
+
+    try {
+      const sum = await api(`/api/products/${product.productId}/inventory-summary`, { token });
+      setInventorySummary(sum || []);
+    } catch (e) {
+      console.error('Failed to fetch inventory summary', e.message);
+      setInventorySummary([]);
+    }
+  };
 
   return (
     <div>
       <h2>Product Bin / Audit Trail</h2>
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ marginRight: 10 }}>Select Product:</label>
-        <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} style={{ padding: 8 }}>
-          <option value="">-- Select --</option>
-          {mockProducts.map(p => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
+      <div style={{ marginBottom: 20, display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div>
+          <label style={{ marginRight: 10, display: 'block' }}>Category:</label>
+          <select value={selectedCategory || ''} onChange={e => setSelectedCategory(e.target.value || null)} style={{ padding: 8 }}>
+            <option value="">All</option>
+            {categories.map(c => <option key={c.categoryId} value={c.categoryId}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ display: 'block', marginBottom: 6 }}>Product:</label>
+          <ProductSearchDropdown categoryId={selectedCategory} onSelect={onProductSelect} />
+        </div>
       </div>
       {selectedProduct ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24 }}>
-          <thead>
-            <tr style={{ background: '#f0f0f0' }}>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>Type</th>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>Action/Party</th>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>Quantity</th>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>Date</th>
-              <th style={{ padding: 10, border: '1px solid #ccc' }}>Documents</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20 }}>No transactions found for this product.</td></tr>
+        <>
+          <div style={{ marginTop: 10 }}>
+            <h3>Inventory Summary</h3>
+            {inventorySummary.length === 0 ? (
+              <div>No inventory buckets for this product.</div>
             ) : (
-              transactions.map(t => (
-                <tr key={t.id}>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.type || t.action}</td>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.supplier || t.customer || t.by || '-'}</td>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.qty}</td>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.date}</td>
-                  <td style={{ padding: 10, border: '1px solid #ccc' }}>
-                    <button onClick={() => setViewDoc(t)} style={{ padding: '4px 10px', background: '#90caf9', color: '#fff', border: 'none', borderRadius: 4 }}>View Documents</button>
-                  </td>
-                </tr>
-              ))
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+                <thead>
+                  <tr style={{ background: '#fafafa' }}>
+                    <th style={{ padding: 8, border: '1px solid #ddd' }}>Batch</th>
+                    <th style={{ padding: 8, border: '1px solid #ddd' }}>Stock</th>
+                    <th style={{ padding: 8, border: '1px solid #ddd' }}>Price</th>
+                    <th style={{ padding: 8, border: '1px solid #ddd' }}>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventorySummary.map(b => (
+                    <tr key={b.batchNo}>
+                      <td style={{ padding: 8, border: '1px solid #ddd' }}>{b.batchNo || '-'}</td>
+                      <td style={{ padding: 8, border: '1px solid #ddd' }}>{b.stock}</td>
+                      <td style={{ padding: 8, border: '1px solid #ddd' }}>{b.price || '-'}</td>
+                      <td style={{ padding: 8, border: '1px solid #ddd' }}>{b.costPrice || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-          </tbody>
-        </table>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <h3>Recent Movements</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+              <thead>
+                <tr style={{ background: '#f0f0f0' }}>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>From</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>To</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Qty</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Ref</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>By</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>No transactions found for this product.</td></tr>
+                ) : (
+                  transactions.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.referenceType} / {t.referenceId}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.performedBy}</td>
+                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.createdAt}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <div style={{ marginTop: 32, color: '#888' }}>Select a product to view its transactions.</div>
       )}

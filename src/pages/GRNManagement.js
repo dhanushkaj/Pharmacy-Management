@@ -19,6 +19,7 @@ const GRNManagement = () => {
   const [receivedDate, setReceivedDate] = useState("");
   const [grnItems, setGrnItems] = useState([]);
   const [createdGrnId, setCreatedGrnId] = useState(null);
+  const [loadedGrn, setLoadedGrn] = useState(null); // For loading existing GRN
   const [approved, setApproved] = useState(false);
   const [approvedUser, setApprovedUser] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -38,11 +39,22 @@ const GRNManagement = () => {
 
   useEffect(() => {
     let abort = false;
+    
+    // Check if GRN ID is passed in URL (from GRN List)
+    const urlParams = new URLSearchParams(window.location.search);
+    const grnId = urlParams.get('grnId');
+    
+    if (grnId) {
+      loadGrnForApproval(grnId);
+    }
+    
+    // Load purchase orders (fetch all pages for dropdown)
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`${API_BASE}/api/purchase-orders`, {
+        // Fetch with large size to get all purchase orders for dropdown
+        const res = await fetch(`${API_BASE}/api/purchase-orders?page=0&size=1000`, {
           headers: { ...authHeaders },
         });
         const data = await safeJson(res);
@@ -50,7 +62,9 @@ const GRNManagement = () => {
           throw new Error(data?.message || "Failed to load purchase orders");
         }
         if (!abort) {
-          setPurchaseOrders(Array.isArray(data) ? data : []);
+          // Spring Boot paginated response has 'content' array
+          const orders = data.content || (Array.isArray(data) ? data : []);
+          setPurchaseOrders(orders);
         }
       } catch (err) {
         if (!abort) {
@@ -66,6 +80,55 @@ const GRNManagement = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadGrnForApproval = async (grnId) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/grns/${grnId}`, {
+        headers: { ...authHeaders },
+      });
+      const data = await safeJson(res);
+      
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to load GRN");
+      }
+      
+      console.log("Loaded GRN:", data);
+      setLoadedGrn(data);
+      setCreatedGrnId(data.id);
+      setGrnNumber(data.grnCode);
+      setApproved(data.status === "APPROVED");
+      setApprovedUser(data.approvedUser || "");
+      
+      // Set the items for display
+      if (data.items && data.items.length > 0) {
+        const items = data.items.map((it) => ({
+          productId: it.productId,
+          productName: it.productName,
+          receivedQuantity: it.receivedQuantity,
+          unitCost: it.unitCost,
+          sellPrice: it.unitCost * 1.2, // Calculate sell price
+        }));
+        setGrnItems(items);
+      }
+      
+      // Find and set the related PO if available
+      if (data.purchaseOrderId && purchaseOrders.length > 0) {
+        const po = purchaseOrders.find(p => p.id === data.purchaseOrderId);
+        if (po) {
+          setSelectedPO(po);
+        }
+      }
+      
+    } catch (err) {
+      console.error("Error loading GRN:", err);
+      setError(err.message);
+      alert("Error loading GRN: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelectPO = (poId) => {
     const po = purchaseOrders.find((p) => p.id === Number(poId));
@@ -105,6 +168,7 @@ const GRNManagement = () => {
           productId: i.productId,
           receivedQuantity: Number(i.receivedQuantity),
           unitCost: Number(i.unitCost),
+          price: Number(i.sellPrice), // Add selling price to payload
         })),
       };
 
@@ -136,32 +200,44 @@ const GRNManagement = () => {
   };
 
   const handleApprove = async () => {
-    if (!approvedUser) return alert("Enter Approved User");
-    if (!createdGrnId) return alert("Please create a GRN first");
+    if (!approvedUser || !approvedUser.trim()) {
+      alert("Enter Approved User");
+      return;
+    }
+    if (!createdGrnId) {
+      alert("Please create a GRN first");
+      return;
+    }
 
     setLoading(true);
     setError("");
     try {
+      console.log("Approving GRN:", createdGrnId, "with user:", approvedUser);
+      
       const res = await fetch(`${API_BASE}/api/grns/${createdGrnId}/approve`, {
         method: "PUT",
         headers: {
           ...authHeaders,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ approvedUser }),
+        body: JSON.stringify({ approvedUser: approvedUser.trim() }),
       });
 
       const data = await safeJson(res);
+      
+      console.log("Response status:", res.status);
+      console.log("Response data:", data);
 
       if (!res.ok) {
-        throw new Error(data?.message || "Failed to approve GRN");
+        const errorMsg = data?.message || data?.error || "Failed to approve GRN";
+        throw new Error(errorMsg);
       }
 
       setApproved(true);
       alert("GRN Approved and Inventory Updated!");
       console.log("Approved:", data);
     } catch (err) {
-      console.error(err);
+      console.error("Approve error:", err);
       setError(err.message);
       alert("Error approving GRN: " + err.message);
     } finally {
@@ -170,8 +246,21 @@ const GRNManagement = () => {
   };
 
   const openRejectModal = () => {
-    if (!createdGrnId) return alert("Please create a GRN first");
+    if (!createdGrnId && !loadedGrn) return alert("Please create a GRN first");
     setShowRejectModal(true);
+  };
+
+  const clearLoadedGrn = () => {
+    setLoadedGrn(null);
+    setCreatedGrnId(null);
+    setGrnNumber("");
+    setGrnItems([]);
+    setApproved(false);
+    setApprovedUser("");
+    setSelectedPO(null);
+    setError("");
+    // Clear the URL parameter
+    window.history.replaceState({}, document.title, "/grn");
   };
 
   const closeRejectModal = () => {
@@ -239,20 +328,70 @@ const GRNManagement = () => {
             borderRadius: 4,
           }}
         >
-          {error}
+          <strong>Error:</strong> {error}
+          <button 
+            onClick={() => setError("")}
+            style={{
+              marginLeft: 12,
+              background: "transparent",
+              border: "none",
+              color: "#721c24",
+              cursor: "pointer",
+              fontWeight: "bold"
+            }}
+          >
+            ✕
+          </button>
         </div>
       )}
 
       {/* Loading Indicator */}
       {loading && <p>Loading...</p>}
 
-      {/* Select Purchase Order */}
-      <div style={{ marginBottom: 24 }}>
-        <label style={{ fontWeight: 500, marginRight: 12 }}>
-          Select Purchase Order:
-        </label>
-        <select
-          value={selectedPO?.id || ""}
+      {/* Loaded GRN Info (when loading from list) */}
+      {loadedGrn && (
+        <div style={{
+          padding: 16,
+          marginBottom: 24,
+          background: "#e7f3ff",
+          border: "1px solid #2196F3",
+          borderRadius: 4,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ marginTop: 0 }}>Loaded GRN: {loadedGrn.grnCode}</h3>
+              <p><strong>Status:</strong> {loadedGrn.status}</p>
+              <p><strong>Purchase Order:</strong> {loadedGrn.purchaseOrderCode || `PO-${loadedGrn.purchaseOrderId}`}</p>
+              <p><strong>Supplier:</strong> {loadedGrn.supplierName || 'N/A'}</p>
+              <p><strong>Received Date:</strong> {new Date(loadedGrn.receivedDate).toLocaleString()}</p>
+            </div>
+            <button
+              onClick={clearLoadedGrn}
+              style={{
+                background: "#6c757d",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                padding: "8px 16px",
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              ✕ Close & Create New GRN
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Select Purchase Order (only show if NOT loading existing GRN) */}
+      {!loadedGrn && (
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontWeight: 500, marginRight: 12 }}>
+            Select Purchase Order:
+          </label>
+          <select
+            value={selectedPO?.id || ""}
           onChange={(e) => handleSelectPO(e.target.value)}
           style={{ padding: 8, minWidth: 200 }}
           disabled={loading}
@@ -260,14 +399,15 @@ const GRNManagement = () => {
           <option value="">-- Select PO --</option>
           {purchaseOrders.map((po) => (
             <option key={po.id} value={po.id}>
-              {po.code} - {po.supplierName}
+              {po.orderCode || `PO-${po.id}`} - {po.supplierName}
             </option>
           ))}
         </select>
       </div>
+      )}
 
-      {/* PO Details */}
-      {selectedPO && (
+      {/* PO Details (only show when creating new GRN) */}
+      {!loadedGrn && selectedPO && (
         <div
           style={{
             marginBottom: 32,
@@ -361,10 +501,15 @@ const GRNManagement = () => {
         </div>
       )}
 
-      {/* Approval Section */}
-      {selectedPO && (
+      {/* Approval Section - Show when GRN is created OR loaded */}
+      {(createdGrnId || loadedGrn) && (
         <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
           <h3>Approval Section</h3>
+          {!createdGrnId && !loadedGrn && (
+            <p style={{ color: "#856404", background: "#fff3cd", padding: 8, borderRadius: 4, marginBottom: 12 }}>
+              ℹ️ Please create a GRN first before approving or rejecting.
+            </p>
+          )}
           <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
             <input
               type="text"
@@ -378,8 +523,12 @@ const GRNManagement = () => {
           <div style={{ display: "flex", gap: 12 }}>
             <button
               onClick={handleApprove}
-              disabled={approved || loading || !createdGrnId}
-              style={btnApprove}
+              disabled={approved || loading || (!createdGrnId && !loadedGrn)}
+              style={{
+                ...btnApprove,
+                opacity: (approved || loading || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
+                cursor: (approved || loading || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
+              }}
             >
               {loading
                 ? "Processing..."
@@ -389,11 +538,32 @@ const GRNManagement = () => {
             </button>
             <button
               onClick={openRejectModal}
-              style={btnReject}
-              disabled={loading || !createdGrnId}
+              style={{
+                ...btnReject,
+                opacity: (loading || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
+                cursor: (loading || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
+              }}
+              disabled={loading || (!createdGrnId && !loadedGrn)}
             >
               Reject GRN
             </button>
+            {loadedGrn && (
+              <button
+                onClick={clearLoadedGrn}
+                style={{
+                  background: "#6c757d",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "10px 20px",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                Cancel & Create New GRN
+              </button>
+            )}
           </div>
         </div>
       )}

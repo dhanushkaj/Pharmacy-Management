@@ -42,17 +42,22 @@ const Header = () => {
 
   return (
     <header style={{
-      background: '#1976d2',
+      position: 'relative',
+      background: 'linear-gradient(90deg, #183153 0%, #1976d2 30%, #64b5f6 100%)',
       color: '#fff',
-      padding: '18px 32px',
+      padding: '18px 32px 18px 0',
       fontSize: '1.5rem',
       fontWeight: 'bold',
       letterSpacing: '1px',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between'
+      justifyContent: 'space-between',
+      minHeight: 70,
+      borderLeft: 'none',
+      boxShadow: '0 2px 8px 0 rgba(25,118,210,0.10)',
     }}>
-      <span>Pharmacy Management System</span>
+      {/* Curved SVG transition at top-left */}
+      <span style={{ letterSpacing: '2px', textShadow: '0 2px 8px #1565c0', marginLeft: 32 }}>Pharmacy Management System</span>
       <nav>
         {!token && <Link to="/login" style={{ color: '#fff', marginRight: 24, textDecoration: 'none', fontSize: '1rem' }}>Login</Link>}
         {token && (

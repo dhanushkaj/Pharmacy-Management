@@ -16,14 +16,29 @@ const Sidebar = () => {
   return (
     <aside className="sidebar" style={{
       width: 220,
-      background: '#263238',
+      minHeight: '100vh',
+      background: 'linear-gradient(180deg, #183153 0%, #1b5e20 100%)', // dark blue to dark green
       color: '#fff',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      paddingTop: 24
+      paddingTop: 24,
+      boxShadow: '2px 0 8px rgba(24,49,83,0.08)'
     }}>
-      <img src={logo} alt="Logo" style={{ width: 80, marginBottom: 30 }} />
+      <div style={{
+        width: 90,
+        height: 90,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle at 60% 40%, #e8f5e9 0%, #388e3c 60%, #b71c1c 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 30,
+        boxShadow: '0 2px 12px 0 rgba(0,0,0,0.10)',
+        border: '4px solid #fff'
+      }}>
+        <img src={logo} alt="Logo" style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', objectFit: 'contain', boxShadow: '0 0 0 2px #b2dfdb' }} />
+      </div>
       <nav>
         <ul style={{ listStyle: 'none', padding: 0 }}>
           <li><NavLink to="/" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Home</NavLink></li>

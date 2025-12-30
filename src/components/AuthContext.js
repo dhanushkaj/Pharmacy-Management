@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [roles, setRoles] = useState([]);    // array
   const [username, setUsername] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const t = localStorage.getItem('token');
@@ -18,11 +19,11 @@ export const AuthProvider = ({ children }) => {
         const parsed = JSON.parse(r);
         setRoles(Array.isArray(parsed) ? parsed : [parsed]);
       } catch (e) {
-        // fallback: treat as single role string
         setRoles([r]);
       }
     }
     if (u) setUsername(u);
+    setLoading(false);
   }, []);
 
   const login = (token, rolesArr = [], user = null) => {
@@ -55,7 +56,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ token, roles, username, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ token, roles, username, login, logout, hasRole, loading }}>
       {children}
     </AuthContext.Provider>
   );

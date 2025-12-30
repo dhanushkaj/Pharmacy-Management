@@ -3,7 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
 
 const PrivateRoute = ({ children, allow = [] }) => {
-  const { token, roles } = useContext(AuthContext);
+  const { token, roles, loading } = useContext(AuthContext);
+  if (loading) return <div style={{textAlign:'center',marginTop:40}}>Loading...</div>;
   if (!token) return <Navigate to="/login" replace />;
 
   if (allow.length > 0) {

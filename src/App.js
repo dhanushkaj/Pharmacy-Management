@@ -28,9 +28,12 @@ import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
+
 import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
 import GRNListView from './pages/GRNListView';
+import UserProfile from './pages/UserProfile';
+import AdminUserManagement from './pages/AdminUserManagement';
 
 const AppContent = () => {
   const location = useLocation();
@@ -69,6 +72,8 @@ const AppContent = () => {
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />
+            <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
+            <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}

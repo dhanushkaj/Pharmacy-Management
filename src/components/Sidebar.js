@@ -40,7 +40,8 @@ const Sidebar = () => {
         <img src={logo} alt="Logo" style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', objectFit: 'contain', boxShadow: '0 0 0 2px #b2dfdb' }} />
       </div>
       <nav>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
+        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', minHeight: '70vh' }}>
+                    {/* ...existing menu items... */}
           <li><NavLink to="/" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Home</NavLink></li>
           <li><NavLink to="/categories" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Categories</NavLink></li>
           <li><NavLink to="/suppliers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Suppliers</NavLink></li>
@@ -89,7 +90,9 @@ const Sidebar = () => {
             </li>
           )}
           <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>🏪 Store Settings</NavLink></li>
-          <li><NavLink to="/settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Settings & Security</NavLink></li>
+          <div style={{ flex: 1 }} />
+          <li><NavLink to="/profile" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>My Profile</NavLink></li>
+          {hasAdmin && <li><NavLink to="/admin/users" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>User Management</NavLink></li>}
         </ul>
       </nav>
     </aside>

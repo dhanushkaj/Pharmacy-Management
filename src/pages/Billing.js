@@ -398,6 +398,12 @@ export default function Billing() {
       alert('Warning: Product has no price set! Please check product configuration.');
     }
 
+    // Allow inventory to go negative: Commented out stock validation
+    // if (product.totalStock !== undefined && product.totalStock < quantity) {
+    //   alert(`Insufficient stock for product '${product.name}'. Available: ${product.totalStock}, Requested: ${quantity}`);
+    //   return;
+    // }
+
     // Check if product already in cart with same price
     const existingIndex = cartItems.findIndex((item) => 
       item && item.product && item.product.productId === product.productId && item.unitPrice === finalPrice

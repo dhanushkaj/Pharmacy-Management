@@ -3,7 +3,7 @@ import { AuthContext } from "../components/AuthContext";
 import * as XLSX from "xlsx";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "";
-const pageSize = 10;
+const pageSize = 25;
 
 const BULK_COLUMNS = [
   "name",

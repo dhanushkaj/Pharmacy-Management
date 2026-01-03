@@ -24,7 +24,7 @@ const printStyles = `
 `;
 
 export default function BillingHistory() {
-  const { token } = useContext(AuthContext);
+  const { token, hasRole } = useContext(AuthContext);
   const [billings, setBillings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -221,6 +221,19 @@ export default function BillingHistory() {
     URL.revokeObjectURL(url);
   };
 
+  // Delete billing handler (admin only)
+  const handleDelete = async (billingId) => {
+    if (!hasRole || !hasRole('admin')) return;
+    if (!window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) return;
+    try {
+      await api(`/api/billings/${billingId}`, { method: 'DELETE', token });
+      setBillings(billings => billings.filter(b => b.billingId !== billingId));
+      alert('Billing deleted successfully.');
+    } catch (err) {
+      alert('Failed to delete billing: ' + (err.message || 'Error'));
+    }
+  };
+
   return (
     <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
       <h2>Billing History</h2>
@@ -361,9 +374,25 @@ export default function BillingHistory() {
                           border: 'none',
                           borderRadius: 4,
                           cursor: 'pointer',
+                          marginRight: 4,
                         }}
                       >
                         Mark Printed
+                      </button>
+                    )}
+                    {hasRole && hasRole('admin') && (
+                      <button
+                        onClick={() => handleDelete(billing.billingId)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f44336',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Delete
                       </button>
                     )}
                   </td>

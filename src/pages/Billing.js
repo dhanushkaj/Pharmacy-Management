@@ -26,7 +26,7 @@ const printStyles = `
 `;
 
 export default function Billing() {
-  const { token } = useContext(AuthContext);
+  const { token, hasRole } = useContext(AuthContext);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -58,7 +58,7 @@ export default function Billing() {
   const [createdBilling, setCreatedBilling] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
 
-  // Load store settings, customers and products on mount, inject print styles
+  // ...existing code...
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
     if (saved) {
@@ -1217,6 +1217,38 @@ export default function Billing() {
               >
                 Close Without Print
               </button>
+              {hasRole && hasRole('admin') && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) {
+                      try {
+                        await api(`/api/billings/${createdBilling.billingId}`, {
+                          method: 'DELETE',
+                          token,
+                        });
+                        alert('Billing deleted successfully.');
+                        setShowBillPreview(false);
+                        setCreatedBilling(null);
+                        resetForm();
+                      } catch (err) {
+                        alert('Failed to delete billing: ' + (err.message || 'Error'));
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '12px 32px',
+                    background: '#f44336',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 16,
+                  }}
+                >
+                  Delete Billing
+                </button>
+              )}
             </div>
           </div>
         </div>

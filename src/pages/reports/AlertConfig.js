@@ -9,6 +9,8 @@ const ALERT_TYPE_LABELS = {
   EXPIRY_CRITICAL: 'Expiry Critical',
   LOW_STOCK: 'Low Stock',
   OUT_OF_STOCK: 'Out of Stock',
+  PAYMENT_DUE: 'Payment Due',
+  PAYMENT_OVERDUE: 'Payment Overdue',
   LOW_SALE: 'Low Sale',
 };
 

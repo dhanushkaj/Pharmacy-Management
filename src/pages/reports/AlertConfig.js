@@ -11,7 +11,8 @@ const ALERT_TYPE_LABELS = {
   OUT_OF_STOCK: 'Out of Stock',
   PAYMENT_DUE: 'Payment Due',
   PAYMENT_OVERDUE: 'Payment Overdue',
-  LOW_SALE: 'Low Sale',
+  NON_MOVING: 'Non Moving',
+  OVER_STOCK: 'Over Stock',
 };
 
 const SEVERITY_LABELS = {
@@ -151,8 +152,13 @@ const AlertConfig = () => {
               </select>
             </div>
             <div>
-              <label>Threshold Days</label><br />
-              <input type="number" value={form.thresholdDays} onChange={e => handleChange('thresholdDays', e.target.value)} />
+              <label>{form.alertType === 'LOW_SALE' ? 'Non-Moving Days' : 'Threshold Days'}</label><br />
+              <input
+                type="number"
+                value={form.thresholdDays}
+                onChange={e => handleChange('thresholdDays', e.target.value)}
+                placeholder={form.alertType === 'LOW_SALE' ? 'e.g. 90 for 3 months' : ''}
+              />
             </div>
             <div>
               <label>Severity</label><br />

@@ -50,6 +50,7 @@ export default function Billing() {
   // Cart Section
   const [cartItems, setCartItems] = useState([]);
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
 
@@ -58,7 +59,9 @@ export default function Billing() {
   const [createdBilling, setCreatedBilling] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
 
-  // ...existing code...
+  // Track manual discount input
+  const [isDiscountManual, setIsDiscountManual] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
     if (saved) {
@@ -155,23 +158,37 @@ export default function Billing() {
       setSelectedProductIndex(-1);
       return;
     }
-    // Support search when user types '12*' then product name (e.g., '12*panadol')
-    let searchName = productSearch;
-    // If input starts with quantity and '*', remove it for search
-    searchName = searchName.replace(/^\s*\d+\s*\*\s*/, '');
-    searchName = searchName.trim().toLowerCase();
+    // Remove quantity prefix (e.g., '12*') for search
+    let searchName = productSearch.replace(/^\s*\d+\s*\*\s*/, '').trim().toLowerCase();
     if (!searchName) {
       setFilteredProducts([]);
       setSelectedProductIndex(-1);
       return;
     }
-    const filtered = allProducts.filter(
-      (p) =>
-        p.name?.toLowerCase().includes(searchName) ||
-        p.genericName?.toLowerCase().includes(searchName) ||
-        p.category?.name?.toLowerCase().includes(searchName) ||
-        p.productCode?.toLowerCase().includes(searchName)
-    );
+    // Escape regex special characters in searchName
+    const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const safeSearchName = escapeRegex(searchName);
+    // 1. Exact match (full string)
+    let filtered = allProducts.filter(p => p.name?.toLowerCase() === safeSearchName);
+    // 2. Word boundary match (e.g., 'ATORVA' matches 'ATORVA 10MG', 'ATORVA TAB')
+    if (filtered.length === 0) {
+      const wordBoundary = new RegExp(`\\b${safeSearchName}\\b`, 'i');
+      filtered = allProducts.filter(p => wordBoundary.test(p.name));
+    }
+    // 3. Prefix match
+    if (filtered.length === 0) {
+      filtered = allProducts.filter(p => p.name?.toLowerCase().startsWith(safeSearchName));
+    }
+    // 4. Fallback: includes in name, generic, category, code
+    if (filtered.length === 0) {
+      filtered = allProducts.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(safeSearchName) ||
+          p.genericName?.toLowerCase().includes(safeSearchName) ||
+          p.category?.name?.toLowerCase().includes(safeSearchName) ||
+          p.productCode?.toLowerCase().includes(safeSearchName)
+      );
+    }
     setFilteredProducts(filtered);
     setSelectedProductIndex(-1);
   }, [productSearch, allProducts]);
@@ -179,6 +196,16 @@ export default function Billing() {
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
     setDiscountPercentage(customer.discountPercentage || 0);
+    // Set discountAmount to customer discount value for first time
+    if (cartItems.length > 0) {
+      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const initialDiscount = (customer.discountPercentage || 0) > 0 ? (subtotal * customer.discountPercentage) / 100 : 0;
+      setDiscountAmount(initialDiscount);
+      setIsDiscountManual(false);
+    } else {
+      setDiscountAmount(0);
+      setIsDiscountManual(false);
+    }
     setCustomerSearch('');
     setFilteredCustomers([]);
   };
@@ -447,13 +474,16 @@ export default function Billing() {
   };
 
   // Calculate totals
-  const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountAmount = (subtotal * discountPercentage) / 100;
-  const grandTotal = subtotal - discountAmount;
+  const subtotal = Number(cartItems.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
+  const percentDiscount = Number(((subtotal * discountPercentage) / 100).toFixed(2));
+  const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
+    ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+    : percentDiscount;
+  const grandTotal = Number((subtotal - validDiscount).toFixed(2));
 
   const handleProceedToConfirmation = () => {
     // Validation
-    if (!selectedCustomer) {
+    if (!selectedCustomer || !selectedCustomer.customerId || selectedCustomer.customerId === '' || selectedCustomer.customerId === null || selectedCustomer.customerId === undefined || selectedCustomer.customerId === 0) {
       alert('Please select or add a customer!');
       return;
     }
@@ -494,6 +524,8 @@ export default function Billing() {
           batchNo: item.product.batchNo || '',
         })),
         discountPercentage: parseFloat(discountPercentage) || 0,
+        totalDiscount: validDiscount, // always use the manually adjusted Discount Amount for backend
+        discountAmount: validDiscount, // always use the manually adjusted Discount Amount for backend
         paymentMethod,
         notes: notes.trim() || null,
       };
@@ -503,14 +535,9 @@ export default function Billing() {
         body: request,
         token,
       });
-
-      // Reload store settings from localStorage to ensure latest data
-      const savedSettings = localStorage.getItem('storeSettings');
-      if (savedSettings) {
-        setStoreSettings(JSON.parse(savedSettings));
+      if (response) {
+        response.discountAmount = validDiscount; // always use the manually adjusted Discount Amount for print
       }
-
-      // Show bill preview modal
       setCreatedBilling(response);
       setShowBillPreview(true);
 
@@ -549,6 +576,28 @@ export default function Billing() {
     setProductSearch('');
     setCreatedBilling(null);
   };
+
+  // Also, when cartItems change, update discountAmount if it was set by customer discount
+  useEffect(() => {
+    if (selectedCustomer && cartItems.length > 0 && (discountAmount === 0 || discountAmount === null || discountAmount === undefined)) {
+      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const initialDiscount = (selectedCustomer.discountPercentage || 0) > 0 ? (subtotal * selectedCustomer.discountPercentage) / 100 : 0;
+      setDiscountAmount(initialDiscount);
+    }
+  }, [cartItems, selectedCustomer]);
+
+  // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      setDiscountAmount(0);
+      setIsDiscountManual(false);
+    } else if (selectedCustomer && !isDiscountManual) {
+      // Recalculate discount if items are added/removed and not manually overridden
+      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const expectedDiscount = (selectedCustomer.discountPercentage || 0) > 0 ? (subtotal * selectedCustomer.discountPercentage) / 100 : 0;
+      setDiscountAmount(expectedDiscount);
+    }
+  }, [cartItems, selectedCustomer, isDiscountManual]);
 
   return (
     <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
@@ -794,13 +843,44 @@ export default function Billing() {
                 max="100"
                 step="0.01"
                 value={discountPercentage}
-                onChange={(e) => setDiscountPercentage(parseFloat(e.target.value) || 0)}
-                style={{ width: 80, padding: 4 }}
+                onChange={e => {
+                  const newPercentage = parseFloat(e.target.value) || 0;
+                  setDiscountPercentage(newPercentage);
+                  // Recalculate discountAmount based on new percentage
+                  const newDiscountAmount = subtotal * newPercentage / 100;
+                  setDiscountAmount(newDiscountAmount);
+                  setIsDiscountManual(false);
+                }}
+                style={{ width: 80, padding: 4, marginRight: 8 }}
               />
+              <span>or Discount Amount:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min="0"
+                  max={subtotal}
+                  step="0.01"
+                  value={discountAmount !== null && discountAmount !== undefined && discountAmount !== '' ? Number(parseFloat(discountAmount).toFixed(2)) : ''}
+                  onChange={e => {
+                    const val = e.target.value === '' ? '' : Number(parseFloat(e.target.value).toFixed(2));
+                    setDiscountAmount(val);
+                    setIsDiscountManual(true);
+                  }}
+                  style={{ width: 100, padding: 4 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setDiscountAmount(''); setIsDiscountManual(false); }}
+                  style={{ padding: '2px 8px', marginLeft: 4, background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                  title="Clear Discount Amount"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Discount Amount:</span>
-              <span>-Rs. {discountAmount.toFixed(2)}</span>
+              <span>Discount Applied:</span>
+              <span>-Rs. {validDiscount.toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: 8 }}>
               <span>Grand Total:</span>
@@ -932,7 +1012,7 @@ export default function Billing() {
                     marginBottom: 12,
                     cursor: 'pointer',
                     background: '#f0f8ff',
-                    ':hover': { background: '#e3f2fd' }
+                    // ':hover': { background: '#e3f2fd' } // Inline hover not supported in React
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1124,9 +1204,9 @@ export default function Billing() {
                   <span>Subtotal:</span>
                   <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {createdBilling.discountPercentage > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#d32f2f' }}>
-                    <span>Discount ({createdBilling.discountPercentage}%):</span>
+                {(createdBilling.discountAmount > 0) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span>Discount Applied:</span>
                     <span>- Rs. {createdBilling.discountAmount.toFixed(2)}</span>
                   </div>
                 )}
@@ -1142,7 +1222,7 @@ export default function Billing() {
                   }}
                 >
                   <span>GRAND TOTAL:</span>
-                  <span>Rs. {createdBilling.grandTotal.toFixed(2)}</span>
+                  <span>Rs. {(createdBilling.subtotal - createdBilling.discountAmount).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1242,8 +1322,7 @@ export default function Billing() {
                     border: 'none',
                     borderRadius: 6,
                     cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: 16,
+                    fontWeight: 'bold'
                   }}
                 >
                   Delete Billing

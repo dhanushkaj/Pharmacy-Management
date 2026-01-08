@@ -187,10 +187,10 @@ export default function BillingHistory() {
       b.billingDate ? new Date(b.billingDate).toLocaleString() : '',
       b.customerName || 'Walk-in Customer',
       b.customerPhone || 'N/A',
-      b.totalAmount?.toFixed(2) || '0.00',
+      (b.subtotal - (b.discountAmount || 0)).toFixed(2), // grand total
       b.paidAmount?.toFixed(2) || '0.00',
       b.changeAmount?.toFixed(2) || '0.00',
-      b.discountPercentage?.toFixed(2) || '0.00',
+      (b.discountAmount !== undefined ? b.discountAmount.toFixed(2) : (b.discountPercentage?.toFixed(2) || '0.00')), // always use discountAmount if present
       b.paymentMethod || 'N/A',
       b.items?.length || 0,
       b.printed ? 'Yes' : 'No'
@@ -343,7 +343,7 @@ export default function BillingHistory() {
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerName || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerPhone || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
-                    <strong>{billing.grandTotal?.toFixed(2)}</strong>
+                    <strong>{(billing.subtotal - (billing.discountAmount || 0)).toFixed(2)}</strong>
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>{billing.paymentMethod}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>
@@ -562,7 +562,11 @@ export default function BillingHistory() {
                 <div><strong>Customer:</strong> {selectedBilling.customerName}</div>
                 <div><strong>Phone:</strong> {selectedBilling.customerPhone}</div>
                 {selectedBilling.paymentMethod && (
-                  <div><strong>Payment:</strong> {selectedBilling.paymentMethod}</div>
+                  <div>
+                    <strong>Payment:</strong> {selectedBilling.paymentMethod}
+                    <br />
+                    <span style={{ color: '#e53935', fontWeight: 'bold' }}>REPRINT</span>
+                  </div>
                 )}
               </div>
 
@@ -607,9 +611,9 @@ export default function BillingHistory() {
                   <span>Subtotal:</span>
                   <span>Rs. {selectedBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {selectedBilling.discountPercentage > 0 && (
+                {(selectedBilling.discountAmount > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>Discount ({selectedBilling.discountPercentage}%):</span>
+                    <span>Discount Applied:</span>
                     <span>- Rs. {selectedBilling.discountAmount.toFixed(2)}</span>
                   </div>
                 )}
@@ -624,7 +628,7 @@ export default function BillingHistory() {
                   }}
                 >
                   <span>GRAND TOTAL:</span>
-                  <span>Rs. {selectedBilling.grandTotal.toFixed(2)}</span>
+                  <span>Rs. {(selectedBilling.subtotal - selectedBilling.discountAmount).toFixed(2)}</span>
                 </div>
               </div>
 

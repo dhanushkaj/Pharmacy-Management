@@ -196,11 +196,17 @@ export default function Billing() {
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
     setDiscountPercentage(customer.discountPercentage || 0);
-    // Set discountAmount to customer discount value for first time
+    // Set discountAmount to use only Customer Discount Base for first time
     if (cartItems.length > 0) {
-      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const initialDiscount = (customer.discountPercentage || 0) > 0 ? (subtotal * customer.discountPercentage) / 100 : 0;
-      setDiscountAmount(initialDiscount);
+      // Only use customer discount base (items without product discount)
+      const customerDiscountBase = cartItems.reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (customer.discountPercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
       setIsDiscountManual(false);
     } else {
       setDiscountAmount(0);
@@ -435,23 +441,41 @@ export default function Billing() {
     const existingIndex = cartItems.findIndex((item) => 
       item && item.product && item.product.productId === product.productId && item.unitPrice === finalPrice
     );
+    let newCartItems;
     if (existingIndex >= 0) {
       // Update quantity
       const updated = [...cartItems];
       updated[existingIndex].quantity += quantity;
+      // Keep productDiscount if already set
       updated[existingIndex].subtotal = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      newCartItems = updated;
       setCartItems(updated);
     } else {
-      // Add new item
-      setCartItems([
+      // Use product.maxDiscount if available, else 0
+      const maxDiscount = product.maxDiscount ? Number(product.maxDiscount) : 0;
+      newCartItems = [
         ...cartItems,
         {
           product,
           quantity,
           unitPrice,
+          productDiscount: maxDiscount,
           subtotal: quantity * unitPrice,
         },
-      ]);
+      ];
+      setCartItems(newCartItems);
+    }
+    // If customer is selected and discount is not manually overridden, recalculate discountAmount using only Customer Discount Base
+    if (selectedCustomer && !isDiscountManual) {
+      // Only use items with NO product discount for customer discount base
+      const customerDiscountBase = newCartItems.reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (selectedCustomer.discountPercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
     setProductSearch('');
     setFilteredProducts([]);
@@ -473,12 +497,55 @@ export default function Billing() {
     setCartItems(cartItems.filter((_, i) => i !== index));
   };
 
-  // Calculate totals
-  const subtotal = Number(cartItems.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
-  const percentDiscount = Number(((subtotal * discountPercentage) / 100).toFixed(2));
+  // Calculate product-level and customer discounts separately
+  const productLevelDiscounts = cartItems.map(item => {
+    if (item.productDiscount && item.productDiscount > 0) {
+      // Product-specific discount: subtract from product price before subtotal
+      return Math.min(item.unitPrice * item.quantity * (item.productDiscount / 100), item.unitPrice * item.quantity);
+    }
+    return 0;
+  });
+  const totalProductLevelDiscount = productLevelDiscounts.reduce((sum, d) => sum + d, 0);
+
+  // Calculate subtotal after product discounts
+  const subtotalAfterProductDiscounts = cartItems.reduce((sum, item, idx) => {
+    if (item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity - productLevelDiscounts[idx]);
+    }
+    return sum + (item.unitPrice * item.quantity);
+  }, 0);
+
+  // Customer discount only for items without product discount
+  // Customer discount base: sum only items without product discount
+  const customerDiscountBase = cartItems.reduce((sum, item) => {
+    if (!item.productDiscount || item.productDiscount === 0) {
+      return sum + (item.unitPrice * item.quantity);
+    }
+    return sum;
+  }, 0);
+  const customerDiscountTotal = customerDiscountBase * (discountPercentage / 100);
+
+  // Subtotal for display (after product discounts)
+  const subtotal = Number(cartItems.reduce((sum, item) => {
+    if (item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100));
+    }
+    return sum + (item.unitPrice * item.quantity);
+  }, 0).toFixed(2));
+  // Product discount total: sum of all product-specific discounts
+  const productDiscountTotal = cartItems.reduce((sum, item) => {
+    if (item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity * (item.productDiscount / 100));
+    }
+    return sum;
+  }, 0);
+  // Customer discount total: always use only Customer Discount Base * discountPercentage
+  // (already calculated above)
+  const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
+  // Allow manual override of discountAmount
   const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
     ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
-    : percentDiscount;
+    : calculatedDiscount;
   const grandTotal = Number((subtotal - validDiscount).toFixed(2));
 
   const handleProceedToConfirmation = () => {
@@ -515,6 +582,11 @@ export default function Billing() {
     setLoading(true);
     setError(null);
     try {
+      // Always send the sum of product + customer discount unless manually overridden
+      const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
+      const discountToSave = (isDiscountManual && discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
+        ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+        : calculatedDiscount;
       const request = {
         customerId: selectedCustomer.customerId,
         items: cartItems.map((item) => ({
@@ -524,8 +596,8 @@ export default function Billing() {
           batchNo: item.product.batchNo || '',
         })),
         discountPercentage: parseFloat(discountPercentage) || 0,
-        totalDiscount: validDiscount, // always use the manually adjusted Discount Amount for backend
-        discountAmount: validDiscount, // always use the manually adjusted Discount Amount for backend
+        totalDiscount: discountToSave, // always send the correct total discount
+        discountAmount: discountToSave, // always send the correct total discount
         paymentMethod,
         notes: notes.trim() || null,
       };
@@ -578,26 +650,22 @@ export default function Billing() {
   };
 
   // Also, when cartItems change, update discountAmount if it was set by customer discount
-  useEffect(() => {
-    if (selectedCustomer && cartItems.length > 0 && (discountAmount === 0 || discountAmount === null || discountAmount === undefined)) {
-      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const initialDiscount = (selectedCustomer.discountPercentage || 0) > 0 ? (subtotal * selectedCustomer.discountPercentage) / 100 : 0;
-      setDiscountAmount(initialDiscount);
-    }
-  }, [cartItems, selectedCustomer]);
 
-  // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
+  // Always recalculate discountAmount using only Customer Discount Base when cart changes, if not manually overridden
   useEffect(() => {
-    if (cartItems.length === 0) {
-      setDiscountAmount(0);
-      setIsDiscountManual(false);
-    } else if (selectedCustomer && !isDiscountManual) {
-      // Recalculate discount if items are added/removed and not manually overridden
-      const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const expectedDiscount = (selectedCustomer.discountPercentage || 0) > 0 ? (subtotal * selectedCustomer.discountPercentage) / 100 : 0;
-      setDiscountAmount(expectedDiscount);
+    if (selectedCustomer && !isDiscountManual) {
+      const customerDiscountBase = cartItems.reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (selectedCustomer.discountPercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
   }, [cartItems, selectedCustomer, isDiscountManual]);
+
+  // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
 
   return (
     <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
@@ -810,10 +878,39 @@ export default function Billing() {
                           style={{ width: 60, padding: 4, fontSize: 13 }}
                         />
                       </div>
+                      {/* Product-level discount input, UI only */}
+                      <div style={{ marginTop: 6 }}>
+                        <label style={{ fontSize: 12, color: '#888' }}>Product Discount (%): </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={item.productDiscount || ''}
+                          onChange={e => {
+                            if (item.product.maxDiscount) return; // If maxDiscount is set, do not allow editing
+                            const val = e.target.value === '' ? 0 : Number(parseFloat(e.target.value).toFixed(2));
+                            const updated = [...cartItems];
+                            updated[idx].productDiscount = val;
+                            setCartItems(updated);
+                          }}
+                          style={{ width: 80, padding: 4, fontSize: 12, marginLeft: 4 }}
+                          disabled={!!item.product.maxDiscount}
+                        />
+                        {item.product.maxDiscount && (
+                          <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
+                            (From Product Table)
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right', minWidth: 100 }}>
                       <div style={{ fontSize: 16, fontWeight: 'bold', color: '#2196f3', marginBottom: 8 }}>
-                        Rs. {item.subtotal.toFixed(2)}
+                        Rs. {(
+                          item.productDiscount && item.productDiscount > 0
+                            ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
+                            : item.unitPrice * item.quantity
+                        ).toFixed(2)}
                       </div>
                       <button
                         onClick={() => removeCartItem(idx)}
@@ -835,8 +932,12 @@ export default function Billing() {
               <span>Subtotal:</span>
               <strong>Rs. {subtotal.toFixed(2)}</strong>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span>Customer Discount Base:</span>
+              <span>Rs. {customerDiscountBase.toFixed(2)}</span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span>Discount (%):</span>
+              <span>Customer Discount (%):</span>
               <input
                 type="number"
                 min="0"
@@ -847,7 +948,7 @@ export default function Billing() {
                   const newPercentage = parseFloat(e.target.value) || 0;
                   setDiscountPercentage(newPercentage);
                   // Recalculate discountAmount based on new percentage
-                  const newDiscountAmount = subtotal * newPercentage / 100;
+                  const newDiscountAmount = customerDiscountBase * newPercentage / 100;
                   setDiscountAmount(newDiscountAmount);
                   setIsDiscountManual(false);
                 }}
@@ -879,8 +980,16 @@ export default function Billing() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Discount Applied:</span>
-              <span>-Rs. {validDiscount.toFixed(2)}</span>
+              <span>Product Discounts:</span>
+              <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span>Total Discount Applied:</span>
+              <span>-Rs. {(
+                isDiscountManual
+                  ? (productDiscountTotal + (discountAmount ? Number(parseFloat(discountAmount).toFixed(2)) : 0))
+                  : (productDiscountTotal + customerDiscountTotal)
+              ).toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: 8 }}>
               <span>Grand Total:</span>
@@ -896,6 +1005,9 @@ export default function Billing() {
               <option value="CASH">Cash</option>
               <option value="CARD">Card</option>
               <option value="MOBILE_PAYMENT">Mobile Payment</option>
+              <option value="ONLINE_TRANSFER">Online Transfer</option>
+              <option value="CREDIT">Credit</option>
+              <option value="CHEQUE">Cheque</option>
               <option value="OTHER">Other</option>
             </select>
           </div>
@@ -1204,10 +1316,11 @@ export default function Billing() {
                   <span>Subtotal:</span>
                   <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {(createdBilling.discountAmount > 0) && (
+                {/* Show correct total discount: product + customer */}
+                {((productDiscountTotal + customerDiscountTotal) > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <span>Discount Applied:</span>
-                    <span>- Rs. {createdBilling.discountAmount.toFixed(2)}</span>
+                    <span>- Rs. {(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
                   </div>
                 )}
                 <div
@@ -1222,7 +1335,7 @@ export default function Billing() {
                   }}
                 >
                   <span>GRAND TOTAL:</span>
-                  <span>Rs. {(createdBilling.subtotal - createdBilling.discountAmount).toFixed(2)}</span>
+                  <span>Rs. {(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
                 </div>
               </div>
 

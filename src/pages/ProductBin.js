@@ -107,7 +107,7 @@ const ProductBin = () => {
                   <th style={{ padding: 10, border: '1px solid #ccc' }}>From</th>
                   <th style={{ padding: 10, border: '1px solid #ccc' }}>To</th>
                   <th style={{ padding: 10, border: '1px solid #ccc' }}>Qty</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Ref</th>
+                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Document</th>
                   <th style={{ padding: 10, border: '1px solid #ccc' }}>By</th>
                   <th style={{ padding: 10, border: '1px solid #ccc' }}>Date</th>
                 </tr>
@@ -116,17 +116,57 @@ const ProductBin = () => {
                 {transactions.length === 0 ? (
                   <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>No transactions found for this product.</td></tr>
                 ) : (
-                  transactions.map(t => (
-                    <tr key={t.id}>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.referenceType} / {t.referenceId}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.performedBy}</td>
-                      <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.createdAt}</td>
-                    </tr>
-                  ))
+                  transactions.map(t => {
+                    // User-friendly document label
+                    let docLabel = '-';
+                    if (t.referenceType && t.referenceId) {
+                      if (t.referenceType === 'BILL') docLabel = `Bill #${t.referenceId}`;
+                      else if (t.referenceType === 'GRN') docLabel = `GRN #${t.referenceId}`;
+                      else if (t.referenceType === 'INVENTORY_RETURN') docLabel = `Return #${t.referenceId}`;
+                      else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
+                      else docLabel = `${t.referenceType} #${t.referenceId}`;
+                    }
+                    return (
+                      <tr key={t.id}>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>
+                          {t.referenceType && t.referenceId ? (
+                            <button style={{ color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                              onClick={async () => {
+                                // Fetch document details by type
+                                let doc = null;
+                                try {
+                                  if (t.referenceType === 'BILL') {
+                                    doc = await api(`/api/billings/by-number/${t.referenceId}`, { token });
+                                  } else if (t.referenceType === 'GRN') {
+                                    doc = await api(`/api/grns/by-code/${t.referenceId}`, { token });
+                                  } else if (t.referenceType === 'INVENTORY_RETURN') {
+                                    doc = await api(`/api/inventory-returns/${t.referenceId}`, { token });
+                                  } else if (t.referenceType === 'BILLING_DELETE') {
+                                    doc = await api(`/api/billings/by-number/${t.referenceId}`, { token });
+                                  } else {
+                                    doc = { type: t.referenceType, id: t.referenceId };
+                                  }
+                                  setViewDoc(doc);
+                                } catch (e) {
+                                  setViewDoc({ error: 'Failed to fetch document', type: t.referenceType, id: t.referenceId });
+                                }
+                              }}
+                            >
+                              {docLabel}
+                            </button>
+                          ) : (
+                            docLabel
+                          )}
+                        </td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.performedBy}</td>
+                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.createdAt}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -17,6 +17,7 @@ import ProductBin from './pages/ProductBin';
 import SettingsSecurity from './pages/SettingsSecurity';
 import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
+import DayEndReport from './pages/reports/DayEndReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
 import InventoryReport from './pages/reports/InventoryReport';
@@ -61,6 +62,7 @@ const AppContent = () => {
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
+            <Route path="/reports/day-end" element={<PrivateRoute><DayEndReport /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />

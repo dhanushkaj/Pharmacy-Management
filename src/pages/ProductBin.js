@@ -70,7 +70,7 @@ function ManualInventoryChangeModal({ movement, onClose }) {
 }
 // Helper: GRN modal content (extracted from GRNListView.js, simplified for reuse)
 function GrnDetailsModal({ grn, onClose }) {
-  if (!grn) return null;
+  if (!grn) return <div style={{ padding: 32, color: 'crimson' }}>No GRN data found.</div>;
   // Inline styles from GRNListView.js
   const detailRow = { display: 'flex', justifyContent: 'space-between', marginBottom: 8 };
   const detailsSection = { marginBottom: 18 };
@@ -102,34 +102,38 @@ function GrnDetailsModal({ grn, onClose }) {
             {grn.rejectedReason && (<div style={detailRow}><strong>Rejection Reason:</strong><span style={{ color: '#dc3545' }}>{grn.rejectedReason}</span></div>)}
           </div>
           <h4 style={{ marginTop: 24, marginBottom: 12 }}>Items</h4>
-          <table style={table}>
-            <thead>
-              <tr>
-                <th style={th}>Product</th>
-                <th style={th}>Quantity</th>
-                <th style={th}>Unit Cost</th>
-                <th style={th}>Selling Price</th>
-                <th style={th}>Total Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grn.items.map((item) => (
-                <tr key={item.id}>
-                  <td style={td}>{item.productName}</td>
-                  <td style={td}>{item.receivedQuantity}</td>
-                  <td style={td}>Rs.{item.unitCost.toFixed(2)}</td>
-                  <td style={td}>Rs.{item.price ? item.price.toFixed(2) : 'N/A'}</td>
-                  <td style={td}>Rs.{(item.receivedQuantity * item.unitCost).toFixed(2)}</td>
+          {Array.isArray(grn.items) && grn.items.length > 0 ? (
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Product</th>
+                  <th style={th}>Quantity</th>
+                  <th style={th}>Unit Cost</th>
+                  <th style={th}>Selling Price</th>
+                  <th style={th}>Total Cost</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: '#f8f9fa', fontWeight: 'bold' }}>
-                <td style={td} colSpan="4">Total</td>
-                <td style={td}>Rs. {grn.items.reduce((sum, item) => sum + item.receivedQuantity * item.unitCost, 0).toFixed(2)}</td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {grn.items.map((item) => (
+                  <tr key={item.id}>
+                    <td style={td}>{item.productName}</td>
+                    <td style={td}>{item.receivedQuantity}</td>
+                    <td style={td}>Rs.{item.unitCost.toFixed(2)}</td>
+                    <td style={td}>Rs.{item.price ? item.price.toFixed(2) : 'N/A'}</td>
+                    <td style={td}>Rs.{(item.receivedQuantity * item.unitCost).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#f8f9fa', fontWeight: 'bold' }}>
+                  <td style={td} colSpan="4">Total</td>
+                  <td style={td}>Rs. {grn.items.reduce((sum, item) => sum + item.receivedQuantity * item.unitCost, 0).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <div style={{ color: '#888', margin: '16px 0' }}>No items found for this GRN.</div>
+          )}
           <div style={{ marginTop: 24, textAlign: 'right' }}>
             <button onClick={onClose} style={btnSecondary}>Close</button>
           </div>
@@ -223,6 +227,9 @@ const ProductBin = () => {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [inventorySummary, setInventorySummary] = useState([]);
 
   useEffect(() => {
@@ -237,25 +244,36 @@ const ProductBin = () => {
     })();
   }, [token]);
 
-  const onProductSelect = async (product) => {
-    setSelectedProduct(product);
-
-    // fetch bin movements and inventory summary
+  const fetchMovements = async (product, pageNum = 0) => {
+    setLoading(true);
     try {
-      const movementsPage = await api(`/api/products/${product.productId}/bin-movements`, { token });
-      // movementsPage has content array
+      const movementsPage = await api(`/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`, { token });
       setTransactions(movementsPage.content || []);
+      setTotalPages(movementsPage.totalPages || 1);
+      setPage(movementsPage.number || 0);
     } catch (e) {
       console.error('Failed to fetch movements', e.message);
       setTransactions([]);
+      setTotalPages(1);
     }
+    setLoading(false);
+  };
 
+  const onProductSelect = async (product) => {
+    setSelectedProduct(product);
+    fetchMovements(product, 0);
     try {
       const sum = await api(`/api/products/${product.productId}/inventory-summary`, { token });
       setInventorySummary(sum || []);
     } catch (e) {
       console.error('Failed to fetch inventory summary', e.message);
       setInventorySummary([]);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (selectedProduct && newPage >= 0 && newPage < totalPages) {
+      fetchMovements(selectedProduct, newPage);
     }
   };
 
@@ -276,7 +294,7 @@ const ProductBin = () => {
         </div>
       </div>
       {selectedProduct ? (
-        <>
+        <div>
           <div style={{ marginTop: 10 }}>
             <h3>Inventory Summary</h3>
             {inventorySummary.length === 0 ? (
@@ -307,127 +325,136 @@ const ProductBin = () => {
 
           <div style={{ marginTop: 20 }}>
             <h3>Recent Movements</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
-              <thead>
-                <tr style={{ background: '#f0f0f0' }}>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>From</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>To</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Qty</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Document</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>By</th>
-                  <th style={{ padding: 10, border: '1px solid #ccc' }}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>No transactions found for this product.</td></tr>
-                ) : (
-                  transactions.map(t => {
-                    // User-friendly document label
-                    let docLabel = '-';
-                    if (t.referenceType && t.referenceId) {
-                      if (t.referenceType === 'BILL') docLabel = `Bill #${t.referenceId}`;
-                      else if (t.referenceType === 'GRN') docLabel = `GRN #${t.referenceId}`;
-                      else if (t.referenceType === 'INVENTORY_RETURN') docLabel = `Return #${t.referenceId}`;
-                      else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
-                      else if (t.referenceType === 'PRODUCT_UPDATE') docLabel = 'Manual Inventory Change';
-                      else docLabel = `${t.referenceType} #${t.referenceId}`;
-                    }
-                    return (
-                      <tr key={t.id} style={t.fromBin === 'INVENTORY' && t.toBin === 'INVENTORY' ? { background: '#fffbe6' } : {}}>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>
-                          {t.referenceType && t.referenceId ? (
-                            <button style={{ color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                              onClick={async () => {
-                                let doc = null;
-                                let relatedMovements = [];
-                                let grnDetails = null;
-                                try {
-                                  if (t.referenceType === 'BILL' || t.referenceType === 'BILLING') {
-                                    // Try to get bill by billingNumber, then by id if needed
-                                    // First, try to get by billingNumber
-                                    let bill = null;
+            {loading ? (
+              <div>Loading...</div>
+            ) : (
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+                  <thead>
+                    <tr style={{ background: '#f0f0f0' }}>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>From</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>To</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>Qty</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>Document</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>By</th>
+                      <th style={{ padding: 10, border: '1px solid #ccc' }}>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.length === 0 ? (
+                      <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>No transactions found for this product.</td></tr>
+                    ) : (
+                      transactions.map(t => {
+                        // ...existing code for rendering rows...
+                        let docLabel = '-';
+                        if (t.referenceType && t.referenceId) {
+                          if (t.referenceType === 'BILL' || t.referenceType === 'BILLING') docLabel = `Bill #${t.referenceId}`;
+                          else if (t.referenceType === 'GRN') docLabel = `GRN #${t.referenceId}`;
+                          else if (t.referenceType === 'INVENTORY_RETURN') docLabel = `Return #${t.referenceId}`;
+                          else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
+                          else if (t.referenceType === 'PRODUCT_UPDATE' || t.referenceType === 'MANUAL_INVENTORY') docLabel = 'Manual Inventory Change';
+                          else docLabel = `${t.referenceType} #${t.referenceId}`;
+                        }
+                        return (
+                          <tr key={t.id} style={t.fromBin === 'INVENTORY' && t.toBin === 'INVENTORY' ? { background: '#fffbe6' } : {}}>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>
+                              {t.referenceType && t.referenceId ? (
+                                <button style={{ color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                                  onClick={async () => {
+                                    // ...existing code for document modal...
+                                    let doc = null;
+                                    let relatedMovements = [];
+                                    let grnDetails = null;
                                     try {
-                                      bill = await api(`/api/billings/by-number/${t.referenceId}`, { token });
-                                    } catch (e) {
-                                      // fallback: try as id
-                                      try {
-                                        bill = await api(`/api/billings/${t.referenceId}`, { token });
-                                      } catch {}
-                                    }
-                                    doc = bill;
-                                    if (bill && bill.billingId) {
-                                      relatedMovements = await api(`/api/billings/${bill.billingId}/movements`, { token });
-                                    }
-                                    // If bill has a GRN reference in its items, try to fetch GRN details
-                                    if (bill && Array.isArray(bill.items)) {
-                                      for (const item of bill.items) {
-                                        if (item.grnId || item.grnCode) {
+                                      if (t.referenceType === 'BILL' || t.referenceType === 'BILLING') {
+                                        let bill = null;
+                                        try {
+                                          bill = await api(`/api/billings/by-number/${t.referenceId}`, { token });
+                                        } catch (e) {
                                           try {
-                                            grnDetails = await api(`/api/grns/${item.grnId || item.grnCode}`, { token });
-                                            break;
+                                            bill = await api(`/api/billings/${t.referenceId}`, { token });
                                           } catch {}
                                         }
+                                        doc = bill;
+                                        if (bill && bill.billingId) {
+                                          relatedMovements = await api(`/api/billings/${bill.billingId}/movements`, { token });
+                                        }
+                                        if (bill && Array.isArray(bill.items)) {
+                                          for (const item of bill.items) {
+                                            if (item.grnId || item.grnCode) {
+                                              try {
+                                                grnDetails = await api(`/api/grns/${item.grnId || item.grnCode}`, { token });
+                                                break;
+                                              } catch {}
+                                            }
+                                          }
+                                        }
+                                      } else if (t.referenceType === 'GRN') {
+                                        let grn = null;
+                                        try {
+                                          grn = await api(`/api/grns/by-code/${t.referenceId}`, { token });
+                                        } catch (e) {
+                                          try {
+                                            grn = await api(`/api/grns/${t.referenceId}`, { token });
+                                          } catch {}
+                                        }
+                                        doc = grn;
+                                        if (grn && grn.id) {
+                                          relatedMovements = await api(`/api/grns/${grn.id}/movements`, { token });
+                                        }
+                                      } else if (t.referenceType === 'INVENTORY_RETURN') {
+                                        doc = await api(`/api/inventory-returns/${t.referenceId}`, { token });
+                                      } else if (t.referenceType === 'BILLING_DELETE') {
+                                        let bill = null;
+                                        try {
+                                          bill = await api(`/api/billings/by-number/${t.referenceId}`, { token });
+                                        } catch (e) {
+                                          try {
+                                            bill = await api(`/api/billings/${t.referenceId}`, { token });
+                                          } catch {}
+                                        }
+                                        doc = bill;
+                                      } else if (t.referenceType === 'PRODUCT_UPDATE') {
+                                        doc = t;
+                                      } else if (t.referenceType === 'MANUAL_INVENTORY') {
+                                        doc = t;
+                                      } else {
+                                        doc = { type: t.referenceType, id: t.referenceId };
                                       }
-                                    }
-                                  } else if (t.referenceType === 'GRN') {
-                                    // Try to get GRN by code, then by id if needed
-                                    let grn = null;
-                                    try {
-                                      grn = await api(`/api/grns/by-code/${t.referenceId}`, { token });
+                                      setViewDoc({ doc, relatedMovements, grnDetails });
                                     } catch (e) {
-                                      try {
-                                        grn = await api(`/api/grns/${t.referenceId}`, { token });
-                                      } catch {}
+                                      setViewDoc({ error: 'Failed to fetch document', type: t.referenceType, id: t.referenceId });
                                     }
-                                    doc = grn;
-                                    if (grn && grn.id) {
-                                      relatedMovements = await api(`/api/grns/${grn.id}/movements`, { token });
-                                    }
-                                  } else if (t.referenceType === 'INVENTORY_RETURN') {
-                                    doc = await api(`/api/inventory-returns/${t.referenceId}`, { token });
-                                  } else if (t.referenceType === 'BILLING_DELETE') {
-                                    let bill = null;
-                                    try {
-                                      bill = await api(`/api/billings/by-number/${t.referenceId}`, { token });
-                                    } catch (e) {
-                                      try {
-                                        bill = await api(`/api/billings/${t.referenceId}`, { token });
-                                      } catch {}
-                                    }
-                                    doc = bill;
-                                  } else if (t.referenceType === 'PRODUCT_UPDATE') {
-                                    doc = t; // Pass the full movement object for manual inventory change
-                                  } else {
-                                    doc = { type: t.referenceType, id: t.referenceId };
-                                  }
-                                  setViewDoc({ doc, relatedMovements, grnDetails });
-                                } catch (e) {
-                                  setViewDoc({ error: 'Failed to fetch document', type: t.referenceType, id: t.referenceId });
-                                }
-                              }}
-                            >
-                              {docLabel}
-                            </button>
-                          ) : (
-                            docLabel
-                          )}
-                        </td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.performedBy}</td>
-                        <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.createdAt}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                                  }}
+                                >
+                                  {docLabel}
+                                </button>
+                              ) : (
+                                docLabel
+                              )}
+                            </td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.performedBy}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.createdAt}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
+                  <button onClick={() => handlePageChange(page - 1)} disabled={page === 0} style={{ padding: '6px 16px' }}>Prev</button>
+                  <span>Page {page + 1} of {totalPages}</span>
+                  <button onClick={() => handlePageChange(page + 1)} disabled={page + 1 >= totalPages} style={{ padding: '6px 16px' }}>Next</button>
+                </div>
+              </>
+            )}
           </div>
-        </>
+        </div>
       ) : (
         <div style={{ marginTop: 32, color: '#888' }}>Select a product to view its transactions.</div>
       )}

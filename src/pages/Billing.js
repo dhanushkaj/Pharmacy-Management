@@ -1009,6 +1009,7 @@ export default function Billing() {
               <option value="CREDIT">Credit</option>
               <option value="CHEQUE">Cheque</option>
               <option value="OTHER">Other</option>
+              <option value="OLD_MANUAL">Old Manual</option>
             </select>
           </div>
 

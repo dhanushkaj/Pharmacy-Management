@@ -281,7 +281,11 @@ export default function BillingHistory() {
               <option value="CASH">Cash</option>
               <option value="CARD">Card</option>
               <option value="MOBILE_PAYMENT">Mobile Payment</option>
+              <option value="ONLINE_TRANSFER">Online Transfer</option>
+              <option value="CREDIT">Credit</option>
+              <option value="CHEQUE">Cheque</option>
               <option value="OTHER">Other</option>
+              <option value="OLD_MANUAL">Old Manual</option>
             </select>
           </div>
           <button

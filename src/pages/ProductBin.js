@@ -148,11 +148,11 @@ import { api } from '../utill/api';
 import { AuthContext } from '../components/AuthContext';
 
 // Helper: Bill modal content (extracted from BillingHistory.js, simplified for reuse)
-function BillDetailsModal({ bill, onClose, storeSettings }) {
+export function BillDetailsModal({ bill, onClose, storeSettings, width = 600 }) {
   if (!bill) return null;
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 400, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: width, width: '90vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
         <div style={{ padding: 12, borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f5' }}>
           <span style={{ fontWeight: 'bold' }}>Bill Preview</span>
           <button onClick={onClose} style={{ padding: '6px 16px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>✕</button>

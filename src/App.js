@@ -76,6 +76,7 @@ const AppContent = () => {
             <Route path="/grn-list" element={<GRNListView />} />
             <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
             <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
+            <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}
@@ -84,6 +85,8 @@ const AppContent = () => {
     </div>
   );
 };
+
+import CustomerCreditReport from './pages/CustomerCreditReport';
 
 const App = () => (
   <AuthProvider>

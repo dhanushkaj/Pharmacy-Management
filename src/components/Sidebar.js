@@ -84,6 +84,7 @@ const Sidebar = () => {
                   <li><NavLink to="/reports/inventory" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Inventory Report</NavLink></li>
                   <li><NavLink to="/reports/alerts" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Alert Report</NavLink></li>
                   <li><NavLink to="/reports/sales" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Sales Report</NavLink></li>
+                  <li><NavLink to="/customer-credit-report" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Customer Credit Report</NavLink></li>
                   {hasAdmin && <li><NavLink to="/reports/alert-config" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Alert Config</NavLink></li>}
                   {hasAdmin && <li><NavLink to="/audit-trail" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Audit Trail</NavLink></li>}
                 </ul>

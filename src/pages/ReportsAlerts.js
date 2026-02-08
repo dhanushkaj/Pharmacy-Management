@@ -10,9 +10,14 @@ const ReportsAlerts = () => (
     <h2>Reports & Alerts</h2>
     {/* Submenu */}
     <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
-  <button id="billing-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Billing Report</button>
-  <button id="alert-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Alert Report</button>
-  <button id="sales-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Sales Report</button>
+      <button id="billing-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Billing Report</button>
+      <button id="alert-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Alert Report</button>
+      <button id="sales-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#43ea7a', color: '#fff', border: 'none', borderRadius: 4 }}>Sales Report</button>
+      <a href="/customer-credit-report" style={{ textDecoration: 'none' }}>
+        <button id="customer-credit-report-btn" style={{ padding: '7px 18px', fontSize: 15, background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4 }}>
+          Customer Credit Report
+        </button>
+      </a>
     </div>
 
     {/* Billing Report Section */}

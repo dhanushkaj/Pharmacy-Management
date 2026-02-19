@@ -109,20 +109,65 @@ const DayEndReport = () => {
   }, [token]);
   
   // Print-only CSS to restrict print to report section
-  React.useEffect(() => {
-    const style = document.createElement('style');
-    style.type = 'text/css';
-    style.id = 'print-only-style';
-    style.innerHTML = `
-      @media print {
-        body * { visibility: hidden !important; }
-        #dayend-report-print, #dayend-report-print * { visibility: visible !important; }
-        #dayend-report-print { position: absolute !important; left: 0; top: 0; width: 100vw !important; background: #fff !important; box-shadow: none !important; }
+  // Print-only CSS to restrict print to report section
+React.useEffect(() => {
+  const style = document.createElement('style');
+  style.type = 'text/css';
+  style.id = 'print-only-style';
+  style.innerHTML = `
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    @media print {
+
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        height: auto !important;
+        overflow: hidden !important;
       }
-    `;
-    document.head.appendChild(style);
-    return () => { const el = document.getElementById('print-only-style'); if (el) el.remove(); };
-  }, []);
+
+      body * {
+        visibility: hidden !important;
+      }
+
+      #dayend-report-print,
+      #dayend-report-print * {
+        visibility: visible !important;
+      }
+
+      #dayend-report-print {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 210mm !important;
+        min-height: 297mm !important;
+        padding: 12mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+
+      button {
+        display: none !important;
+      }
+
+      form {
+        display: none !important;
+      }
+
+    }
+  `;
+  document.head.appendChild(style);
+  return () => {
+    const el = document.getElementById('print-only-style');
+    if (el) el.remove();
+  };
+}, []);
+
 
   // Reconciliation
   const [expectedCash, setExpectedCash] = useState('0.00');

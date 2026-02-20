@@ -10,6 +10,38 @@ const coinDenominations = [10, 5, 1];
 
 
 const DayEndReport = () => {
+    // User guidance for calculations
+    const guidance = (
+      <div style={{ background: '#e3f2fd', borderRadius: 8, padding: 16, marginBottom: 24, fontSize: 15, color: '#1a237e' }}>
+        <b>Day-End Report Guidance:</b>
+        <ul style={{ marginTop: 8, marginBottom: 0 }}>
+          <li><b>Total Sale:</b> All sales for the day (cash, card, online, cheque, credit). Auto-filled from billing.</li>
+          <li><b>Cash Sales:</b> Only sales paid by cash. Auto-filled from billing.</li>
+          <li><b>Expected Cash:</b> <br />
+            <span style={{ fontSize: 14 }}>
+              <i>Cash Sales - Returns - Supplier Payments + Old Manual Bill Value + Manual Bill Entries Total - Credit Customer Billings</i>
+            </span>
+          </li>
+          <li><b>Physical Cash Counted:</b> Actual cash you count, based on denominations entered.</li>
+          <li><b>Difference:</b> <br />
+            <span style={{ fontSize: 14 }}>
+              <i>Physical Cash Counted - Expected Cash</i>
+            </span>
+          </li>
+          <li><b>Status:</b> <br />
+            <span style={{ fontSize: 14 }}>
+              <b>SHORT:</b> Cash Counted &lt; Expected Cash (cash missing)<br />
+              <b>EXCESS:</b> Cash Counted &gt; Expected Cash (extra cash)<br />
+              <b>BALANCED:</b> Cash Counted = Expected Cash (perfect match)
+            </span>
+          </li>
+        </ul>
+        <div style={{ marginTop: 8, fontSize: 14 }}>
+          All values are auto-calculated. Enter denominations and check the report for discrepancies.
+        </div>
+      </div>
+    );
+    {guidance}
   const { token } = useContext(AuthContext);
 
   // Header fields
@@ -225,21 +257,24 @@ React.useEffect(() => {
     fetchOldManualBillValue();
   }, [token]);
 
-  // Helper
-  const cashValue =
-    noteDenominations.reduce((sum, d) => sum + (Number(notes[d]) || 0) * d, 0) +
-    coinDenominations.reduce((sum, d) => sum + (Number(coins[d]) || 0) * d, 0);
 
-  // Non-cash total
-  const nonCashTotal =
+  // Helper: always number
+  const cashValue = React.useMemo(() =>
+    noteDenominations.reduce((sum, d) => sum + (Number(notes[d]) || 0) * d, 0) +
+    coinDenominations.reduce((sum, d) => sum + (Number(coins[d]) || 0) * d, 0)
+  , [notes, coins]);
+
+  // Non-cash total (auto)
+  const nonCashTotal = React.useMemo(() =>
     (parseFloat(cardPayments) || 0) +
     (parseFloat(onlineTransfers) || 0) +
-    (parseFloat(customerChequePayments) || 0);
+    (parseFloat(customerChequePayments) || 0)
+  , [cardPayments, onlineTransfers, customerChequePayments]);
 
   // Sync physicalCashCounted and difference with cashValue and expectedCash
   React.useEffect(() => {
-    setPhysicalCashCounted(cashValue.toFixed(2));
-    const diff = (parseFloat(cashValue) || 0) - (parseFloat(expectedCash) || 0);
+    setPhysicalCashCounted(Number(cashValue).toFixed(2));
+    const diff = (Number(cashValue) || 0) - (parseFloat(expectedCash) || 0);
     setDifference(diff.toFixed(2));
   }, [cashValue, expectedCash]);
 
@@ -484,19 +519,8 @@ React.useEffect(() => {
               </React.Fragment>
             ))}
           </div>
-          <div style={{ fontWeight: 'bold', marginTop: 8 }}>Total Cash Value: {cashValue}</div>
-
-          <h3>Non-Cash Collections</h3>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <label>Card Payments:</label>
-            <input type="number" min="0" step="0.01" value={cardPayments} onChange={e => setCardPayments(e.target.value)} />
-            <label>Online Transfers:</label>
-            <input type="number" min="0" step="0.01" value={onlineTransfers} onChange={e => setOnlineTransfers(e.target.value)} />
-            <label>Customer Cheque Payments:</label>
-            <input type="number" min="0" step="0.01" value={customerChequePayments} onChange={e => setCustomerChequePayments(e.target.value)} />
-            <span style={{ marginLeft: 16, fontWeight: 'bold' }}>Total: {nonCashTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          </div>
-
+          <div style={{ fontWeight: 'bold', marginTop: 8 }}>Total Cash Value: {Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+  
           <h3>Supplier Payments (Same Day)</h3>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <input type="text" placeholder="Supplier Name" value={supplierInput.supplierName} onChange={e => setSupplierInput({ ...supplierInput, supplierName: e.target.value })} />
@@ -544,37 +568,37 @@ React.useEffect(() => {
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
           </div>
 
-  <h3>Cash Reconciliation</h3>
-  <div style={{ marginBottom: 12, fontSize: 16 }}>
-    {(() => {
-      // Calculate supplier payments total
-      let supplierPaymentsTotal = 0;
-      if (Array.isArray(supplierPayments)) {
-        supplierPaymentsTotal = supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
-      }
-      // Calculate expected cash using the updated formula
-      const cashSalesNum = parseFloat(cashSales) || 0;
-      const returnsNum = parseFloat(returns) || 0;
-      const oldManualNum = oldManualBillValue != null ? parseFloat(oldManualBillValue) : 0;
-      const creditCustomerNum = creditCustomerBillings != null ? parseFloat(creditCustomerBillings) : 0;
-      const manualBillEntriesNum = manualBillEntriesTotal;
-      const expectedCashCalc = cashSalesNum - returnsNum - supplierPaymentsTotal + oldManualNum + manualBillEntriesNum - creditCustomerNum;
-      return (
-        <>
-          <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-          <div>Physical Cash Counted: <b>{cashReconciliation?.physicalCashCounted != null ? cashReconciliation.physicalCashCounted.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-          <div>Difference: <b>{cashReconciliation?.difference != null ? cashReconciliation.difference.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-          <div>Status: <b>{
-                        Number(cashValue) > expectedCashCalc
-                          ? 'EXCESS'
-                          : Number(cashValue) < expectedCashCalc
-                          ? 'SHORT'
-                          : 'BALANCED'
-                      }</b></div>
-        </>
-      );
-    })()}
-  </div>
+        <h3>Cash Reconciliation</h3>
+        <div style={{ marginBottom: 12, fontSize: 16 }}>
+          {(() => {
+            // Calculate supplier payments total
+            let supplierPaymentsTotal = 0;
+            if (Array.isArray(supplierPayments)) {
+              supplierPaymentsTotal = supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
+            }
+            // Calculate expected cash using the updated formula
+            const cashSalesNum = parseFloat(cashSales) || 0;
+            const returnsNum = parseFloat(returns) || 0;
+            const oldManualNum = oldManualBillValue != null ? parseFloat(oldManualBillValue) : 0;
+            const creditCustomerNum = creditCustomerBillings != null ? parseFloat(creditCustomerBillings) : 0;
+            const manualBillEntriesNum = manualBillEntriesTotal;
+            const expectedCashCalc = cashSalesNum - returnsNum - supplierPaymentsTotal + oldManualNum + manualBillEntriesNum - creditCustomerNum;
+            return (
+              <>
+                <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div>Physical Cash Counted: <b>{Number(physicalCashCounted).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div>Difference: <b>{Number(difference).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div>Status: <b>{
+                  Number(physicalCashCounted) > expectedCashCalc
+                    ? 'EXCESS'
+                    : Number(physicalCashCounted) < expectedCashCalc
+                      ? 'SHORT'
+                      : 'BALANCED'
+                }</b></div>
+              </>
+            );
+          })()}
+        </div>
   
 
           {difference !== '0.00' && (

@@ -358,10 +358,9 @@ React.useEffect(() => {
                 lineHeight: 1.3 // tighter line spacing
               }}
             >
-              <h1 style={{ textAlign: 'center', margin: 0, letterSpacing: 1, fontWeight: 700, fontSize: 20, color: '#1976d2' }}>
-                DAILY CLOSING REPORT
-              </h1>
-              <div style={{ fontFamily: 'monospace', marginBottom: 8 }}>
+              <div className="day-end-report">
+               
+                <h2>Day-End Report</h2>
                 <div>Branch: <b>{submittedData.branch}</b></div>
                 <div>POS ID: <b>{submittedData.posId}</b></div>
                 <div>Cashier: <b>{submittedData.cashier}</b></div>
@@ -480,6 +479,9 @@ React.useEffect(() => {
         )}
 
         <form onSubmit={handleSubmit} style={{ maxWidth: 700, margin: '0 auto' }}>
+
+           <div style={{ maxWidth: 700, margin: '0 auto' }}>{guidance}</div>
+           
           <h3>Header Info</h3>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <input placeholder="Branch" value={branch} onChange={e => setBranch(e.target.value)} />
@@ -565,6 +567,7 @@ React.useEffect(() => {
             <div>Online Transfer Sales: <b>{systemSalesSummary?.onlineTransferSales != null ? systemSalesSummary.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Cheque Sales: <b>{systemSalesSummary?.chequeSales != null ? systemSalesSummary.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
 
         <h3>Cash Reconciliation</h3>

@@ -41,7 +41,6 @@ const DayEndReport = () => {
         </div>
       </div>
     );
-    {guidance}
   const { token } = useContext(AuthContext);
 
   // Header fields
@@ -583,15 +582,16 @@ React.useEffect(() => {
             const creditCustomerNum = creditCustomerBillings != null ? parseFloat(creditCustomerBillings) : 0;
             const manualBillEntriesNum = manualBillEntriesTotal;
             const expectedCashCalc = cashSalesNum - returnsNum - supplierPaymentsTotal + oldManualNum + manualBillEntriesNum - creditCustomerNum;
+            const liveDifference = Number(physicalCashCounted) - expectedCashCalc;
             return (
               <>
                 <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div>Physical Cash Counted: <b>{Number(physicalCashCounted).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div>Difference: <b>{Number(difference).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div>Difference: <b>{liveDifference.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div>Status: <b>{
-                  Number(physicalCashCounted) > expectedCashCalc
+                  liveDifference > 0
                     ? 'EXCESS'
-                    : Number(physicalCashCounted) < expectedCashCalc
+                    : liveDifference < 0
                       ? 'SHORT'
                       : 'BALANCED'
                 }</b></div>

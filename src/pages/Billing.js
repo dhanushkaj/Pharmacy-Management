@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
@@ -346,21 +346,22 @@ export default function Billing() {
     }
   };
 
+  // Enhanced: Show all price levels FIFO (latest first, even if stock is zero)
+  //           Prepare for keyboard navigation in modal
   const fetchInventoryForProduct = async (product, quantity) => {
     if (!product || !product.productId) {
       console.error('Invalid product in fetchInventoryForProduct:', product);
       return;
     }
-    
     try {
-      const data = await api(`/api/products/${product.productId}/inventory`, { token });
-      
+      let data = await api(`/api/products/${product.productId}/inventory`, { token });
       if (!data || data.length === 0) {
         alert('No inventory found for this product! Please add inventory first.');
         return;
       }
-      
-      // Group by selling price (price is returned as string, convert to number)
+      // Sort inventory by createdAt ascending (FIFO: oldest first)
+      data = data.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      // Group by selling price and track latest date for each price group
       const priceGroups = {};
       data.forEach(item => {
         const price = parseFloat(item.price) || 0;
@@ -368,24 +369,31 @@ export default function Billing() {
           priceGroups[price] = {
             price,
             totalStock: 0,
-            items: []
+            items: [],
+            latestDate: item.createdAt ? new Date(item.createdAt) : new Date(0)
           };
         }
         priceGroups[price].totalStock += item.stock || 0;
         priceGroups[price].items.push(item);
+        // Track latest date for this price group
+        if (item.createdAt && new Date(item.createdAt) > priceGroups[price].latestDate) {
+          priceGroups[price].latestDate = new Date(item.createdAt);
+        }
       });
-      
-      const options = Object.values(priceGroups);
-      console.log('Price options:', options);
-      
+      // Sort price options: latest date first (FIFO), then by price desc
+      let options = Object.values(priceGroups).sort((a, b) => {
+        if (b.latestDate - a.latestDate !== 0) return b.latestDate - a.latestDate;
+        return b.price - a.price;
+      });
+      // Always show all price levels, even if stock is zero
+      options = options.map(opt => ({ ...opt, quantity }));
       if (options.length === 1) {
-        // Only one price, add directly to cart
         addProductToCart(product, quantity, options[0].price);
       } else {
-        // Multiple prices, show selection modal
-        setPriceOptions(options.map(opt => ({ ...opt, quantity })));
+        setPriceOptions(options);
         setSelectedProduct(product);
         setShowPriceOptions(true);
+        setSelectedPriceOptionIndex(0); // default to first
       }
     } catch (err) {
       console.error('Failed to fetch inventory:', err);
@@ -393,19 +401,32 @@ export default function Billing() {
     }
   };
 
-  const handleSelectPriceOption = (priceOption) => {
+  // Keyboard navigation for price modal
+  const [selectedPriceOptionIndex, setSelectedPriceOptionIndex] = useState(0);
+  const priceModalRef = useRef(null);
+  const handleSelectPriceOption = (priceOption, idx = null) => {
     if (!selectedProduct) {
       console.error('No product selected');
       setShowPriceOptions(false);
       setPriceOptions([]);
       return;
     }
-    addProductToCart(selectedProduct, priceOption.quantity, priceOption.price);
+    // If called from keyboard, use selectedPriceOptionIndex
+    const option = idx !== null ? priceOptions[idx] : priceOption;
+    addProductToCart(selectedProduct, option.quantity, option.price);
     setShowPriceOptions(false);
     setPriceOptions([]);
     setSelectedProduct(null);
     setProductSearch('');
+    setSelectedPriceOptionIndex(0);
   };
+
+  // Focus the price modal when it opens (must be at top level, not inside a function)
+  useEffect(() => {
+    if (showPriceOptions && priceModalRef.current) {
+      priceModalRef.current.focus();
+    }
+  }, [showPriceOptions]);
 
   const addProductToCart = (product, quantity = 1, unitPrice = null) => {
     console.log('Adding to cart:', product, 'Quantity:', quantity, 'Unit Price:', unitPrice);
@@ -1108,7 +1129,24 @@ export default function Billing() {
           }}
           onClick={() => setShowPriceOptions(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 500 }}>
+          <div
+            ref={priceModalRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 500 }}
+            tabIndex={0}
+            onKeyDown={e => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedPriceOptionIndex(prev => (prev < priceOptions.length - 1 ? prev + 1 : prev));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedPriceOptionIndex(prev => (prev > 0 ? prev - 1 : 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSelectPriceOption(null, selectedPriceOptionIndex);
+              }
+            }}
+          >
             <h3>Select Selling Price</h3>
             <p style={{ color: '#666', marginBottom: 16 }}>
               This product has multiple selling prices in inventory. Please select one:
@@ -1117,16 +1155,17 @@ export default function Billing() {
               {priceOptions.map((option, idx) => (
                 <div
                   key={idx}
-                  onClick={() => handleSelectPriceOption(option)}
+                  onClick={() => handleSelectPriceOption(option, idx)}
                   style={{
                     padding: 16,
-                    border: '2px solid #2196f3',
+                    border: selectedPriceOptionIndex === idx ? '3px solid #1976d2' : '2px solid #2196f3',
                     borderRadius: 8,
                     marginBottom: 12,
                     cursor: 'pointer',
-                    background: '#f0f8ff',
-                    // ':hover': { background: '#e3f2fd' } // Inline hover not supported in React
+                    background: selectedPriceOptionIndex === idx ? '#e3f2fd' : '#f0f8ff',
                   }}
+                  tabIndex={0}
+                  onMouseEnter={() => setSelectedPriceOptionIndex(idx)}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>

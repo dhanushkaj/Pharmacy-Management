@@ -259,7 +259,7 @@ const AuditTrail = () => {
   }, [filters]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, overflow: 'hidden' }}>
       <h2 style={{ marginBottom: 24, color: '#333' }}>Audit Trail</h2>
       
       {/* Filters */}
@@ -422,17 +422,17 @@ const AuditTrail = () => {
 
       {/* Audit Logs Table */}
       {!loading && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', border: '1px solid #ddd', tableLayout: 'fixed' }}>
+        <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', border: '1px solid #ddd', minWidth: '900px' }}>
             <thead>
               <tr style={{ background: '#f0f0f0' }}>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '160px' }}>Timestamp</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '100px' }}>Action</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '150px' }}>Entity</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '120px' }}>User</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '120px' }}>IP Address</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '300px' }}>Changes</th>
-                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '250px' }}>Description</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '13%' }}>Timestamp</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '8%' }}>Action</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '12%' }}>Entity</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '10%' }}>User</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '10%' }}>IP Address</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '27%' }}>Changes</th>
+                <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #ddd', width: '20%' }}>Description</th>
               </tr>
             </thead>
             <tbody>

@@ -15,58 +15,64 @@ const Sidebar = () => {
   const { totalActive, criticalCount } = useAlertSummary();
   return (
     <aside className="sidebar" style={{
-      width: 220,
+      width: 180,
+      minWidth: 180,
+      maxWidth: 180,
       minHeight: '100vh',
       background: 'linear-gradient(180deg, #183153 0%, #1b5e20 100%)', // dark blue to dark green
       color: '#fff',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      paddingTop: 24,
-      boxShadow: '2px 0 8px rgba(24,49,83,0.08)'
+      paddingTop: 16,
+      boxShadow: '2px 0 8px rgba(24,49,83,0.08)',
+      flexShrink: 0,
+      overflowY: 'auto',
+      overflowX: 'hidden'
     }}>
       <div style={{
-        width: 90,
-        height: 90,
+        width: 70,
+        height: 70,
         borderRadius: '50%',
         background: 'radial-gradient(circle at 60% 40%, #e8f5e9 0%, #388e3c 60%, #b71c1c 100%)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 30,
+        marginBottom: 20,
         boxShadow: '0 2px 12px 0 rgba(0,0,0,0.10)',
-        border: '4px solid #fff'
+        border: '3px solid #fff',
+        flexShrink: 0
       }}>
-        <img src={logo} alt="Logo" style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', objectFit: 'contain', boxShadow: '0 0 0 2px #b2dfdb' }} />
+        <img src={logo} alt="Logo" style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', objectFit: 'contain', boxShadow: '0 0 0 2px #b2dfdb' }} />
       </div>
-      <nav>
-        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', minHeight: '70vh' }}>
+      <nav style={{ width: '100%', padding: '0 8px', boxSizing: 'border-box' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', minHeight: '65vh' }}>
                     {/* ...existing menu items... */}
-          <li><NavLink to="/" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Home</NavLink></li>
-          <li><NavLink to="/categories" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Categories</NavLink></li>
-          <li><NavLink to="/suppliers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Suppliers</NavLink></li>
-          <li><NavLink to="/products" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Products</NavLink></li>
-          <li><NavLink to="/purchase-order" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Purchase Order</NavLink></li>
-          {hasAdmin && <li><NavLink to="/grn" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Approve GRN</NavLink></li>} 
-          <li><NavLink to="/inventory-returns" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Inventory Returns</NavLink></li>
-          <li><NavLink to="/billing" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Billing</NavLink></li>
-          <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Customers</NavLink></li>
-          <li><NavLink to="/bin" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>Product Bin</NavLink></li>
+          <li><NavLink to="/" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Home</NavLink></li>
+          <li><NavLink to="/categories" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Categories</NavLink></li>
+          <li><NavLink to="/suppliers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Suppliers</NavLink></li>
+          <li><NavLink to="/products" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Products</NavLink></li>
+          <li><NavLink to="/purchase-order" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Purchase Order</NavLink></li>
+          {hasAdmin && <li><NavLink to="/grn" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Approve GRN</NavLink></li>} 
+          <li><NavLink to="/inventory-returns" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Inventory Returns</NavLink></li>
+          <li><NavLink to="/billing" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Billing</NavLink></li>
+          <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Customers</NavLink></li>
+          <li><NavLink to="/bin" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Product Bin</NavLink></li>
           {showReports && (
             <li>
-              <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '12px 0' }} onClick={() => setReportsOpen(o => !o)}>
-                <span style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                  <NavLink to="/reports" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none' })}>Reports & Alerts</NavLink>
+              <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setReportsOpen(o => !o)}>
+                <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '14px' }}>
+                  <NavLink to="/reports" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', fontSize: '14px' })}>Reports & Alerts</NavLink>
                   {(totalActive > 0) && (
                     <span style={{
                       background: criticalCount > 0 ? '#d32f2f' : '#ffb300',
                       color: '#fff',
-                      borderRadius: 12,
-                      fontSize: 12,
+                      borderRadius: 10,
+                      fontSize: 10,
                       fontWeight: 'bold',
-                      marginLeft: 8,
-                      padding: '2px 8px',
-                      minWidth: 24,
+                      marginLeft: 6,
+                      padding: '2px 6px',
+                      minWidth: 18,
                       textAlign: 'center',
                       display: 'inline-block',
                       boxShadow: '0 1px 4px rgba(0,0,0,0.15)'
@@ -75,26 +81,26 @@ const Sidebar = () => {
                     </span>
                   )}
                 </span>
-                <span style={{ marginLeft: 8, fontSize: 14 }}>{reportsOpen ? '▼' : '▶'}</span>
+                <span style={{ marginLeft: 4, fontSize: 12 }}>{reportsOpen ? '▼' : '▶'}</span>
               </div>
               {reportsOpen && (
-                <ul style={{ listStyle: 'none', paddingLeft: 16, marginTop: 4 }}>
-                  <li><NavLink to="/billing-history" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Billing Report</NavLink></li>
-                  <li><NavLink to="/reports/day-end" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Day-End Report</NavLink></li>
-                  <li><NavLink to="/reports/inventory" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Inventory Report</NavLink></li>
-                  <li><NavLink to="/reports/alerts" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Alert Report</NavLink></li>
-                  <li><NavLink to="/reports/sales" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Sales Report</NavLink></li>
-                  <li><NavLink to="/customer-credit-report" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Customer Credit Report</NavLink></li>
-                  {hasAdmin && <li><NavLink to="/reports/alert-config" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Alert Config</NavLink></li>}
-                  {hasAdmin && <li><NavLink to="/audit-trail" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '8px 0' })}>Audit Trail</NavLink></li>}
+                <ul style={{ listStyle: 'none', paddingLeft: 12, marginTop: 2 }}>
+                  <li><NavLink to="/billing-history" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Billing Report</NavLink></li>
+                  <li><NavLink to="/reports/day-end" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Day-End Report</NavLink></li>
+                  <li><NavLink to="/reports/inventory" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Inventory Report</NavLink></li>
+                  <li><NavLink to="/reports/alerts" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Alert Report</NavLink></li>
+                  <li><NavLink to="/reports/sales" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Sales Report</NavLink></li>
+                  <li><NavLink to="/customer-credit-report" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Credit Report</NavLink></li>
+                  {hasAdmin && <li><NavLink to="/reports/alert-config" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Alert Config</NavLink></li>}
+                  {hasAdmin && <li><NavLink to="/audit-trail" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Audit Trail</NavLink></li>}
                 </ul>
               )}
             </li>
           )}
-          <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>🏪 Store Settings</NavLink></li>
+          <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>🏪 Store Settings</NavLink></li>
           <div style={{ flex: 1 }} />
-          <li><NavLink to="/profile" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>My Profile</NavLink></li>
-          {hasAdmin && <li><NavLink to="/admin/users" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '12px 0' })}>User Management</NavLink></li>}
+          <li><NavLink to="/profile" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>My Profile</NavLink></li>
+          {hasAdmin && <li><NavLink to="/admin/users" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>User Management</NavLink></li>}
         </ul>
       </nav>
     </aside>

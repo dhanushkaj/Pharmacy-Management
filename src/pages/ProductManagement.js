@@ -911,30 +911,30 @@ const ProductManagement = () => {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Product Management</h2>
+    <div style={{ padding: 16, boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
+      <h2 style={{ fontSize: 20, marginBottom: 12 }}>Product Management</h2>
 
       <form
         onSubmit={onSubmit}
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: 24,
-          marginBottom: 24,
+          gap: 16,
+          marginBottom: 20,
           background: "#f5f5f5",
-          padding: 20,
+          padding: 16,
           borderRadius: 8,
         }}
       >
         <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 180 }}
+          style={{ display: "flex", flexDirection: "column", minWidth: 150, flex: '1 1 150px' }}
         >
-          <label>Category</label>
+          <label style={{ fontSize: 13 }}>Category</label>
           <select
             name="categoryId"
             value={form.categoryId}
             onChange={handleChange}
-            style={{ padding: 8 }}
+            style={{ padding: 6, fontSize: 13 }}
           >
             <option value="">Select Category</option>
             {categories.map((c) => (
@@ -946,7 +946,7 @@ const ProductManagement = () => {
         </div>
 
         <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
+          style={{ display: "flex", flexDirection: "column", minWidth: 180, flex: '1 1 180px' }}
         >
           <label>Product Name</label>
           <input

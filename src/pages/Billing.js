@@ -101,34 +101,9 @@ export default function Billing() {
       // Handle paginated response or direct array
       const products = data?.content ? data.content : Array.isArray(data) ? data : [];
       
-      // Fetch inventory for each product to get selling prices
-      const productsWithPrices = await Promise.all(
-        products.map(async (product) => {
-          try {
-            const inventory = await api(`/api/products/${product.productId}/inventory`, { token });
-            // Get unique selling prices from inventory (price is returned as string, convert to number)
-            const prices = [...new Set(inventory.map(item => parseFloat(item.price) || 0))].filter(p => p > 0);
-            // Calculate total stock from all inventory items
-            const totalStock = inventory.reduce((sum, item) => sum + (item.stock || 0), 0);
-            return {
-              ...product,
-              sellingPrices: prices.length > 0 ? prices : null,
-              hasMultiplePrices: prices.length > 1,
-              totalStock: totalStock
-            };
-          } catch (err) {
-            console.warn(`⚠️ Failed to fetch inventory for product ${product.name}:`, err.message);
-            return {
-              ...product,
-              sellingPrices: null,
-              hasMultiplePrices: false,
-              totalStock: 0
-            };
-          }
-        })
-      );
-      
-      setAllProducts(productsWithPrices);
+      // Don't pre-fetch inventory for all products - this causes N+1 query problem!
+      // Inventory will be fetched on-demand when a product is selected
+      setAllProducts(products);
     } catch (err) {
       console.error('❌ Failed to load products:', err);
       setError('Failed to load products: ' + err.message);
@@ -274,26 +249,11 @@ export default function Billing() {
     setFilteredProducts([]);
     setSelectedProductIndex(-1);
     
-    // Check if product has inventory and prices
-    if (!product.sellingPrices || product.sellingPrices.length === 0) {
-      alert('No inventory found for this product! Please add inventory first.');
-      setProductSearch('');
-      return;
-    }
+    // Fetch inventory on-demand for this product (lazy loading)
+    await fetchInventoryForProduct(product, quantity);
     
-    // If product has multiple prices, show price selection modal
-    if (product.hasMultiplePrices && product.sellingPrices.length > 1) {
-      await fetchInventoryForProduct(product, quantity);
-      // Don't clear selectedProduct here - it's needed for the price modal
-      setProductSearch('');
-    } else {
-      // Single price - add directly to cart
-      const price = product.sellingPrices[0];
-      addProductToCart(product, quantity, price);
-      // Clear search box and selected product after adding to cart
-      setProductSearch('');
-      setSelectedProduct(null);
-    }
+    // Clear search box after processing
+    setProductSearch('');
   };
 
   const handleProductSearchKeyDown = async (e) => {
@@ -689,31 +649,31 @@ export default function Billing() {
   // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
 
   return (
-    <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
-      <h2>Billing / Sales</h2>
+    <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
+      <h2 style={{ fontSize: 20, marginBottom: 12 }}>Billing / Sales</h2>
 
-      {error && <div style={{ color: 'red', marginBottom: 12, padding: 10, background: '#fee', border: '1px solid red' }}>{error}</div>}
+      {error && <div style={{ color: 'red', marginBottom: 10, padding: 8, background: '#fee', border: '1px solid red', fontSize: 13 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 24, marginTop: 20 }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
         {/* LEFT SIDE: Customer + Product Search */}
-        <div style={{ flex: 1, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa' }}>
-          <h3>Customer Section</h3>
+        <div style={{ flex: '1 1 300px', minWidth: 280, border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa', boxSizing: 'border-box' }}>
+          <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Customer Section</h3>
           {!selectedCustomer ? (
             <>
               <input
                 type="text"
-                placeholder="Search customer by name, phone, address..."
+                placeholder="Search customer..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
-                style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8 }}
+                style={{ width: '100%', padding: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }}
               />
               {filteredCustomers.length > 0 && (
-                <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 200, overflowY: 'auto' }}>
+                <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
                   {filteredCustomers.map((c) => (
                     <div
                       key={c.customerId}
                       onClick={() => handleSelectCustomer(c)}
-                      style={{ padding: 10, cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                      style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: 13 }}
                     >
                       <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
                     </div>
@@ -791,45 +751,7 @@ export default function Billing() {
               {filteredProducts.filter(p => p != null).map((p, idx) => {
                 const isSelected = idx === selectedProductIndex;
                 
-                // If product has multiple prices, show each price as a separate row
-                if (p.hasMultiplePrices && p.sellingPrices && p.sellingPrices.length > 1) {
-                  return p.sellingPrices.map((price, priceIdx) => (
-                    <div
-                      key={`${p.productId}-${priceIdx}`}
-                      onClick={() => handleSelectProductFromDropdown(p)}
-                      style={{
-                        padding: 12,
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #eee',
-                        background: isSelected && priceIdx === 0 ? '#e3f2fd' : '#fff'
-                      }}
-                      onMouseEnter={() => setSelectedProductIndex(idx)}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
-                            {p.name || 'N/A'}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                            {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
-                            Rs. {price.toFixed(2)}
-                          </div>
-                          {priceIdx > 0 && (
-                            <div style={{ fontSize: 10, color: '#999' }}>
-                              Option {priceIdx + 1}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ));
-                }
-                
-                // Single price product - show in one row
+                // Show product in one row - inventory will be fetched on selection
                 return (
                   <div
                     key={p.productId}
@@ -848,19 +770,13 @@ export default function Billing() {
                           {p.name || 'N/A'}
                         </div>
                         <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                          {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
+                          {p.category?.name || 'N/A'} | Code: {p.productCode || 'N/A'}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                        {p.sellingPrices && p.sellingPrices.length > 0 ? (
-                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
-                            Rs. {p.sellingPrices[0].toFixed(2)}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: '#ff9800' }}>
-                            No Price
-                          </div>
-                        )}
+                        <div style={{ fontSize: 12, color: '#666' }}>
+                          Click to add
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -30,7 +30,7 @@ import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
 
-import PrintSetupGuide from './components/PrintSetupGuide';
+// import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
 import GRNListView from './pages/GRNListView';
 import UserProfile from './pages/UserProfile';
@@ -80,7 +80,7 @@ const AppContent = () => {
           </Routes>
         </div>
         {!isAuthPage && <Footer />}
-        {!isAuthPage && <PrintSetupGuide />}
+        {/* {!isAuthPage && <PrintSetupGuide />} */}
       </div>
     </div>
   );

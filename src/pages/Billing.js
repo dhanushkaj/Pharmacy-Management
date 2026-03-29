@@ -53,6 +53,7 @@ export default function Billing() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
+  const [amountReceived, setAmountReceived] = useState('');
 
   // Bill Preview Modal
   const [showBillPreview, setShowBillPreview] = useState(false);
@@ -568,6 +569,10 @@ export default function Billing() {
       const discountToSave = (isDiscountManual && discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
         ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
         : calculatedDiscount;
+      
+      // Parse amount received
+      const parsedAmountReceived = amountReceived !== '' ? parseFloat(amountReceived) : 0;
+      
       const request = {
         customerId: selectedCustomer.customerId,
         items: cartItems.map((item) => ({
@@ -581,6 +586,7 @@ export default function Billing() {
         discountAmount: discountToSave, // always send the correct total discount
         paymentMethod,
         notes: notes.trim() || null,
+        amountReceived: parsedAmountReceived,
       };
 
       const response = await api('/api/billings', {
@@ -625,6 +631,7 @@ export default function Billing() {
     setDiscountPercentage(0);
     setPaymentMethod('CASH');
     setNotes('');
+    setAmountReceived('');
     setCustomerSearch('');
     setProductSearch('');
     setCreatedBilling(null);
@@ -948,6 +955,37 @@ export default function Billing() {
               <option value="OTHER">Other</option>
               <option value="OLD_MANUAL">Old Manual</option>
             </select>
+          </div>
+
+          {/* Amount Received & Balance Section */}
+          <div style={{ marginBottom: 12, padding: 12, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Amount Received (Rs.):</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(e.target.value)}
+                placeholder="Enter amount given by customer"
+                style={{ width: '100%', padding: 8, fontSize: 16, boxSizing: 'border-box' }}
+              />
+            </div>
+            {amountReceived !== '' && parseFloat(amountReceived) > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontSize: 18, 
+                fontWeight: 'bold',
+                padding: 8,
+                background: parseFloat(amountReceived) >= grandTotal ? '#c8e6c9' : '#ffcdd2',
+                borderRadius: 4,
+                color: parseFloat(amountReceived) >= grandTotal ? '#2e7d32' : '#c62828'
+              }}>
+                <span>{parseFloat(amountReceived) >= grandTotal ? 'Balance to Return:' : 'Amount Due:'}</span>
+                <span>Rs. {Math.abs(parseFloat(amountReceived) - grandTotal).toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -1293,6 +1331,29 @@ export default function Billing() {
                   <span>GRAND TOTAL:</span>
                   <span>Rs. {(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
                 </div>
+
+                {/* Amount Received and Balance */}
+                {createdBilling.amountReceived > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #333', margin: '8px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                      <span>Amount Received:</span>
+                      <span>Rs. {createdBilling.amountReceived.toFixed(2)}</span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontWeight: 'bold',
+                      fontSize: 13,
+                      padding: '4px 0',
+                      background: createdBilling.balanceAmount >= 0 ? '#e8f5e9' : '#ffebee',
+                      borderRadius: 4
+                    }}>
+                      <span>{createdBilling.balanceAmount >= 0 ? 'Balance/Change:' : 'Amount Due:'}</span>
+                      <span>Rs. {Math.abs(createdBilling.balanceAmount).toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {createdBilling.notes && (

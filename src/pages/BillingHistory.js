@@ -324,7 +324,8 @@ export default function BillingHistory() {
 
       {!loading && billings.length > 0 && (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', minWidth: 900 }}>
             <thead>
               <tr style={{ background: '#e3f2fd' }}>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Billing #</th>
@@ -332,6 +333,8 @@ export default function BillingHistory() {
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Customer</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Phone</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Total (Rs.)</th>
+                <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Received (Rs.)</th>
+                <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Balance (Rs.)</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Payment</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Printed</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Actions</th>
@@ -347,7 +350,15 @@ export default function BillingHistory() {
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerName || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerPhone || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
-                    <strong>{(billing.subtotal - (billing.discountAmount || 0)).toFixed(2)}</strong>
+                    <strong>{(billing.grandTotal || (billing.subtotal - (billing.discountAmount || 0))).toFixed(2)}</strong>
+                  </td>
+                  <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
+                    {billing.amountReceived ? billing.amountReceived.toFixed(2) : '-'}
+                  </td>
+                  <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right', color: billing.balanceAmount >= 0 ? '#2e7d32' : '#c62828' }}>
+                    {billing.amountReceived > 0 ? (
+                      <span>{billing.balanceAmount >= 0 ? '+' : ''}{billing.balanceAmount?.toFixed(2) || '0.00'}</span>
+                    ) : '-'}
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>{billing.paymentMethod}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>
@@ -404,6 +415,7 @@ export default function BillingHistory() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
@@ -645,8 +657,31 @@ export default function BillingHistory() {
                   }}
                 >
                   <span>GRAND TOTAL:</span>
-                  <span>Rs. {(selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0)).toFixed(2)}</span>
+                  <span>Rs. {(selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))).toFixed(2)}</span>
                 </div>
+
+                {/* Amount Received and Balance */}
+                {selectedBilling.amountReceived > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #333', margin: '8px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                      <span>Amount Received:</span>
+                      <span>Rs. {selectedBilling.amountReceived.toFixed(2)}</span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontWeight: 'bold',
+                      fontSize: 13,
+                      padding: '4px 0',
+                      background: selectedBilling.balanceAmount >= 0 ? '#e8f5e9' : '#ffebee',
+                      borderRadius: 4
+                    }}>
+                      <span>{selectedBilling.balanceAmount >= 0 ? 'Balance/Change:' : 'Amount Due:'}</span>
+                      <span>Rs. {Math.abs(selectedBilling.balanceAmount).toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {selectedBilling.notes && (

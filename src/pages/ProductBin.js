@@ -223,6 +223,7 @@ const mockAudit = [
 const ProductBin = () => {
   const { token } = useContext(AuthContext);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productDetails, setProductDetails] = useState(null);
   const [viewDoc, setViewDoc] = useState(null);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -261,12 +262,18 @@ const ProductBin = () => {
 
   const onProductSelect = async (product) => {
     setSelectedProduct(product);
+    setProductDetails(null);
     fetchMovements(product, 0);
     try {
-      const sum = await api(`/api/products/${product.productId}/inventory-summary`, { token });
+      const [details, sum] = await Promise.all([
+        api(`/api/products/${product.productId}`, { token }),
+        api(`/api/products/${product.productId}/inventory-summary`, { token }),
+      ]);
+      setProductDetails(details || product);
       setInventorySummary(sum || []);
     } catch (e) {
-      console.error('Failed to fetch inventory summary', e.message);
+      console.error('Failed to fetch product details / inventory summary', e.message);
+      setProductDetails(product);
       setInventorySummary([]);
     }
   };
@@ -295,6 +302,65 @@ const ProductBin = () => {
       </div>
       {selectedProduct ? (
         <div>
+          {/* Product Info Card */}
+          {productDetails && (
+            <div style={{ background: '#f0f7ff', border: '1px solid #b3d0f5', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+              <h3 style={{ margin: '0 0 12px 0', color: '#1565c0', fontSize: 16 }}>📦 Product Information</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ minWidth: 180, flex: '1 1 180px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Product Name</div>
+                  <div style={{ fontWeight: 600 }}>{productDetails.name || '-'}</div>
+                </div>
+                <div style={{ minWidth: 130, flex: '1 1 130px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Product Code</div>
+                  <div style={{ fontWeight: 600 }}>{productDetails.productCode || '-'}</div>
+                </div>
+                <div style={{ minWidth: 160, flex: '1 1 160px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Generic Name</div>
+                  <div>{productDetails.genericName || '-'}</div>
+                </div>
+                <div style={{ minWidth: 140, flex: '1 1 140px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Category</div>
+                  <div>{productDetails.categoryName || '-'}</div>
+                </div>
+                <div style={{ minWidth: 140, flex: '1 1 140px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Supplier</div>
+                  <div>{productDetails.supplierName || '-'}</div>
+                </div>
+                <div style={{ minWidth: 100, flex: '1 1 100px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Pack Size</div>
+                  <div style={{ fontWeight: 600, color: '#1976d2' }}>{productDetails.packSize || '-'}</div>
+                </div>
+                <div style={{ minWidth: 100, flex: '1 1 100px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Bin Location</div>
+                  <div>{productDetails.binLocation || '-'}</div>
+                </div>
+                <div style={{ minWidth: 80, flex: '1 1 80px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Min Stock</div>
+                  <div>{productDetails.minStock ?? '-'}</div>
+                </div>
+                <div style={{ minWidth: 80, flex: '1 1 80px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Max Stock</div>
+                  <div>{productDetails.maxStock ?? '-'}</div>
+                </div>
+                <div style={{ minWidth: 100, flex: '1 1 100px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Total Stock</div>
+                  <div style={{ fontWeight: 600, color: productDetails.totalStock > 0 ? '#2e7d32' : '#c62828' }}>{productDetails.totalStock ?? 0}</div>
+                </div>
+                <div style={{ minWidth: 110, flex: '1 1 110px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Expiry Date</div>
+                  <div>{productDetails.expiryDate || '-'}</div>
+                </div>
+                {productDetails.patientInstructions && (
+                  <div style={{ minWidth: 240, flex: '1 1 240px' }}>
+                    <div style={{ fontSize: 11, color: '#666', marginBottom: 2 }}>Patient Instructions</div>
+                    <div style={{ fontStyle: 'italic' }}>{productDetails.patientInstructions}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 10 }}>
             <h3>Inventory Summary</h3>
             {inventorySummary.length === 0 ? (

@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useMemo } from "react";
-import { getLastSellingPrice } from "../utill/lastPriceApi";
+import { getLastPrices } from "../utill/lastPriceApi";
 import { AuthContext } from "../components/AuthContext";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "";
@@ -30,6 +30,7 @@ const GRNManagement = () => {
   const [approvedUser, setApprovedUser] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savingEdits, setSavingEdits] = useState(false);
   const [error, setError] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   
@@ -106,6 +107,10 @@ const GRNManagement = () => {
       setGrnNumber(data.grnCode);
       setApproved(data.status === "APPROVED");
       setApprovedUser(data.approvedUser || "");
+      setIsPaid(!!data.paid);
+      setPaymentDueDate(data.paymentDueDate || "");
+      setPaymentDueDays(data.paymentDueDays ?? "");
+      setChequeDate(data.chequeDate || "");
       
       // Set the items for display
       if (data.items && data.items.length > 0) {
@@ -114,7 +119,7 @@ const GRNManagement = () => {
           productName: it.productName,
           receivedQuantity: it.receivedQuantity,
           unitCost: it.unitCost,
-          sellPrice: it.unitCost * 1.2, // Calculate sell price
+          sellPrice: it.price ?? (it.unitCost * 1.2),
         }));
         setGrnItems(items);
       }
@@ -142,20 +147,24 @@ const GRNManagement = () => {
     setCreatedGrnId(null);
     setApproved(false);
     if (po) {
-      // Fetch last selling prices for all products in PO
+      // Fetch last selling price and last cost price for all products in PO
       const items = await Promise.all(
         po.items.map(async (it) => {
           let lastPrice = 0;
+          let lastCost = 0;
           try {
-            lastPrice = await getLastSellingPrice(it.productId, token);
+            const prices = await getLastPrices(it.productId, token);
+            lastPrice = prices.lastPrice || 0;
+            lastCost = prices.lastCostPrice || 0;
           } catch (e) {
             lastPrice = it.sellPrice || 0;
+            lastCost = it.unitCost || 0;
           }
           return {
             productId: it.productId,
             productName: it.productName,
             receivedQuantity: it.quantity,
-            unitCost: it.unitCost || 0,
+            unitCost: lastCost || it.unitCost || 0,
             sellPrice: lastPrice || it.sellPrice || 0,
           };
         })
@@ -237,6 +246,74 @@ const GRNManagement = () => {
     }
   };
 
+  const handleUpdateLoadedGrn = async () => {
+    if (!loadedGrn || !loadedGrn.id) {
+      alert("No GRN loaded for editing");
+      return;
+    }
+    if (loadedGrn.status !== "PENDING") {
+      alert("Only PENDING GRNs can be edited");
+      return;
+    }
+
+    if (!isPaid) {
+      const hasDueDate = !!paymentDueDate;
+      const hasChequeDate = !!chequeDate;
+      const hasDueDays = paymentDueDays !== "" && paymentDueDays !== null && paymentDueDays !== undefined;
+      if (!hasDueDate && !hasChequeDate && !hasDueDays) {
+        alert("Please enter either Payment Due Date, Cheque Date, or Payment Due (Days)");
+        return;
+      }
+    }
+
+    setSavingEdits(true);
+    setError("");
+    try {
+      const payload = {
+        paid: isPaid,
+        paymentDueDate: paymentDueDate || null,
+        paymentDueDays: paymentDueDays === "" ? null : Number(paymentDueDays),
+        chequeDate: chequeDate || null,
+        items: grnItems.map((i) => ({
+          productId: i.productId,
+          receivedQuantity: Number(i.receivedQuantity),
+          unitCost: Number(i.unitCost),
+          price: Number(i.sellPrice),
+        })),
+      };
+
+      const res = await fetch(`${API_BASE}/api/grns/${loadedGrn.id}`, {
+        method: "PUT",
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to update GRN");
+      }
+
+      setLoadedGrn(data);
+      setGrnItems((data.items || []).map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        receivedQuantity: it.receivedQuantity,
+        unitCost: it.unitCost,
+        sellPrice: it.price ?? (it.unitCost * 1.2),
+      })));
+      alert("GRN updated successfully. You can now approve.");
+    } catch (err) {
+      console.error("Update GRN error:", err);
+      setError(err.message || "Failed to update GRN");
+      alert("Error updating GRN: " + (err.message || "Unknown error"));
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   const handleApprove = async () => {
     if (!approvedUser || !approvedUser.trim()) {
       alert("Enter Approved User");
@@ -296,6 +373,10 @@ const GRNManagement = () => {
     setApproved(false);
     setApprovedUser("");
     setSelectedPO(null);
+    setIsPaid(false);
+    setPaymentDueDate("");
+    setPaymentDueDays("");
+    setChequeDate("");
     setError("");
     // Clear the URL parameter
     window.history.replaceState({}, document.title, "/grn");
@@ -417,6 +498,130 @@ const GRNManagement = () => {
               }}
             >
               ✕ Close & Create New GRN
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Editable Section for Loaded PENDING GRN */}
+      {loadedGrn && loadedGrn.status === "PENDING" && (
+        <div
+          style={{
+            marginBottom: 32,
+            border: "1px solid #ddd",
+            padding: 16,
+            borderRadius: 8,
+            background: "#fffdf2",
+          }}
+        >
+          <h3>Edit GRN Before Approval</h3>
+          <p style={{ marginTop: 0, color: "#666" }}>
+            If anything is wrong, update values here and click <strong>Save Changes</strong> before approving.
+          </p>
+
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+            <label style={{ fontWeight: 500 }}>
+              <input
+                type="checkbox"
+                checked={isPaid}
+                onChange={e => setIsPaid(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              Mark as Paid
+            </label>
+            <div>
+              <label style={{ fontWeight: 500, marginRight: 8 }}>
+                Payment Due Date:
+              </label>
+              <input
+                type="date"
+                value={paymentDueDate}
+                onChange={e => setPaymentDueDate(e.target.value)}
+                style={{ padding: 6 }}
+                disabled={isPaid}
+              />
+            </div>
+            <div>
+              <label style={{ fontWeight: 500, marginRight: 8 }}>
+                Payment Due (Days):
+              </label>
+              <input
+                type="number"
+                value={paymentDueDays}
+                onChange={e => setPaymentDueDays(e.target.value)}
+                style={{ padding: 6, width: 80 }}
+                min="0"
+                disabled={isPaid}
+              />
+            </div>
+            <div>
+              <label style={{ fontWeight: 500, marginRight: 8 }}>
+                Cheque Date:
+              </label>
+              <input
+                type="date"
+                value={chequeDate}
+                onChange={e => setChequeDate(e.target.value)}
+                style={{ padding: 6 }}
+                disabled={isPaid}
+              />
+            </div>
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
+            <thead>
+              <tr style={{ background: "#f2f2f2" }}>
+                <th style={th}>Product</th>
+                <th style={th}>Received Qty</th>
+                <th style={th}>Unit Cost</th>
+                <th style={th}>Sell Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grnItems.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={td}>{item.productName}</td>
+                  <td style={td}>
+                    <input
+                      type="number"
+                      value={item.receivedQuantity}
+                      onChange={(e) => handleChangeItem(idx, "receivedQuantity", e.target.value)}
+                      style={input}
+                      min="1"
+                    />
+                  </td>
+                  <td style={td}>
+                    <input
+                      type="number"
+                      value={item.unitCost}
+                      onChange={(e) => handleChangeItem(idx, "unitCost", e.target.value)}
+                      style={input}
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                  <td style={td}>
+                    <input
+                      type="number"
+                      value={item.sellPrice}
+                      onChange={(e) => handleChangeItem(idx, "sellPrice", e.target.value)}
+                      style={input}
+                      step="0.01"
+                      min="0"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ marginTop: 16 }}>
+            <button
+              onClick={handleUpdateLoadedGrn}
+              style={btnInfo}
+              disabled={savingEdits || loading}
+            >
+              {savingEdits ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </div>
@@ -635,11 +840,11 @@ const GRNManagement = () => {
           <div style={{ display: "flex", gap: 12 }}>
             <button
               onClick={handleApprove}
-              disabled={approved || loading || (!createdGrnId && !loadedGrn)}
+              disabled={approved || loading || savingEdits || (!createdGrnId && !loadedGrn)}
               style={{
                 ...btnApprove,
-                opacity: (approved || loading || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
-                cursor: (approved || loading || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
+                opacity: (approved || loading || savingEdits || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
+                cursor: (approved || loading || savingEdits || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
               }}
             >
               {loading
@@ -652,10 +857,10 @@ const GRNManagement = () => {
               onClick={openRejectModal}
               style={{
                 ...btnReject,
-                opacity: (loading || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
-                cursor: (loading || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
+                opacity: (loading || savingEdits || (!createdGrnId && !loadedGrn)) ? 0.5 : 1,
+                cursor: (loading || savingEdits || (!createdGrnId && !loadedGrn)) ? 'not-allowed' : 'pointer',
               }}
-              disabled={loading || (!createdGrnId && !loadedGrn)}
+              disabled={loading || savingEdits || (!createdGrnId && !loadedGrn)}
             >
               Reject GRN
             </button>

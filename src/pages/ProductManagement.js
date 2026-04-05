@@ -381,6 +381,7 @@ const emptyForm = {
   maxDiscount: "",
   patientInstructions: "",
   binLocation: "",
+  packSize: "",
 };
 
 const ProductManagement = () => {
@@ -569,6 +570,7 @@ const ProductManagement = () => {
         expiryDate: form.expiryDate || null,
         patientInstructions: form.patientInstructions || null,
         binLocation: form.binLocation || null,
+        packSize: form.packSize?.trim() || null,
       };
 
       await createOrUpdate(payload, form.productId);
@@ -606,6 +608,7 @@ const ProductManagement = () => {
       maxDiscount: p.maxDiscount ?? "",
       patientInstructions: p.patientInstructions || "",
       binLocation: p.binLocation || "",
+      packSize: p.packSize || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1115,6 +1118,19 @@ const ProductManagement = () => {
           />
         </div>
 
+        <div
+          style={{ display: "flex", flexDirection: "column", minWidth: 140 }}
+        >
+          <label>Pack Size</label>
+          <input
+            name="packSize"
+            value={form.packSize}
+            onChange={handleChange}
+            placeholder="e.g. 10x10"
+            style={{ padding: 8 }}
+          />
+        </div>
+
         <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
           <button
             type="submit"
@@ -1275,6 +1291,7 @@ const ProductManagement = () => {
             <th>Max</th>
             <th>Max Disc %</th>
             <th>Bin</th>
+            <th>Pack Size</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1318,6 +1335,9 @@ const ProductManagement = () => {
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.binLocation || "-"}
+                </td>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  {p.packSize || "-"}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd", whiteSpace: "nowrap" }}>
                   <button

@@ -459,7 +459,15 @@ const GRNListView = () => {
               </tfoot>
             </table>
 
-            <div style={{ marginTop: 24, textAlign: "right" }}>
+            <div style={{ marginTop: 24, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              {selectedGrn.status === "PENDING" && (
+                <button
+                  onClick={() => navigate(`/grn?grnId=${selectedGrn.id}`)}
+                  style={btnApprove}
+                >
+                  Edit & Approve
+                </button>
+              )}
               <button onClick={closeDetailsModal} style={btnSecondary}>
                 Close
               </button>

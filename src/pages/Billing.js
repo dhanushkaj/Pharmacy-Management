@@ -35,6 +35,7 @@ export default function Billing() {
   const [allCustomers, setAllCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerDropdownIndex, setCustomerDropdownIndex] = useState(0);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '' });
 
@@ -62,6 +63,21 @@ export default function Billing() {
 
   // Track manual discount input
   const [isDiscountManual, setIsDiscountManual] = useState(false);
+
+  // Customer billing history (Ctrl+H)
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [customerBills, setCustomerBills] = useState([]);
+  const [selectedHistoryBill, setSelectedHistoryBill] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyBillIndex, setHistoryBillIndex] = useState(0);
+  const [historyItemIndex, setHistoryItemIndex] = useState(0);
+
+  // Billing return (Ctrl+R)
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnItem, setReturnItem] = useState(null);
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnProcessing, setReturnProcessing] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
@@ -125,6 +141,7 @@ export default function Billing() {
         c.address?.toLowerCase().includes(lower)
     );
     setFilteredCustomers(filtered);
+    setCustomerDropdownIndex(0);
   }, [customerSearch, allCustomers]);
 
   // Product search filter (ignore quantity prefix like 14*panadol)
@@ -174,8 +191,8 @@ export default function Billing() {
     setDiscountPercentage(customer.discountPercentage || 0);
     // Set discountAmount to use only Customer Discount Base for first time
     if (cartItems.length > 0) {
-      // Only use customer discount base (items without product discount)
-      const customerDiscountBase = cartItems.reduce((sum, item) => {
+      // Only use customer discount base (items without product discount, excluding returns)
+      const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
         if (!item.productDiscount || item.productDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
@@ -419,9 +436,9 @@ export default function Billing() {
     //   return;
     // }
 
-    // Check if product already in cart with same price
+    // Check if product already in cart with same price (only match non-return items)
     const existingIndex = cartItems.findIndex((item) => 
-      item && item.product && item.product.productId === product.productId && item.unitPrice === finalPrice
+      item && item.product && !item.isReturn && item.product.productId === product.productId && item.unitPrice === finalPrice
     );
     let newCartItems;
     if (existingIndex >= 0) {
@@ -449,8 +466,8 @@ export default function Billing() {
     }
     // If customer is selected and discount is not manually overridden, recalculate discountAmount using only Customer Discount Base
     if (selectedCustomer && !isDiscountManual) {
-      // Only use items with NO product discount for customer discount base
-      const customerDiscountBase = newCartItems.reduce((sum, item) => {
+      // Only use items with NO product discount for customer discount base (excluding returns)
+      const customerDiscountBase = newCartItems.filter(i => !i.isReturn).reduce((sum, item) => {
         if (!item.productDiscount || item.productDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
@@ -480,26 +497,26 @@ export default function Billing() {
   };
 
   // Calculate product-level and customer discounts separately
-  const productLevelDiscounts = cartItems.map(item => {
+  // Separate normal items and return items for calculations
+  const normalCartItems = cartItems.filter(item => !item.isReturn);
+  const returnCartItems = cartItems.filter(item => item.isReturn);
+
+  const productLevelDiscounts = normalCartItems.map(item => {
     if (item.productDiscount && item.productDiscount > 0) {
-      // Product-specific discount: subtract from product price before subtotal
       return Math.min(item.unitPrice * item.quantity * (item.productDiscount / 100), item.unitPrice * item.quantity);
     }
     return 0;
   });
   const totalProductLevelDiscount = productLevelDiscounts.reduce((sum, d) => sum + d, 0);
 
-  // Calculate subtotal after product discounts
-  const subtotalAfterProductDiscounts = cartItems.reduce((sum, item, idx) => {
+  const subtotalAfterProductDiscounts = normalCartItems.reduce((sum, item, idx) => {
     if (item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity - productLevelDiscounts[idx]);
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0);
 
-  // Customer discount only for items without product discount
-  // Customer discount base: sum only items without product discount
-  const customerDiscountBase = cartItems.reduce((sum, item) => {
+  const customerDiscountBase = normalCartItems.reduce((sum, item) => {
     if (!item.productDiscount || item.productDiscount === 0) {
       return sum + (item.unitPrice * item.quantity);
     }
@@ -507,28 +524,30 @@ export default function Billing() {
   }, 0);
   const customerDiscountTotal = customerDiscountBase * (discountPercentage / 100);
 
-  // Subtotal for display (after product discounts)
-  const subtotal = Number(cartItems.reduce((sum, item) => {
+  const subtotal = Number(normalCartItems.reduce((sum, item) => {
     if (item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100));
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0).toFixed(2));
-  // Product discount total: sum of all product-specific discounts
-  const productDiscountTotal = cartItems.reduce((sum, item) => {
+
+  const productDiscountTotal = normalCartItems.reduce((sum, item) => {
     if (item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity * (item.productDiscount / 100));
     }
     return sum;
   }, 0);
-  // Customer discount total: always use only Customer Discount Base * discountPercentage
-  // (already calculated above)
+
   const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
-  // Allow manual override of discountAmount
   const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
     ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
     : calculatedDiscount;
   const grandTotal = Number((subtotal - validDiscount).toFixed(2));
+
+  // Return refund total (positive number representing total refund to customer)
+  const returnRefundTotal = Number(returnCartItems.reduce((sum, item) => sum + Math.abs(item.subtotal), 0).toFixed(2));
+  // Net payable = what the customer actually pays (sale total minus return refunds)
+  const netPayable = Number((grandTotal - returnRefundTotal).toFixed(2));
 
   const handleProceedToConfirmation = () => {
     // Validation
@@ -540,22 +559,32 @@ export default function Billing() {
       alert('Please add at least one product!');
       return;
     }
-    if (grandTotal < 0) {
+
+    const hasReturns = cartItems.some(item => item.isReturn);
+    const hasNormalItems = cartItems.some(item => !item.isReturn);
+
+    // Only block negative grand total if there are normal sale items
+    if (hasNormalItems && grandTotal < 0) {
       alert('Grand total cannot be negative!');
       return;
     }
 
-    // Navigate to confirmation page with state
-    // (For now, we'll just show a confirmation here - in production, use React Router navigate)
-    const confirmProceed = window.confirm(
-      `Confirm billing for ${selectedCustomer.name}?\n\n` +
-        `Subtotal: Rs. ${subtotal.toFixed(2)}\n` +
-        `Discount: ${discountPercentage}% (Rs. ${discountAmount.toFixed(2)})\n` +
+    let confirmMsg = `Confirm billing for ${selectedCustomer.name}?\n\n`;
+    if (hasNormalItems) {
+      confirmMsg += `Subtotal: Rs. ${subtotal.toFixed(2)}\n` +
+        `Discount: ${discountPercentage}% (Rs. ${discountAmount.toFixed ? discountAmount.toFixed(2) : discountAmount})\n` +
         `Grand Total: Rs. ${grandTotal.toFixed(2)}\n` +
-        `Payment: ${paymentMethod}`
-    );
+        `Payment: ${paymentMethod}\n`;
+    }
+    if (hasReturns) {
+      const returnCount = cartItems.filter(i => i.isReturn).length;
+      confirmMsg += `\n↩ ${returnCount} return item(s) — Refund: Rs. ${returnRefundTotal.toFixed(2)}\n`;
+    }
+    if (hasReturns && hasNormalItems) {
+      confirmMsg += `\n💰 NET PAYABLE: Rs. ${netPayable.toFixed(2)}`;
+    }
 
-    if (confirmProceed) {
+    if (window.confirm(confirmMsg)) {
       submitBilling();
     }
   };
@@ -572,33 +601,108 @@ export default function Billing() {
       
       // Parse amount received
       const parsedAmountReceived = amountReceived !== '' ? parseFloat(amountReceived) : 0;
-      
-      const request = {
-        customerId: selectedCustomer.customerId,
-        items: cartItems.map((item) => ({
-          productId: item.product.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          batchNo: item.product.batchNo || '',
-        })),
-        discountPercentage: parseFloat(discountPercentage) || 0,
-        totalDiscount: discountToSave, // always send the correct total discount
-        discountAmount: discountToSave, // always send the correct total discount
-        paymentMethod,
-        notes: notes.trim() || null,
-        amountReceived: parsedAmountReceived,
-      };
 
-      const response = await api('/api/billings', {
-        method: 'POST',
-        body: request,
-        token,
-      });
-      if (response) {
-        response.discountAmount = validDiscount; // always use the manually adjusted Discount Amount for print
+      // Separate return items from normal items
+      const normalItems = cartItems.filter(item => !item.isReturn);
+      const returnItems = cartItems.filter(item => item.isReturn);
+
+      // Only submit billing if there are normal (non-return) items
+      let response = null;
+      if (normalItems.length > 0) {
+        const request = {
+          customerId: selectedCustomer.customerId,
+          items: normalItems.map((item) => ({
+            productId: item.product.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            batchNo: item.product.batchNo || '',
+          })),
+          discountPercentage: parseFloat(discountPercentage) || 0,
+          totalDiscount: discountToSave,
+          discountAmount: discountToSave,
+          paymentMethod,
+          notes: notes.trim() || null,
+          amountReceived: parsedAmountReceived,
+        };
+
+        response = await api('/api/billings', {
+          method: 'POST',
+          body: request,
+          token,
+        });
+        if (response) {
+          response.discountAmount = validDiscount;
+        }
       }
-      setCreatedBilling(response);
-      setShowBillPreview(true);
+
+      // Now process return items on backend (inventory restore + bin movement)
+      const returnResults = [];
+      for (const retItem of returnItems) {
+        try {
+          const retResponse = await api('/api/billings/return', {
+            method: 'POST',
+            body: {
+              billingItemId: retItem.billingItemId,
+              returnQty: retItem.returnQty,
+            },
+            token,
+          });
+          returnResults.push(retResponse);
+        } catch (retErr) {
+          console.error('Return processing failed for item:', retItem, retErr);
+          setError((prev) => (prev ? prev + '\n' : '') + `Return failed for ${retItem.product.name}: ${retErr.message}`);
+        }
+      }
+
+      if (response) {
+        // Attach return info to billing response for display
+        response.returnItems = returnResults;
+        response.returnRefundTotal = returnRefundTotal;
+        response.netPayable = netPayable;
+        response.returnCartItems = returnItems.map(ri => ({
+          productName: ri.product.name,
+          productCode: ri.product.productCode,
+          quantity: Math.abs(ri.quantity),
+          unitPrice: ri.unitPrice,
+          refundAmount: Math.abs(ri.subtotal),
+          originalBill: ri.originalBill,
+          discountPercentage: ri.productDiscount || 0,
+        }));
+        setCreatedBilling(response);
+        setShowBillPreview(true);
+      } else if (returnResults.length > 0) {
+        // Only returns, no normal sale items — still show a receipt
+        const returnOnlyBilling = {
+          billingNumber: 'RETURN',
+          billingDate: new Date().toISOString(),
+          customerName: selectedCustomer?.name || '',
+          customerPhone: selectedCustomer?.phone || '',
+          items: [],
+          subtotal: 0,
+          grandTotal: 0,
+          discountPercentage: 0,
+          paymentMethod: 'RETURN',
+          amountReceived: 0,
+          balanceAmount: 0,
+          notes: notes || '',
+          returnItems: returnResults,
+          returnRefundTotal: returnRefundTotal,
+          netPayable: -returnRefundTotal,
+          returnCartItems: returnItems.map(ri => ({
+            productName: ri.product.name,
+            productCode: ri.product.productCode,
+            quantity: Math.abs(ri.quantity),
+            unitPrice: ri.unitPrice,
+            refundAmount: Math.abs(ri.subtotal),
+            originalBill: ri.originalBill,
+            discountPercentage: ri.productDiscount || 0,
+          })),
+        };
+        setCreatedBilling(returnOnlyBilling);
+        setShowBillPreview(true);
+      } else {
+        setError('No items to process.');
+      }
 
     } catch (err) {
       setError(err.message || 'Failed to create billing');
@@ -637,12 +741,212 @@ export default function Billing() {
     setCreatedBilling(null);
   };
 
+  // --- Ctrl+H: Customer billing history ---
+  const fetchCustomerBills = async () => {
+    if (!selectedCustomer || !selectedCustomer.customerId) {
+      alert('Please select a customer first!');
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      const data = await api(`/api/billings/customer/${selectedCustomer.customerId}?page=0&size=50`, { token });
+      const bills = data?.content ? data.content : Array.isArray(data) ? data : [];
+      setCustomerBills(bills);
+      setSelectedHistoryBill(null);
+      setSelectedHistoryItem(null);
+      setHistoryBillIndex(0);
+      setHistoryItemIndex(0);
+      setShowCustomerHistory(true);
+    } catch (err) {
+      console.error('Failed to load customer billing history:', err);
+      alert('Failed to load billing history: ' + (err.message || 'Error'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // --- Ctrl+R: open return popup for selected history item ---
+  const openReturnForItem = (bill, item) => {
+    const alreadyReturned = item.returnedQty || 0;
+    const maxReturnable = item.quantity - alreadyReturned;
+    if (maxReturnable <= 0) {
+      alert('All units for this item have already been returned.');
+      return;
+    }
+    setReturnItem({
+      ...item,
+      billingNumber: bill.billingNumber,
+      billingId: bill.billingId,
+      discountPercentage: bill.discountPercentage || 0,
+      maxReturnable,
+    });
+    setReturnQty(1);
+    setShowReturnModal(true);
+  };
+
+  // --- Process return ---
+  const handleProcessReturn = async () => {
+    if (!returnItem) return;
+    if (returnQty <= 0 || returnQty > returnItem.maxReturnable) {
+      alert(`Return quantity must be between 1 and ${returnItem.maxReturnable}`);
+      return;
+    }
+
+    // Calculate refund amount locally (same logic as backend)
+    const discPct = returnItem.discountPercentage || 0;
+    const itemGross = returnItem.unitPrice * returnQty;
+    const discDeducted = itemGross * (discPct / 100);
+    const refundAmount = itemGross - discDeducted;
+
+    const product = allProducts.find(p => p.productId === returnItem.productId) || {
+      productId: returnItem.productId,
+      productCode: returnItem.productCode,
+      name: returnItem.productName,
+    };
+
+    // Only add to cart — backend return is processed when billing is submitted
+    setCartItems(prev => [
+      ...prev,
+      {
+        product,
+        quantity: -returnQty,
+        unitPrice: returnItem.unitPrice,
+        productDiscount: discPct,
+        subtotal: -refundAmount,
+        isReturn: true,
+        originalBill: returnItem.billingNumber,
+        billingItemId: returnItem.billingItemId,
+        returnQty: returnQty,
+      },
+    ]);
+
+    alert(`Return added to cart: ${returnQty} x ${returnItem.productName}\nRefund: Rs. ${refundAmount.toFixed(2)} (after ${discPct}% discount deduction)\n\nReturn will be processed when you confirm the billing.`);
+    setShowReturnModal(false);
+    setReturnItem(null);
+    // Clear selected item so Enter from alert dismissal doesn't re-trigger return
+    setSelectedHistoryItem(null);
+    setHistoryItemIndex(-1);
+  };
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Ctrl+H: open customer billing history
+      if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        if (selectedCustomer) {
+          fetchCustomerBills();
+        } else {
+          alert('Please select a customer first to view billing history.');
+        }
+        return;
+      }
+
+      // --- History modal keyboard navigation ---
+      if (showCustomerHistory && !showReturnModal) {
+
+        // Escape: close modal or go back
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (selectedHistoryBill) {
+            // Go back to bills list
+            setSelectedHistoryBill(null);
+            setSelectedHistoryItem(null);
+            setHistoryItemIndex(0);
+          } else {
+            // Close modal
+            setShowCustomerHistory(false);
+            setSelectedHistoryItem(null);
+          }
+          return;
+        }
+
+        // Backspace: go back from items to bills list
+        if (e.key === 'Backspace' && selectedHistoryBill) {
+          e.preventDefault();
+          setSelectedHistoryBill(null);
+          setSelectedHistoryItem(null);
+          setHistoryItemIndex(0);
+          return;
+        }
+
+        // --- Bills list navigation (no bill selected yet) ---
+        if (!selectedHistoryBill && customerBills.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHistoryBillIndex(prev => Math.min(prev + 1, customerBills.length - 1));
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHistoryBillIndex(prev => Math.max(prev - 1, 0));
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const bill = customerBills[historyBillIndex];
+            if (bill) {
+              setSelectedHistoryBill(bill);
+              setHistoryItemIndex(0);
+              // Auto-select first item
+              const items = bill.items || [];
+              setSelectedHistoryItem(items.length > 0 ? items[0] : null);
+            }
+            return;
+          }
+        }
+
+        // --- Items list navigation (bill selected, viewing items) ---
+        if (selectedHistoryBill) {
+          const items = selectedHistoryBill.items || [];
+
+          if (e.key === 'ArrowDown' && items.length > 0) {
+            e.preventDefault();
+            const newIdx = Math.min(historyItemIndex + 1, items.length - 1);
+            setHistoryItemIndex(newIdx);
+            setSelectedHistoryItem(items[newIdx]);
+            return;
+          }
+          if (e.key === 'ArrowUp' && items.length > 0) {
+            e.preventDefault();
+            const newIdx = Math.max(historyItemIndex - 1, 0);
+            setHistoryItemIndex(newIdx);
+            setSelectedHistoryItem(items[newIdx]);
+            return;
+          }
+
+          // Ctrl+R or Enter: open return for selected item
+          if ((e.ctrlKey && e.key === 'r') || e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedHistoryItem) {
+              const returned = selectedHistoryItem.returnedQty || 0;
+              const returnable = selectedHistoryItem.quantity - returned;
+              if (returnable > 0) {
+                openReturnForItem(selectedHistoryBill, selectedHistoryItem);
+              } else {
+                alert('All units for this item have already been returned.');
+              }
+            }
+            return;
+          }
+        }
+      }
+
+      // Ctrl+R outside of history modal context (fallback)
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex]);
+
   // Also, when cartItems change, update discountAmount if it was set by customer discount
 
   // Always recalculate discountAmount using only Customer Discount Base when cart changes, if not manually overridden
   useEffect(() => {
     if (selectedCustomer && !isDiscountManual) {
-      const customerDiscountBase = cartItems.reduce((sum, item) => {
+      const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
         if (!item.productDiscount || item.productDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
@@ -669,18 +973,44 @@ export default function Billing() {
             <>
               <input
                 type="text"
-                placeholder="Search customer..."
+                placeholder="Search customer... (↑↓ Enter)"
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (filteredCustomers.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setCustomerDropdownIndex(prev => Math.min(prev + 1, filteredCustomers.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setCustomerDropdownIndex(prev => Math.max(prev - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const c = filteredCustomers[customerDropdownIndex];
+                      if (c) handleSelectCustomer(c);
+                    }
+                  }
+                  if (e.key === 'Escape') {
+                    setCustomerSearch('');
+                    setFilteredCustomers([]);
+                  }
+                }}
                 style={{ width: '100%', padding: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }}
               />
               {filteredCustomers.length > 0 && (
                 <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
-                  {filteredCustomers.map((c) => (
+                  {filteredCustomers.map((c, idx) => (
                     <div
                       key={c.customerId}
                       onClick={() => handleSelectCustomer(c)}
-                      style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: 13 }}
+                      onMouseEnter={() => setCustomerDropdownIndex(idx)}
+                      style={{
+                        padding: 8,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        fontSize: 13,
+                        background: idx === customerDropdownIndex ? '#e3f2fd' : '#fff',
+                      }}
                     >
                       <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
                     </div>
@@ -726,6 +1056,13 @@ export default function Billing() {
                 style={{ marginTop: 8, padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
               >
                 Change Customer
+              </button>
+              <button
+                onClick={fetchCustomerBills}
+                style={{ marginTop: 8, marginLeft: 8, padding: '6px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                title="Ctrl+H"
+              >
+                📋 History (Ctrl+H)
               </button>
             </div>
           )}
@@ -801,28 +1138,38 @@ export default function Billing() {
           ) : (
             <div style={{ marginBottom: 16 }}>
               {cartItems.filter(item => item && item.product).map((item, idx) => (
-                <div key={idx} style={{ padding: 10, background: '#fff', border: '1px solid #ddd', borderRadius: 4, marginBottom: 8 }}>
+                <div key={idx} style={{ padding: 10, background: item.isReturn ? '#ffebee' : '#fff', border: item.isReturn ? '1px solid #ef9a9a' : '1px solid #ddd', borderRadius: 4, marginBottom: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4, wordWrap: 'break-word', whiteSpace: 'normal' }}>
-                        {item.product.name}
+                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4, wordWrap: 'break-word', whiteSpace: 'normal', color: item.isReturn ? '#c62828' : 'inherit' }}>
+                        {item.isReturn ? '↩ RETURN: ' : ''}{item.product.name}
                       </div>
                       <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
                         Code: {item.product.productCode}
+                        {item.isReturn && item.originalBill && (
+                          <span style={{ marginLeft: 8, color: '#e65100', fontWeight: 'bold' }}>
+                            (From Bill: {item.originalBill})
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 13 }}>Unit Price: Rs. {item.unitPrice.toFixed(2)}</span>
                         <span style={{ fontSize: 13 }}>|</span>
                         <span style={{ fontSize: 13 }}>Qty:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
-                          style={{ width: 60, padding: 4, fontSize: 13 }}
-                        />
+                        {item.isReturn ? (
+                          <span style={{ fontSize: 13, fontWeight: 'bold', color: '#c62828' }}>{Math.abs(item.quantity)}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
+                            style={{ width: 60, padding: 4, fontSize: 13 }}
+                          />
+                        )}
                       </div>
                       {/* Product-level discount input, UI only */}
+                      {!item.isReturn && (
                       <div style={{ marginTop: 6 }}>
                         <label style={{ fontSize: 12, color: '#888' }}>Product Discount (%): </label>
                         <input
@@ -847,13 +1194,16 @@ export default function Billing() {
                           </span>
                         )}
                       </div>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right', minWidth: 100 }}>
-                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#2196f3', marginBottom: 8 }}>
-                        Rs. {(
-                          item.productDiscount && item.productDiscount > 0
-                            ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
-                            : item.unitPrice * item.quantity
+                      <div style={{ fontSize: 16, fontWeight: 'bold', color: item.isReturn ? '#c62828' : '#2196f3', marginBottom: 8 }}>
+                        {item.isReturn ? '-' : ''}Rs. {Math.abs(
+                          item.isReturn
+                            ? item.subtotal
+                            : (item.productDiscount && item.productDiscount > 0
+                              ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
+                              : item.unitPrice * item.quantity)
                         ).toFixed(2)}
                       </div>
                       <button
@@ -939,6 +1289,18 @@ export default function Billing() {
               <span>Grand Total:</span>
               <span>Rs. {grandTotal.toFixed(2)}</span>
             </div>
+            {returnCartItems.length > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: '#c62828', fontWeight: 'bold' }}>
+                  <span>↩ Return Refund ({returnCartItems.length} item{returnCartItems.length > 1 ? 's' : ''}):</span>
+                  <span>- Rs. {returnRefundTotal.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 'bold', borderTop: '2px solid #e65100', paddingTop: 8, marginTop: 8, color: '#e65100' }}>
+                  <span>NET PAYABLE:</span>
+                  <span>Rs. {netPayable.toFixed(2)}</span>
+                </div>
+              </>
+            )}
           </div>
 
           <hr style={{ margin: '16px 0' }} />
@@ -978,12 +1340,12 @@ export default function Billing() {
                 fontSize: 18, 
                 fontWeight: 'bold',
                 padding: 8,
-                background: parseFloat(amountReceived) >= grandTotal ? '#c8e6c9' : '#ffcdd2',
+                background: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2',
                 borderRadius: 4,
-                color: parseFloat(amountReceived) >= grandTotal ? '#2e7d32' : '#c62828'
+                color: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828'
               }}>
-                <span>{parseFloat(amountReceived) >= grandTotal ? 'Balance to Return:' : 'Amount Due:'}</span>
-                <span>Rs. {Math.abs(parseFloat(amountReceived) - grandTotal).toFixed(2)}</span>
+                <span>{parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:'}</span>
+                <span>Rs. {Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2)}</span>
               </div>
             )}
           </div>
@@ -1191,10 +1553,10 @@ export default function Billing() {
             >
               <div style={{ fontSize: 48, marginBottom: 8 }}>✓</div>
               <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
-                Billing Created Successfully!
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Processed Successfully!' : 'Billing Created Successfully!'}
               </div>
               <div style={{ fontSize: 14, opacity: 0.9 }}>
-                Bill #{createdBilling.billingNumber}
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Receipt' : `Bill #${createdBilling.billingNumber}`}
               </div>
             </div>
 
@@ -1299,6 +1661,31 @@ export default function Billing() {
                       </td>
                     </tr>
                   ))}
+                  {/* Return items */}
+                  {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan="4" style={{ padding: '8px 0 4px', fontWeight: 'bold', fontSize: 10, borderTop: '1px dashed #c62828', color: '#c62828' }}>
+                          ↩ RETURNS:
+                        </td>
+                      </tr>
+                      {createdBilling.returnCartItems.map((ri, idx) => (
+                        <tr key={`ret-${idx}`} style={{ borderBottom: '1px dotted #ef9a9a', color: '#c62828' }}>
+                          <td style={{ padding: '4px 0', fontSize: 10 }}>
+                            <div style={{ fontWeight: 'bold' }}>{ri.productName}</div>
+                            <div style={{ fontSize: 8 }}>Bill: {ri.originalBill}{ri.discountPercentage > 0 ? ` | Disc: ${ri.discountPercentage}%` : ''}</div>
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '4px 0' }}>{ri.quantity}</td>
+                          <td style={{ textAlign: 'right', padding: '4px 0' }}>
+                            {ri.unitPrice.toFixed(2)}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 'bold' }}>
+                            -{ri.refundAmount.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
                 </tbody>
               </table>
 
@@ -1306,31 +1693,60 @@ export default function Billing() {
 
               {/* Totals */}
               <div style={{ fontSize: 11 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span>Subtotal:</span>
-                  <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
-                </div>
-                {/* Show correct total discount: product + customer */}
-                {((productDiscountTotal + customerDiscountTotal) > 0) && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span>Discount Applied:</span>
-                    <span>- Rs. {(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
-                  </div>
+                {createdBilling.items.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span>Subtotal:</span>
+                      <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
+                    </div>
+                    {((productDiscountTotal + customerDiscountTotal) > 0) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span>Discount Applied:</span>
+                        <span>- Rs. {(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        paddingTop: 10,
+                        borderTop: '2px solid #000',
+                        fontWeight: 'bold',
+                        fontSize: 14,
+                        marginTop: 6,
+                      }}
+                    >
+                      <span>GRAND TOTAL:</span>
+                      <span>Rs. {(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+                    </div>
+                  </>
                 )}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    paddingTop: 10,
-                    borderTop: '2px solid #000',
-                    fontWeight: 'bold',
-                    fontSize: 14,
-                    marginTop: 6,
-                  }}
-                >
-                  <span>GRAND TOTAL:</span>
-                  <span>Rs. {(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
-                </div>
+
+                {/* Return Refund */}
+                {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #c62828', margin: '8px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#c62828', fontWeight: 'bold', fontSize: 12 }}>
+                      <span>↩ Return Refund:</span>
+                      <span>- Rs. {createdBilling.returnRefundTotal.toFixed(2)}</span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        paddingTop: 8,
+                        borderTop: '2px solid #e65100',
+                        fontWeight: 'bold',
+                        fontSize: 16,
+                        marginTop: 4,
+                        color: '#e65100',
+                      }}
+                    >
+                      <span>NET PAYABLE:</span>
+                      <span>Rs. {createdBilling.netPayable.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
 
                 {/* Amount Received and Balance */}
                 {createdBilling.amountReceived > 0 && (
@@ -1369,8 +1785,8 @@ export default function Billing() {
 
               {/* Footer */}
               <div style={{ textAlign: 'center', fontSize: 10, marginTop: 12 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Thank You!</div>
-                <div style={{ fontSize: 9 }}>Please keep this bill for warranty claims</div>
+                <div style={{ fontSize: 9, marginBottom: 6 }}>No. of Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Thank You, Come Again!</div>
               </div>
 
               <div style={{ textAlign: 'center', fontSize: 8, marginTop: 10, color: '#999' }}>
@@ -1458,6 +1874,209 @@ export default function Billing() {
                   Delete Billing
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Billing History Modal (Ctrl+H) */}
+      {showCustomerHistory && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+          }}
+          onClick={() => { setShowCustomerHistory(false); setSelectedHistoryItem(null); }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 900, width: '95%', maxHeight: '90vh', overflow: 'auto', padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>📋 Billing History — {selectedCustomer?.name}</h3>
+              <button onClick={() => { setShowCustomerHistory(false); setSelectedHistoryItem(null); }} style={{ background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>⌨ Use ↑↓ arrows to navigate, Enter to select, {selectedHistoryBill ? 'Ctrl+R / Enter to return item, Esc to go back' : 'Esc to close'}</div>
+            {historyLoading ? (
+              <div>Loading...</div>
+            ) : customerBills.length === 0 ? (
+              <div style={{ color: '#888', textAlign: 'center', padding: 32 }}>No billing history found for this customer.</div>
+            ) : (
+              <>
+                {!selectedHistoryBill ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#f0f0f0' }}>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Bill #</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Date</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Items</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Grand Total</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Discount %</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerBills.map((bill, idx) => (
+                        <tr key={bill.billingId}
+                          onClick={() => { setHistoryBillIndex(idx); }}
+                          onDoubleClick={() => { setHistoryBillIndex(idx); setSelectedHistoryBill(bill); setHistoryItemIndex(0); setSelectedHistoryItem((bill.items || [])[0] || null); }}
+                          style={{ cursor: 'pointer', background: idx === historyBillIndex ? '#e3f2fd' : 'transparent' }}
+                        >
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{bill.billingNumber}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{new Date(bill.billingDate).toLocaleDateString()}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{bill.items?.length || 0}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Rs. {bill.grandTotal?.toFixed(2)}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>{bill.discountPercentage || 0}%</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>
+                            <button
+                              onClick={() => { setSelectedHistoryBill(bill); setHistoryItemIndex(0); setSelectedHistoryItem((bill.items || [])[0] || null); }}
+                              style={{ background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+                            >
+                              View Items (Enter)
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div>
+                    <button onClick={() => { setSelectedHistoryBill(null); setSelectedHistoryItem(null); }} style={{ marginBottom: 12, padding: '6px 16px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}>
+                      ← Back to Bills
+                    </button>
+                    <h4 style={{ marginBottom: 8 }}>Bill #{selectedHistoryBill.billingNumber} — {new Date(selectedHistoryBill.billingDate).toLocaleDateString()} — Discount: {selectedHistoryBill.discountPercentage || 0}%</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f0f0f0' }}>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Product</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Code</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Qty Sold</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Returned</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Returnable</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Unit Price</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedHistoryBill.items || []).map((item, idx) => {
+                          const returned = item.returnedQty || 0;
+                          const returnable = item.quantity - returned;
+                          const isSelected = idx === historyItemIndex;
+                          return (
+                            <tr key={item.billingItemId}
+                              onClick={() => { setHistoryItemIndex(idx); setSelectedHistoryItem(item); }}
+                              style={{ cursor: 'pointer', background: isSelected ? '#e3f2fd' : 'transparent' }}
+                            >
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>{item.productName}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>{item.productCode}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>{item.quantity}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center', color: returned > 0 ? '#c62828' : '#888' }}>{returned}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold', color: returnable > 0 ? '#2e7d32' : '#888' }}>{returnable}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Rs. {item.unitPrice?.toFixed(2)}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>
+                                {returnable > 0 ? (
+                                  <button
+                                    onClick={() => openReturnForItem(selectedHistoryBill, item)}
+                                    style={{ background: '#e65100', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+                                    title="Ctrl+R"
+                                  >
+                                    ↩ Return (Ctrl+R)
+                                  </button>
+                                ) : (
+                                  <span style={{ color: '#888', fontSize: 12 }}>Fully returned</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Return Quantity Modal (Ctrl+R) */}
+      {showReturnModal && returnItem && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000,
+          }}
+          onClick={() => setShowReturnModal(false)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 480, width: '90%', padding: 24 }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#e65100' }}>↩ Process Return</h3>
+            <div style={{ marginBottom: 16, background: '#fff3e0', padding: 12, borderRadius: 6, border: '1px solid #ffe0b2' }}>
+              <div><strong>Product:</strong> {returnItem.productName} ({returnItem.productCode})</div>
+              <div><strong>From Bill:</strong> {returnItem.billingNumber}</div>
+              <div><strong>Unit Price:</strong> Rs. {returnItem.unitPrice?.toFixed(2)}</div>
+              <div><strong>Sold Qty:</strong> {returnItem.quantity}</div>
+              <div><strong>Already Returned:</strong> {returnItem.returnedQty || 0}</div>
+              <div><strong>Max Returnable:</strong> {returnItem.maxReturnable}</div>
+              <div><strong>Original Bill Discount:</strong> {returnItem.discountPercentage}%</div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Return Quantity:</label>
+              <input
+                type="number"
+                min="1"
+                max={returnItem.maxReturnable}
+                value={returnQty}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setReturnQty('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num) && num >= 0 && num <= returnItem.maxReturnable) {
+                      setReturnQty(num);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // Clamp on blur (when user leaves the field)
+                  const num = parseInt(returnQty, 10);
+                  if (isNaN(num) || num < 1) setReturnQty(1);
+                  else if (num > returnItem.maxReturnable) setReturnQty(returnItem.maxReturnable);
+                }}
+                style={{ width: '100%', padding: 8, fontSize: 16, boxSizing: 'border-box' }}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleProcessReturn(); }}
+              />
+            </div>
+
+            {/* Refund calculation preview */}
+            <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>Gross Amount:</span>
+                <span>Rs. {(returnItem.unitPrice * returnQty).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#c62828' }}>
+                <span>Discount Deduction ({returnItem.discountPercentage}%):</span>
+                <span>- Rs. {(returnItem.unitPrice * returnQty * returnItem.discountPercentage / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 16, borderTop: '2px solid #333', paddingTop: 8, marginTop: 4 }}>
+                <span>Refund Amount:</span>
+                <span>Rs. {(returnItem.unitPrice * returnQty * (1 - returnItem.discountPercentage / 100)).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowReturnModal(false)}
+                style={{ padding: '8px 20px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleProcessReturn}
+                disabled={returnProcessing}
+                style={{ padding: '8px 20px', background: returnProcessing ? '#ccc' : '#e65100', color: '#fff', border: 'none', borderRadius: 4, cursor: returnProcessing ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+              >
+                {returnProcessing ? 'Processing...' : `Confirm Return (${returnQty} units)`}
+              </button>
             </div>
           </div>
         </div>

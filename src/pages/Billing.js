@@ -72,6 +72,7 @@ export default function Billing() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyBillIndex, setHistoryBillIndex] = useState(0);
   const [historyItemIndex, setHistoryItemIndex] = useState(0);
+  const [historySearch, setHistorySearch] = useState('');
 
   // Billing return (Ctrl+R)
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -188,7 +189,10 @@ export default function Billing() {
 
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
-    setDiscountPercentage(customer.discountPercentage || 0);
+    // If CARD payment, cap to 2%
+    const custDisc = customer.discountPercentage || 0;
+    const effectiveDisc = paymentMethod === 'CARD' ? Math.min(custDisc, 2) : custDisc;
+    setDiscountPercentage(effectiveDisc);
     // Set discountAmount to use only Customer Discount Base for first time
     if (cartItems.length > 0) {
       // Only use customer discount base (items without product discount, excluding returns)
@@ -501,8 +505,11 @@ export default function Billing() {
   const normalCartItems = cartItems.filter(item => !item.isReturn);
   const returnCartItems = cartItems.filter(item => item.isReturn);
 
+  // Product discounts only apply if customer discount is also applied
+  const hasCustomerDiscount = discountPercentage > 0;
+
   const productLevelDiscounts = normalCartItems.map(item => {
-    if (item.productDiscount && item.productDiscount > 0) {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
       return Math.min(item.unitPrice * item.quantity * (item.productDiscount / 100), item.unitPrice * item.quantity);
     }
     return 0;
@@ -510,29 +517,30 @@ export default function Billing() {
   const totalProductLevelDiscount = productLevelDiscounts.reduce((sum, d) => sum + d, 0);
 
   const subtotalAfterProductDiscounts = normalCartItems.reduce((sum, item, idx) => {
-    if (item.productDiscount && item.productDiscount > 0) {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity - productLevelDiscounts[idx]);
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0);
 
   const customerDiscountBase = normalCartItems.reduce((sum, item) => {
-    if (!item.productDiscount || item.productDiscount === 0) {
+    if (!hasCustomerDiscount || !item.productDiscount || item.productDiscount === 0) {
       return sum + (item.unitPrice * item.quantity);
     }
     return sum;
   }, 0);
   const customerDiscountTotal = customerDiscountBase * (discountPercentage / 100);
 
+  // Subtotal already has product discounts applied
   const subtotal = Number(normalCartItems.reduce((sum, item) => {
-    if (item.productDiscount && item.productDiscount > 0) {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100));
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0).toFixed(2));
 
   const productDiscountTotal = normalCartItems.reduce((sum, item) => {
-    if (item.productDiscount && item.productDiscount > 0) {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
       return sum + (item.unitPrice * item.quantity * (item.productDiscount / 100));
     }
     return sum;
@@ -541,7 +549,7 @@ export default function Billing() {
   const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
   const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
     ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
-    : calculatedDiscount;
+    : customerDiscountTotal;
   const grandTotal = Number((subtotal - validDiscount).toFixed(2));
 
   // Return refund total (positive number representing total refund to customer)
@@ -756,6 +764,7 @@ export default function Billing() {
       setSelectedHistoryItem(null);
       setHistoryBillIndex(0);
       setHistoryItemIndex(0);
+      setHistorySearch('');
       setShowCustomerHistory(true);
     } catch (err) {
       console.error('Failed to load customer billing history:', err);
@@ -946,16 +955,21 @@ export default function Billing() {
   // Always recalculate discountAmount using only Customer Discount Base when cart changes, if not manually overridden
   useEffect(() => {
     if (selectedCustomer && !isDiscountManual) {
+      // If CARD, cap to 2%
+      const effectivePercentage = paymentMethod === 'CARD' ? Math.min(selectedCustomer.discountPercentage || 0, 2) : (selectedCustomer.discountPercentage || 0);
+      if (paymentMethod === 'CARD' && discountPercentage > 2) {
+        setDiscountPercentage(2);
+      }
       const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
         if (!item.productDiscount || item.productDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
         return sum;
       }, 0);
-      const customerDiscountTotal = customerDiscountBase * (selectedCustomer.discountPercentage / 100);
+      const customerDiscountTotal = customerDiscountBase * (effectivePercentage / 100);
       setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
-  }, [cartItems, selectedCustomer, isDiscountManual]);
+  }, [cartItems, selectedCustomer, isDiscountManual, paymentMethod]);
 
   // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
 
@@ -965,252 +979,76 @@ export default function Billing() {
 
       {error && <div style={{ color: 'red', marginBottom: 10, padding: 8, background: '#fee', border: '1px solid red', fontSize: 13 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
-        {/* LEFT SIDE: Customer + Product Search */}
-        <div style={{ flex: '1 1 300px', minWidth: 280, border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa', boxSizing: 'border-box' }}>
-          <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Customer Section</h3>
-          {!selectedCustomer ? (
-            <>
-              <input
-                type="text"
-                placeholder="Search customer... (↑↓ Enter)"
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (filteredCustomers.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setCustomerDropdownIndex(prev => Math.min(prev + 1, filteredCustomers.length - 1));
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setCustomerDropdownIndex(prev => Math.max(prev - 1, 0));
-                    } else if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const c = filteredCustomers[customerDropdownIndex];
-                      if (c) handleSelectCustomer(c);
-                    }
-                  }
-                  if (e.key === 'Escape') {
-                    setCustomerSearch('');
-                    setFilteredCustomers([]);
-                  }
-                }}
-                style={{ width: '100%', padding: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }}
-              />
-              {filteredCustomers.length > 0 && (
-                <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
-                  {filteredCustomers.map((c, idx) => (
-                    <div
-                      key={c.customerId}
-                      onClick={() => handleSelectCustomer(c)}
-                      onMouseEnter={() => setCustomerDropdownIndex(idx)}
-                      style={{
-                        padding: 8,
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #eee',
-                        fontSize: 13,
-                        background: idx === customerDropdownIndex ? '#e3f2fd' : '#fff',
-                      }}
-                    >
-                      <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setShowNewCustomerModal(true)}
-                style={{
-                  marginTop: 12,
-                  padding: '10px 16px',
-                  background: '#4caf50',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                }}
-              >
-                + Add New Customer
-              </button>
-            </>
-          ) : (
-            <div style={{ padding: 12, background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 4 }}>
-              <p style={{ margin: 0 }}>
-                <strong>Selected:</strong> {selectedCustomer.name}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Phone:</strong> {selectedCustomer.phone}
-              </p>
-              {selectedCustomer.address && (
-                <p style={{ margin: 0 }}>
-                  <strong>Address:</strong> {selectedCustomer.address}
-                </p>
-              )}
-              <p style={{ margin: 0 }}>
-                <strong>Default Discount:</strong> {selectedCustomer.discountPercentage || 0}%
-              </p>
-              <button
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setDiscountPercentage(0);
-                }}
-                style={{ marginTop: 8, padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-              >
-                Change Customer
-              </button>
-              <button
-                onClick={fetchCustomerBills}
-                style={{ marginTop: 8, marginLeft: 8, padding: '6px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                title="Ctrl+H"
-              >
-                📋 History (Ctrl+H)
-              </button>
-            </div>
-          )}
-
-          <hr style={{ margin: '24px 0' }} />
-
-          <h3>Product Search & Add</h3>
-          <input
-            type="text"
-            placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
-            value={productSearch}
-            onChange={(e) => setProductSearch(e.target.value)}
-            onKeyDown={handleProductSearchKeyDown}
-            style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8 }}
-          />
-          <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
-            <strong>Quick Add Instructions:</strong><br />
-            1. Type product name - dropdown appears<br />
-            2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
-            3. Product automatically added to cart (qty: 1)<br />
-            4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />
-            5. If multiple prices available, a selection dialog will appear
-            <br />
-            <span style={{ fontSize: 10, color: '#999' }}>
-              {allProducts.length} total products | {filteredProducts.length} filtered
-            </span>
-          </small>
-          {filteredProducts.length > 0 && (
-            <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
-              {filteredProducts.filter(p => p != null).map((p, idx) => {
-                const isSelected = idx === selectedProductIndex;
-                
-                // Show product in one row - inventory will be fetched on selection
-                return (
-                  <div
-                    key={p.productId}
-                    onClick={() => handleSelectProductFromDropdown(p)}
-                    style={{
-                      padding: 12,
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #eee',
-                      background: isSelected ? '#e3f2fd' : '#fff'
-                    }}
-                    onMouseEnter={() => setSelectedProductIndex(idx)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
-                          {p.name || 'N/A'}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                          {p.category?.name || 'N/A'} | Code: {p.productCode || 'N/A'}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                        <div style={{ fontSize: 12, color: '#666' }}>
-                          Click to add
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT SIDE: Cart + Totals + Payment */}
-        <div style={{ flex: 1, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa' }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'nowrap', height: 'calc(100vh - 120px)' }}>
+        {/* LEFT SIDE: Cart + Totals + Payment */}
+        <div style={{ flex: '1.5 1 400px', minWidth: 380, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa', boxSizing: 'border-box', overflowY: 'auto' }}>
           <h3>Cart ({cartItems.length} items)</h3>
           {cartItems.length === 0 ? (
             <p style={{ color: '#999' }}>No items added yet</p>
           ) : (
             <div style={{ marginBottom: 16 }}>
               {cartItems.filter(item => item && item.product).map((item, idx) => (
-                <div key={idx} style={{ padding: 10, background: item.isReturn ? '#ffebee' : '#fff', border: item.isReturn ? '1px solid #ef9a9a' : '1px solid #ddd', borderRadius: 4, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div key={idx} style={{ padding: 6, background: item.isReturn ? '#ffebee' : '#fff', border: item.isReturn ? '1px solid #ef9a9a' : '1px solid #ddd', borderRadius: 4, marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4, wordWrap: 'break-word', whiteSpace: 'normal', color: item.isReturn ? '#c62828' : 'inherit' }}>
-                        {item.isReturn ? '↩ RETURN: ' : ''}{item.product.name}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
-                        Code: {item.product.productCode}
+                      <div style={{ fontSize: 13, fontWeight: 'bold', wordWrap: 'break-word', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: item.isReturn ? '#c62828' : 'inherit' }}>
+                        {item.isReturn ? '↩ ' : ''}{item.product.name}
                         {item.isReturn && item.originalBill && (
-                          <span style={{ marginLeft: 8, color: '#e65100', fontWeight: 'bold' }}>
-                            (From Bill: {item.originalBill})
-                          </span>
+                          <span style={{ marginLeft: 6, color: '#e65100', fontSize: 11 }}>(Bill: {item.originalBill})</span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13 }}>Unit Price: Rs. {item.unitPrice.toFixed(2)}</span>
-                        <span style={{ fontSize: 13 }}>|</span>
-                        <span style={{ fontSize: 13 }}>Qty:</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        <span style={{ fontSize: 12 }}>Rs. {item.unitPrice.toFixed(2)}</span>
+                        <span style={{ fontSize: 12, color: '#999' }}>×</span>
                         {item.isReturn ? (
-                          <span style={{ fontSize: 13, fontWeight: 'bold', color: '#c62828' }}>{Math.abs(item.quantity)}</span>
+                          <span style={{ fontSize: 12, fontWeight: 'bold', color: '#c62828' }}>{Math.abs(item.quantity)}</span>
                         ) : (
                           <input
                             type="number"
                             min="1"
                             value={item.quantity}
                             onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
-                            style={{ width: 60, padding: 4, fontSize: 13 }}
+                            style={{ width: 50, padding: 2, fontSize: 12 }}
                           />
                         )}
-                      </div>
-                      {/* Product-level discount input, UI only */}
-                      {!item.isReturn && (
-                      <div style={{ marginTop: 6 }}>
-                        <label style={{ fontSize: 12, color: '#888' }}>Product Discount (%): </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={item.productDiscount || ''}
-                          onChange={e => {
-                            if (item.product.maxDiscount) return; // If maxDiscount is set, do not allow editing
-                            const val = e.target.value === '' ? 0 : Number(parseFloat(e.target.value).toFixed(2));
-                            const updated = [...cartItems];
-                            updated[idx].productDiscount = val;
-                            setCartItems(updated);
-                          }}
-                          style={{ width: 80, padding: 4, fontSize: 12, marginLeft: 4 }}
-                          disabled={!!item.product.maxDiscount}
-                        />
-                        {item.product.maxDiscount && (
-                          <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
-                            (From Product Table)
-                          </span>
+                        {/* Inline product discount — only visible when customer discount is active */}
+                        {!item.isReturn && discountPercentage > 0 && (
+                          <>
+                            <span style={{ fontSize: 11, color: '#999' }}>Disc:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={item.productDiscount || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? 0 : Number(parseFloat(e.target.value).toFixed(2));
+                                const updated = [...cartItems];
+                                updated[idx].productDiscount = val;
+                                setCartItems(updated);
+                              }}
+                              style={{ width: 45, padding: 2, fontSize: 11 }}
+                            />
+                            <span style={{ fontSize: 11, color: '#999' }}>%</span>
+                          </>
                         )}
                       </div>
-                      )}
                     </div>
-                    <div style={{ textAlign: 'right', minWidth: 100 }}>
-                      <div style={{ fontSize: 16, fontWeight: 'bold', color: item.isReturn ? '#c62828' : '#2196f3', marginBottom: 8 }}>
+                    <div style={{ textAlign: 'right', minWidth: 80, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 'bold', color: item.isReturn ? '#c62828' : '#2196f3' }}>
                         {item.isReturn ? '-' : ''}Rs. {Math.abs(
                           item.isReturn
                             ? item.subtotal
-                            : (item.productDiscount && item.productDiscount > 0
+                            : (discountPercentage > 0 && item.productDiscount && item.productDiscount > 0
                               ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
                               : item.unitPrice * item.quantity)
                         ).toFixed(2)}
                       </div>
                       <button
                         onClick={() => removeCartItem(idx)}
-                        style={{ padding: '6px 12px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                        style={{ padding: '3px 8px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 11 }}
                       >
-                        Remove
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -1235,13 +1073,16 @@ export default function Billing() {
               <input
                 type="number"
                 min="0"
-                max="100"
+                max={paymentMethod === 'CARD' ? 2 : 100}
                 step="0.01"
                 value={discountPercentage}
                 onChange={e => {
-                  const newPercentage = parseFloat(e.target.value) || 0;
+                  let newPercentage = parseFloat(e.target.value) || 0;
+                  if (paymentMethod === 'CARD' && newPercentage > 2) {
+                    newPercentage = 2;
+                    alert('Maximum discount for card payment is 2%');
+                  }
                   setDiscountPercentage(newPercentage);
-                  // Recalculate discountAmount based on new percentage
                   const newDiscountAmount = customerDiscountBase * newPercentage / 100;
                   setDiscountAmount(newDiscountAmount);
                   setIsDiscountManual(false);
@@ -1273,10 +1114,12 @@ export default function Billing() {
                 </button>
               </div>
             </div>
+            {discountPercentage > 0 && productDiscountTotal > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span>Product Discounts:</span>
               <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
             </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span>Total Discount Applied:</span>
               <span>-Rs. {(
@@ -1307,7 +1150,17 @@ export default function Billing() {
 
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Payment Method:</label>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ width: '100%', padding: 8 }}>
+            <select value={paymentMethod} onChange={(e) => {
+              const method = e.target.value;
+              setPaymentMethod(method);
+              // If CARD, cap customer discount to 2%
+              if (method === 'CARD' && discountPercentage > 2) {
+                setDiscountPercentage(2);
+                const newDiscountAmount = customerDiscountBase * 2 / 100;
+                setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                setIsDiscountManual(false);
+              }
+            }} style={{ width: '100%', padding: 8 }}>
               <option value="CASH">Cash</option>
               <option value="CARD">Card</option>
               <option value="MOBILE_PAYMENT">Mobile Payment</option>
@@ -1372,6 +1225,175 @@ export default function Billing() {
           >
             {loading ? 'Processing...' : 'Confirm & Create Billing'}
           </button>
+        </div>
+
+        {/* RIGHT SIDE: Product Search (top) + Customer (bottom) */}
+        <div style={{ flex: '1 1 300px', minWidth: 280, display: 'flex', flexDirection: 'column', gap: 16, boxSizing: 'border-box', overflowY: 'auto' }}>
+
+          {/* RIGHT TOP: Product Search & Add */}
+          <div style={{ border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa' }}>
+            <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Product Search & Add</h3>
+            <input
+              type="text"
+              placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              onKeyDown={handleProductSearchKeyDown}
+              style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8, boxSizing: 'border-box' }}
+            />
+            <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
+              <strong>Quick Add Instructions:</strong><br />
+              1. Type product name - dropdown appears<br />
+              2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
+              3. Product automatically added to cart (qty: 1)<br />
+              4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />
+              5. If multiple prices available, a selection dialog will appear
+              <br />
+              <span style={{ fontSize: 10, color: '#999' }}>
+                {allProducts.length} total products | {filteredProducts.length} filtered
+              </span>
+            </small>
+            {filteredProducts.length > 0 && (
+              <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
+                {filteredProducts.filter(p => p != null).map((p, idx) => {
+                  const isSelected = idx === selectedProductIndex;
+                  
+                  return (
+                    <div
+                      key={p.productId}
+                      onClick={() => handleSelectProductFromDropdown(p)}
+                      style={{
+                        padding: 12,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        background: isSelected ? '#e3f2fd' : '#fff'
+                      }}
+                      onMouseEnter={() => setSelectedProductIndex(idx)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
+                            {p.name || 'N/A'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                            {p.category?.name || 'N/A'} | Code: {p.productCode || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
+                          <div style={{ fontSize: 12, color: '#666' }}>
+                            Click to add
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT BOTTOM: Customer Section */}
+          <div style={{ border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa', marginTop: 16 }}>
+            <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Customer Section</h3>
+            {!selectedCustomer ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search customer... (↑↓ Enter)"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (filteredCustomers.length > 0) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setCustomerDropdownIndex(prev => Math.min(prev + 1, filteredCustomers.length - 1));
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setCustomerDropdownIndex(prev => Math.max(prev - 1, 0));
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const c = filteredCustomers[customerDropdownIndex];
+                        if (c) handleSelectCustomer(c);
+                      }
+                    }
+                    if (e.key === 'Escape') {
+                      setCustomerSearch('');
+                      setFilteredCustomers([]);
+                    }
+                  }}
+                  style={{ width: '100%', padding: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }}
+                />
+                {filteredCustomers.length > 0 && (
+                  <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
+                    {filteredCustomers.map((c, idx) => (
+                      <div
+                        key={c.customerId}
+                        onClick={() => handleSelectCustomer(c)}
+                        onMouseEnter={() => setCustomerDropdownIndex(idx)}
+                        style={{
+                          padding: 8,
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee',
+                          fontSize: 13,
+                          background: idx === customerDropdownIndex ? '#e3f2fd' : '#fff',
+                        }}
+                      >
+                        <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowNewCustomerModal(true)}
+                  style={{
+                    marginTop: 12,
+                    padding: '10px 16px',
+                    background: '#4caf50',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Add New Customer
+                </button>
+              </>
+            ) : (
+              <div style={{ padding: 12, background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 4 }}>
+                <p style={{ margin: 0 }}>
+                  <strong>Selected:</strong> {selectedCustomer.name}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Phone:</strong> {selectedCustomer.phone}
+                </p>
+                {selectedCustomer.address && (
+                  <p style={{ margin: 0 }}>
+                    <strong>Address:</strong> {selectedCustomer.address}
+                  </p>
+                )}
+                <p style={{ margin: 0 }}>
+                  <strong>Default Discount:</strong> {selectedCustomer.discountPercentage || 0}%
+                </p>
+                <button
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setDiscountPercentage(0);
+                  }}
+                  style={{ marginTop: 8, padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                >
+                  Change Customer
+                </button>
+                <button
+                  onClick={fetchCustomerBills}
+                  style={{ marginTop: 8, marginLeft: 8, padding: '6px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                  title="Ctrl+H"
+                >
+                  📋 History (Ctrl+H)
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -1566,47 +1588,45 @@ export default function Billing() {
               style={{
                 width: 320,
                 margin: '0 auto',
-                padding: '24px 20px',
+                padding: '16px 12px',
                 fontFamily: 'monospace',
                 fontSize: 11,
-                lineHeight: 1.5,
+                lineHeight: 1.4,
                 background: '#fff',
+                color: '#000',
               }}
             >
               {/* Store Header */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 10 }}>
+                <div style={{ textAlign: 'center', marginBottom: 6 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
-                    style={{ maxWidth: 140, maxHeight: 70 }}
+                    style={{ maxWidth: 120, maxHeight: 50 }}
                   />
                 </div>
               )}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 2 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                 {storeSettings?.address || 'Store Address'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
-                Tel: {storeSettings?.phone || 'N/A'}
-              </div>
               {storeSettings?.email && (
-                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                   {storeSettings.email}
                 </div>
               )}
               {storeSettings?.taxId && (
-                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                   Tax ID: {storeSettings.taxId}
                 </div>
               )}
 
-              <div style={{ borderTop: '2px solid #000', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
               {/* Bill Details */}
-              <div style={{ fontSize: 11, marginBottom: 10 }}>
+              <div style={{ fontSize: 11, marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <strong>Invoice #:</strong>
                   <span>{createdBilling.billingNumber}</span>
@@ -1619,10 +1639,6 @@ export default function Billing() {
                   <strong>Customer:</strong>
                   <span>{createdBilling.customerName}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <strong>Phone:</strong>
-                  <span>{createdBilling.customerPhone}</span>
-                </div>
                 {createdBilling.paymentMethod && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <strong>Payment:</strong>
@@ -1631,32 +1647,29 @@ export default function Billing() {
                 )}
               </div>
 
-              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               {/* Items Table */}
-              <table style={{ width: '100%', fontSize: 10, marginBottom: 10, borderCollapse: 'collapse' }}>
+              <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 'bold' }}>Item</th>
-                    <th style={{ textAlign: 'center', padding: '6px 0', fontWeight: 'bold' }}>Qty</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Price</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Total</th>
+                    <th style={{ textAlign: 'left', padding: '3px 0', fontWeight: 'bold' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {createdBilling.items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px dotted #ccc' }}>
-                      <td style={{ padding: '6px 0', fontSize: 10 }}>
-                        <div style={{ fontWeight: 'bold' }}>{item.productName}</div>
-                        {item.productCode && (
-                          <div style={{ fontSize: 8, color: '#666' }}>Code: {item.productCode}</div>
-                        )}
+                    <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '3px 0', fontSize: 10, fontWeight: 'bold' }}>
+                        {item.productName}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '6px 0' }}>{item.quantity}</td>
-                      <td style={{ textAlign: 'right', padding: '6px 0' }}>
+                      <td style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.unitPrice.toFixed(2)}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.subtotal.toFixed(2)}
                       </td>
                     </tr>
@@ -1665,21 +1678,21 @@ export default function Billing() {
                   {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
                     <>
                       <tr>
-                        <td colSpan="4" style={{ padding: '8px 0 4px', fontWeight: 'bold', fontSize: 10, borderTop: '1px dashed #c62828', color: '#c62828' }}>
+                        <td colSpan="4" style={{ padding: '4px 0 2px', fontWeight: 'bold', fontSize: 10, borderTop: '1px solid #000' }}>
                           ↩ RETURNS:
                         </td>
                       </tr>
                       {createdBilling.returnCartItems.map((ri, idx) => (
-                        <tr key={`ret-${idx}`} style={{ borderBottom: '1px dotted #ef9a9a', color: '#c62828' }}>
-                          <td style={{ padding: '4px 0', fontSize: 10 }}>
-                            <div style={{ fontWeight: 'bold' }}>{ri.productName}</div>
-                            <div style={{ fontSize: 8 }}>Bill: {ri.originalBill}{ri.discountPercentage > 0 ? ` | Disc: ${ri.discountPercentage}%` : ''}</div>
+                        <tr key={`ret-${idx}`} style={{ borderBottom: '1px solid #ccc' }}>
+                          <td style={{ padding: '2px 0', fontSize: 10, fontWeight: 'bold' }}>
+                            {ri.productName}
+                            <div style={{ fontSize: 8, fontWeight: 'bold' }}>Bill: {ri.originalBill}{ri.discountPercentage > 0 ? ` | Disc: ${ri.discountPercentage}%` : ''}</div>
                           </td>
-                          <td style={{ textAlign: 'center', padding: '4px 0' }}>{ri.quantity}</td>
-                          <td style={{ textAlign: 'right', padding: '4px 0' }}>
+                          <td style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>{ri.quantity}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>
                             {ri.unitPrice.toFixed(2)}
                           </td>
-                          <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 'bold' }}>
+                          <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>
                             -{ri.refundAmount.toFixed(2)}
                           </td>
                         </tr>
@@ -1689,19 +1702,19 @@ export default function Billing() {
                 </tbody>
               </table>
 
-              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               {/* Totals */}
-              <div style={{ fontSize: 11 }}>
+              <div style={{ fontSize: 11, fontWeight: 'bold' }}>
                 {createdBilling.items.length > 0 && (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                       <span>Subtotal:</span>
                       <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
                     </div>
                     {((productDiscountTotal + customerDiscountTotal) > 0) && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span>Discount Applied:</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span>Discount:</span>
                         <span>- Rs. {(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
                       </div>
                     )}
@@ -1709,11 +1722,10 @@ export default function Billing() {
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        paddingTop: 10,
+                        paddingTop: 4,
                         borderTop: '2px solid #000',
-                        fontWeight: 'bold',
                         fontSize: 14,
-                        marginTop: 6,
+                        marginTop: 2,
                       }}
                     >
                       <span>GRAND TOTAL:</span>
@@ -1725,8 +1737,8 @@ export default function Billing() {
                 {/* Return Refund */}
                 {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
                   <>
-                    <div style={{ borderTop: '1px dashed #c62828', margin: '8px 0' }}></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#c62828', fontWeight: 'bold', fontSize: 12 }}>
+                    <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, fontSize: 12 }}>
                       <span>↩ Return Refund:</span>
                       <span>- Rs. {createdBilling.returnRefundTotal.toFixed(2)}</span>
                     </div>
@@ -1734,12 +1746,10 @@ export default function Billing() {
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        paddingTop: 8,
-                        borderTop: '2px solid #e65100',
-                        fontWeight: 'bold',
+                        paddingTop: 4,
+                        borderTop: '2px solid #000',
                         fontSize: 16,
-                        marginTop: 4,
-                        color: '#e65100',
+                        marginTop: 2,
                       }}
                     >
                       <span>NET PAYABLE:</span>
@@ -1751,21 +1761,18 @@ export default function Billing() {
                 {/* Amount Received and Balance */}
                 {createdBilling.amountReceived > 0 && (
                   <>
-                    <div style={{ borderTop: '1px dashed #333', margin: '8px 0' }}></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
-                      <span>Amount Received:</span>
+                    <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, fontSize: 12 }}>
+                      <span>Received:</span>
                       <span>Rs. {createdBilling.amountReceived.toFixed(2)}</span>
                     </div>
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
-                      fontWeight: 'bold',
                       fontSize: 13,
-                      padding: '4px 0',
-                      background: createdBilling.balanceAmount >= 0 ? '#e8f5e9' : '#ffebee',
-                      borderRadius: 4
+                      padding: '2px 0',
                     }}>
-                      <span>{createdBilling.balanceAmount >= 0 ? 'Balance/Change:' : 'Amount Due:'}</span>
+                      <span>{createdBilling.balanceAmount >= 0 ? 'Balance:' : 'Due:'}</span>
                       <span>Rs. {Math.abs(createdBilling.balanceAmount).toFixed(2)}</span>
                     </div>
                   </>
@@ -1774,22 +1781,23 @@ export default function Billing() {
 
               {createdBilling.notes && (
                 <>
-                  <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
-                  <div style={{ fontSize: 9, fontStyle: 'italic', wordWrap: 'break-word' }}>
-                    <strong>Notes:</strong> {createdBilling.notes}
+                  <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                  <div style={{ fontSize: 9, fontWeight: 'bold', wordWrap: 'break-word' }}>
+                    Notes: {createdBilling.notes}
                   </div>
                 </>
               )}
 
-              <div style={{ borderTop: '2px solid #000', margin: '12px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
               {/* Footer */}
-              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 12 }}>
-                <div style={{ fontSize: 9, marginBottom: 6 }}>No. of Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
-                <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Thank You, Come Again!</div>
+              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>No. of Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>Thank You, Come Again!</div>
+                <div style={{ fontSize: 10, fontWeight: 'bold' }}>Tel: {storeSettings?.phone || 'N/A'}</div>
               </div>
 
-              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 10, color: '#999' }}>
+              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 6, fontWeight: 'bold' }}>
                 Powered by Pharmacy Management System
               </div>
             </div>
@@ -1901,6 +1909,17 @@ export default function Billing() {
             ) : (
               <>
                 {!selectedHistoryBill ? (
+                  <>
+                  <div style={{ marginBottom: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="🔍 Search by bill number..."
+                      value={historySearch}
+                      onChange={e => { setHistorySearch(e.target.value); setHistoryBillIndex(0); }}
+                      style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #ccc', borderRadius: 4, boxSizing: 'border-box' }}
+                      autoFocus
+                    />
+                  </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: '#f0f0f0' }}>
@@ -1913,7 +1932,7 @@ export default function Billing() {
                       </tr>
                     </thead>
                     <tbody>
-                      {customerBills.map((bill, idx) => (
+                      {customerBills.filter(b => !historySearch || (b.billingNumber && b.billingNumber.toLowerCase().includes(historySearch.toLowerCase()))).map((bill, idx) => (
                         <tr key={bill.billingId}
                           onClick={() => { setHistoryBillIndex(idx); }}
                           onDoubleClick={() => { setHistoryBillIndex(idx); setSelectedHistoryBill(bill); setHistoryItemIndex(0); setSelectedHistoryItem((bill.items || [])[0] || null); }}
@@ -1936,6 +1955,7 @@ export default function Billing() {
                       ))}
                     </tbody>
                   </table>
+                  </>
                 ) : (
                   <div>
                     <button onClick={() => { setSelectedHistoryBill(null); setSelectedHistoryItem(null); }} style={{ marginBottom: 12, padding: '6px 16px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}>

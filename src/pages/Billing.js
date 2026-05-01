@@ -80,6 +80,10 @@ export default function Billing() {
   const [returnQty, setReturnQty] = useState(1);
   const [returnProcessing, setReturnProcessing] = useState(false);
 
+  // Payment Modal (F key)
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isPaymentReady, setIsPaymentReady] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
     if (saved) {
@@ -557,7 +561,8 @@ export default function Billing() {
   // Net payable = what the customer actually pays (sale total minus return refunds)
   const netPayable = Number((grandTotal - returnRefundTotal).toFixed(2));
 
-  const handleProceedToConfirmation = () => {
+  // Open Payment Modal (F key or button)
+  const handleOpenPaymentModal = () => {
     // Validation
     if (!selectedCustomer || !selectedCustomer.customerId || selectedCustomer.customerId === '' || selectedCustomer.customerId === null || selectedCustomer.customerId === undefined || selectedCustomer.customerId === 0) {
       alert('Please select or add a customer!');
@@ -568,7 +573,6 @@ export default function Billing() {
       return;
     }
 
-    const hasReturns = cartItems.some(item => item.isReturn);
     const hasNormalItems = cartItems.some(item => !item.isReturn);
 
     // Only block negative grand total if there are normal sale items
@@ -577,27 +581,27 @@ export default function Billing() {
       return;
     }
 
-    let confirmMsg = `Confirm billing for ${selectedCustomer.name}?\n\n`;
-    if (hasNormalItems) {
-      confirmMsg += `Subtotal: Rs. ${subtotal.toFixed(2)}\n` +
-        `Discount: ${discountPercentage}% (Rs. ${discountAmount.toFixed ? discountAmount.toFixed(2) : discountAmount})\n` +
-        `Grand Total: Rs. ${grandTotal.toFixed(2)}\n` +
-        `Payment: ${paymentMethod}\n`;
-    }
-    if (hasReturns) {
-      const returnCount = cartItems.filter(i => i.isReturn).length;
-      confirmMsg += `\n↩ ${returnCount} return item(s) — Refund: Rs. ${returnRefundTotal.toFixed(2)}\n`;
-    }
-    if (hasReturns && hasNormalItems) {
-      confirmMsg += `\n💰 NET PAYABLE: Rs. ${netPayable.toFixed(2)}`;
-    }
-
-    if (window.confirm(confirmMsg)) {
-      submitBilling();
-    }
+    setIsPaymentReady(false);
+    setShowPaymentModal(true);
   };
 
-  const submitBilling = async () => {
+  // Close Payment Modal and reset form (F1 or Back button)
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setIsPaymentReady(false);
+    resetForm();
+  };
+
+  // Direct submit and print (after clicking + and Enter)
+  const handleDirectSubmitAndPrint = async () => {
+    if (!isPaymentReady) {
+      alert('Please click the (+) button first to confirm!');
+      return;
+    }
+    await submitBilling(true); // true = direct print mode
+  };
+
+  const submitBilling = async (directPrintMode = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -677,7 +681,16 @@ export default function Billing() {
           discountPercentage: ri.productDiscount || 0,
         }));
         setCreatedBilling(response);
-        setShowBillPreview(true);
+        
+        // Direct print mode: print immediately without showing bill preview modal
+        if (directPrintMode) {
+          // Wait a moment for state to update, then trigger print
+          setTimeout(() => {
+            window.print();
+          }, 300);
+        } else {
+          setShowBillPreview(true);
+        }
       } else if (returnResults.length > 0) {
         // Only returns, no normal sale items — still show a receipt
         const returnOnlyBilling = {
@@ -707,7 +720,15 @@ export default function Billing() {
           })),
         };
         setCreatedBilling(returnOnlyBilling);
-        setShowBillPreview(true);
+        
+        // Direct print mode for return-only bills
+        if (directPrintMode) {
+          setTimeout(() => {
+            window.print();
+          }, 300);
+        } else {
+          setShowBillPreview(true);
+        }
       } else {
         setError('No items to process.');
       }
@@ -716,6 +737,8 @@ export default function Billing() {
       setError(err.message || 'Failed to create billing');
     } finally {
       setLoading(false);
+      // Reset ready state after submission
+      setIsPaymentReady(false);
     }
   };
 
@@ -729,24 +752,29 @@ export default function Billing() {
     setTimeout(() => {
       resetForm();
       setShowBillPreview(false);
+      setShowPaymentModal(false);
     }, 1000);
   };
 
   const handleCloseWithoutPrint = () => {
     resetForm();
     setShowBillPreview(false);
+    setShowPaymentModal(false);
   };
 
   const resetForm = () => {
     setSelectedCustomer(null);
     setCartItems([]);
     setDiscountPercentage(0);
+    setDiscountAmount(0);
+    setIsDiscountManual(false);
     setPaymentMethod('CASH');
     setNotes('');
     setAmountReceived('');
     setCustomerSearch('');
     setProductSearch('');
     setCreatedBilling(null);
+    setIsPaymentReady(false);
   };
 
   // --- Ctrl+H: Customer billing history ---
@@ -840,6 +868,49 @@ export default function Billing() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
+      // --- Payment Modal keyboard handlers ---
+      if (showPaymentModal && !showBillPreview) {
+        // F1: close payment modal and reset form
+        if (e.key === 'F1') {
+          e.preventDefault();
+          handleClosePaymentModal();
+          return;
+        }
+
+        // + key (plus): set ready state
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          setIsPaymentReady(true);
+          return;
+        }
+
+        // Enter: submit and print if ready
+        if (e.key === 'Enter' && isPaymentReady && !loading) {
+          e.preventDefault();
+          handleDirectSubmitAndPrint();
+          return;
+        }
+
+        // Don't process other shortcuts while in payment modal
+        return;
+      }
+
+      // F key (not F1-F12): open payment modal
+      if (e.key === 'f' || e.key === 'F') {
+        // Don't trigger if user is typing in an input
+        const activeElement = document.activeElement;
+        const isTyping = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' || 
+          activeElement.tagName === 'SELECT'
+        );
+        if (!isTyping && !showPaymentModal && !showBillPreview && !showCustomerHistory && !showReturnModal) {
+          e.preventDefault();
+          handleOpenPaymentModal();
+          return;
+        }
+      }
+
       // Ctrl+H: open customer billing history
       if (e.ctrlKey && e.key === 'h') {
         e.preventDefault();
@@ -948,7 +1019,7 @@ export default function Billing() {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex]);
+  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex, showPaymentModal, showBillPreview, isPaymentReady, loading, cartItems]);
 
   // Also, when cartItems change, update discountAmount if it was set by customer discount
 
@@ -1059,74 +1130,11 @@ export default function Billing() {
 
           <hr style={{ margin: '16px 0' }} />
 
+          {/* Cart Summary - Grand Total only */}
           <div style={{ padding: 12, background: '#fff', border: '1px solid #ddd', borderRadius: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span>Subtotal:</span>
               <strong>Rs. {subtotal.toFixed(2)}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Customer Discount Base:</span>
-              <span>Rs. {customerDiscountBase.toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span>Customer Discount (%):</span>
-              <input
-                type="number"
-                min="0"
-                max={paymentMethod === 'CARD' ? 2 : 100}
-                step="0.01"
-                value={discountPercentage}
-                onChange={e => {
-                  let newPercentage = parseFloat(e.target.value) || 0;
-                  if (paymentMethod === 'CARD' && newPercentage > 2) {
-                    newPercentage = 2;
-                    alert('Maximum discount for card payment is 2%');
-                  }
-                  setDiscountPercentage(newPercentage);
-                  const newDiscountAmount = customerDiscountBase * newPercentage / 100;
-                  setDiscountAmount(newDiscountAmount);
-                  setIsDiscountManual(false);
-                }}
-                style={{ width: 80, padding: 4, marginRight: 8 }}
-              />
-              <span>or Discount Amount:</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="number"
-                  min="0"
-                  max={subtotal}
-                  step="0.01"
-                  value={discountAmount !== null && discountAmount !== undefined && discountAmount !== '' ? Number(parseFloat(discountAmount).toFixed(2)) : ''}
-                  onChange={e => {
-                    const val = e.target.value === '' ? '' : Number(parseFloat(e.target.value).toFixed(2));
-                    setDiscountAmount(val);
-                    setIsDiscountManual(true);
-                  }}
-                  style={{ width: 100, padding: 4 }}
-                />
-                <button
-                  type="button"
-                  onClick={() => { setDiscountAmount(''); setIsDiscountManual(false); }}
-                  style={{ padding: '2px 8px', marginLeft: 4, background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
-                  title="Clear Discount Amount"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            {discountPercentage > 0 && productDiscountTotal > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Product Discounts:</span>
-              <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
-            </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Total Discount Applied:</span>
-              <span>-Rs. {(
-                isDiscountManual
-                  ? (productDiscountTotal + (discountAmount ? Number(parseFloat(discountAmount).toFixed(2)) : 0))
-                  : (productDiscountTotal + customerDiscountTotal)
-              ).toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: 8 }}>
               <span>Grand Total:</span>
@@ -1148,83 +1156,40 @@ export default function Billing() {
 
           <hr style={{ margin: '16px 0' }} />
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Payment Method:</label>
-            <select value={paymentMethod} onChange={(e) => {
-              const method = e.target.value;
-              setPaymentMethod(method);
-              // If CARD, cap customer discount to 2%
-              if (method === 'CARD' && discountPercentage > 2) {
-                setDiscountPercentage(2);
-                const newDiscountAmount = customerDiscountBase * 2 / 100;
-                setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                setIsDiscountManual(false);
-              }
-            }} style={{ width: '100%', padding: 8 }}>
-              <option value="CASH">Cash</option>
-              <option value="CARD">Card</option>
-              <option value="MOBILE_PAYMENT">Mobile Payment</option>
-              <option value="ONLINE_TRANSFER">Online Transfer</option>
-              <option value="CREDIT">Credit</option>
-              <option value="CHEQUE">Cheque</option>
-              <option value="OTHER">Other</option>
-              <option value="OLD_MANUAL">Old Manual</option>
-            </select>
-          </div>
-
-          {/* Amount Received & Balance Section */}
-          <div style={{ marginBottom: 12, padding: 12, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Amount Received (Rs.):</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amountReceived}
-                onChange={(e) => setAmountReceived(e.target.value)}
-                placeholder="Enter amount given by customer"
-                style={{ width: '100%', padding: 8, fontSize: 16, boxSizing: 'border-box' }}
-              />
-            </div>
-            {amountReceived !== '' && parseFloat(amountReceived) > 0 && (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                fontSize: 18, 
-                fontWeight: 'bold',
-                padding: 8,
-                background: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2',
-                borderRadius: 4,
-                color: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828'
-              }}>
-                <span>{parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:'}</span>
-                <span>Rs. {Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Notes (optional):</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows="3" style={{ width: '100%', padding: 8 }} placeholder="Any notes..."></textarea>
-          </div>
-
+          {/* Proceed to Payment Button */}
           <button
-            onClick={handleProceedToConfirmation}
+            onClick={handleOpenPaymentModal}
             disabled={loading || !selectedCustomer || cartItems.length === 0}
             style={{
               width: '100%',
-              padding: '12px 0',
-              fontSize: 16,
+              padding: '16px 0',
+              fontSize: 18,
               fontWeight: 'bold',
-              background: loading || !selectedCustomer || cartItems.length === 0 ? '#ccc' : '#2196f3',
+              background: loading || !selectedCustomer || cartItems.length === 0 ? '#ccc' : '#4caf50',
               color: '#fff',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: 8,
               cursor: loading || !selectedCustomer || cartItems.length === 0 ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              boxShadow: loading || !selectedCustomer || cartItems.length === 0 ? 'none' : '0 4px 12px rgba(76,175,80,0.3)',
             }}
           >
-            {loading ? 'Processing...' : 'Confirm & Create Billing'}
+            <span style={{ fontSize: 22 }}>💳</span>
+            <span>Proceed to Payment</span>
+            <span style={{ 
+              background: 'rgba(255,255,255,0.3)', 
+              padding: '4px 12px', 
+              borderRadius: 4, 
+              fontSize: 14,
+              fontWeight: 'normal'
+            }}>(F)</span>
           </button>
+          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: '#888' }}>
+            Press <strong>F</strong> key or click button to open payment window
+          </div>
         </div>
 
         {/* RIGHT SIDE: Product Search (top) + Customer (bottom) */}
@@ -1531,6 +1496,325 @@ export default function Billing() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal (F key) */}
+      {showPaymentModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: '95%',
+              maxWidth: 500,
+              maxHeight: '95vh',
+              overflow: 'auto',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: 16,
+                background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                color: '#fff',
+                textAlign: 'center',
+                borderTopLeftRadius: 12,
+                borderTopRightRadius: 12,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 'bold' }}>
+                💳 Payment Confirmation
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>
+                Customer: {selectedCustomer?.name || 'N/A'}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: 20 }}>
+              {/* Summary Section */}
+              <div style={{ padding: 16, background: '#f5f5f5', borderRadius: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span>Subtotal:</span>
+                  <strong>Rs. {subtotal.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span>Customer Discount Base:</span>
+                  <span>Rs. {customerDiscountBase.toFixed(2)}</span>
+                </div>
+
+                {/* Customer Discount Input */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                  <span>Customer Discount (%):</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={paymentMethod === 'CARD' ? 2 : 100}
+                    step="0.01"
+                    value={discountPercentage}
+                    onChange={e => {
+                      let newPercentage = parseFloat(e.target.value) || 0;
+                      if (paymentMethod === 'CARD' && newPercentage > 2) {
+                        newPercentage = 2;
+                        alert('Maximum discount for card payment is 2%');
+                      }
+                      setDiscountPercentage(newPercentage);
+                      const newDiscountAmount = customerDiscountBase * newPercentage / 100;
+                      setDiscountAmount(newDiscountAmount);
+                      setIsDiscountManual(false);
+                      setIsPaymentReady(false); // Reset ready state
+                    }}
+                    style={{ width: 80, padding: 6, fontSize: 14 }}
+                  />
+                </div>
+
+                {/* Discount Amount Input */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                  <span>or Discount Amount:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max={subtotal}
+                      step="0.01"
+                      value={discountAmount !== null && discountAmount !== undefined && discountAmount !== '' ? Number(parseFloat(discountAmount).toFixed(2)) : ''}
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Number(parseFloat(e.target.value).toFixed(2));
+                        setDiscountAmount(val);
+                        setIsDiscountManual(true);
+                        setIsPaymentReady(false); // Reset ready state
+                      }}
+                      style={{ width: 100, padding: 6, fontSize: 14 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setDiscountAmount(''); setIsDiscountManual(false); setIsPaymentReady(false); }}
+                      style={{ padding: '4px 8px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                      title="Clear Discount Amount"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* Product Discounts */}
+                {discountPercentage > 0 && productDiscountTotal > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span>Product Discounts:</span>
+                    <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {/* Total Discount Applied */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span>Total Discount Applied:</span>
+                  <span>-Rs. {(
+                    isDiscountManual
+                      ? (productDiscountTotal + (discountAmount ? Number(parseFloat(discountAmount).toFixed(2)) : 0))
+                      : (productDiscountTotal + customerDiscountTotal)
+                  ).toFixed(2)}</span>
+                </div>
+
+                {/* Grand Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: 12, marginTop: 8 }}>
+                  <span>Grand Total:</span>
+                  <span style={{ color: '#1976d2' }}>Rs. {grandTotal.toFixed(2)}</span>
+                </div>
+
+                {/* Return Refund */}
+                {returnCartItems.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, color: '#c62828', fontWeight: 'bold' }}>
+                      <span>↩ Return Refund ({returnCartItems.length} item{returnCartItems.length > 1 ? 's' : ''}):</span>
+                      <span>- Rs. {returnRefundTotal.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 22, fontWeight: 'bold', borderTop: '2px solid #e65100', paddingTop: 12, marginTop: 8, color: '#e65100' }}>
+                      <span>NET PAYABLE:</span>
+                      <span>Rs. {netPayable.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Payment Method */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Payment Method:</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => {
+                    const method = e.target.value;
+                    setPaymentMethod(method);
+                    // If CARD, cap customer discount to 2%
+                    if (method === 'CARD' && discountPercentage > 2) {
+                      setDiscountPercentage(2);
+                      const newDiscountAmount = customerDiscountBase * 2 / 100;
+                      setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      setIsDiscountManual(false);
+                    }
+                    setIsPaymentReady(false); // Reset ready state
+                  }} 
+                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 6, border: '1px solid #ccc' }}
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="CARD">Card</option>
+                  <option value="MOBILE_PAYMENT">Mobile Payment</option>
+                  <option value="ONLINE_TRANSFER">Online Transfer</option>
+                  <option value="CREDIT">Credit</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="OTHER">Other</option>
+                  <option value="OLD_MANUAL">Old Manual</option>
+                </select>
+              </div>
+
+              {/* Amount Received */}
+              <div style={{ marginBottom: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Amount Received (Rs.):</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amountReceived}
+                  onChange={(e) => {
+                    setAmountReceived(e.target.value);
+                    setIsPaymentReady(false); // Reset ready state
+                  }}
+                  placeholder="Enter amount given by customer"
+                  style={{ width: '100%', padding: 12, fontSize: 18, boxSizing: 'border-box', borderRadius: 6, border: '1px solid #ccc' }}
+                />
+                
+                {/* Balance Display */}
+                {amountReceived !== '' && parseFloat(amountReceived) > 0 && (
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    fontSize: 20, 
+                    fontWeight: 'bold',
+                    padding: 12,
+                    marginTop: 12,
+                    background: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2',
+                    borderRadius: 6,
+                    color: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828'
+                  }}>
+                    <span>{parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:'}</span>
+                    <span>Rs. {Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Notes (optional):</label>
+                <textarea 
+                  value={notes} 
+                  onChange={(e) => {
+                    setNotes(e.target.value);
+                    setIsPaymentReady(false); // Reset ready state
+                  }} 
+                  rows="2" 
+                  style={{ width: '100%', padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #ccc', boxSizing: 'border-box' }} 
+                  placeholder="Any notes..."
+                />
+              </div>
+
+              {/* Ready Indicator & Instructions */}
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: 12,
+                padding: 16,
+                background: isPaymentReady ? '#e8f5e9' : '#fff3e0',
+                borderRadius: 12,
+                border: isPaymentReady ? '2px solid #4caf50' : '2px dashed #ff9800',
+                transition: 'all 0.3s ease',
+              }}>
+                {/* Tick indicator when ready */}
+                {isPaymentReady ? (
+                  <div style={{ 
+                    fontSize: 48, 
+                    color: '#4caf50',
+                    animation: 'pulse 1s infinite',
+                  }}>
+                    ✓
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 32, color: '#ff9800' }}>
+                    ⌨️
+                  </div>
+                )}
+
+                {/* Instruction Text */}
+                <div style={{ textAlign: 'center', fontSize: 14, color: isPaymentReady ? '#2e7d32' : '#e65100', fontWeight: 'bold' }}>
+                  {isPaymentReady 
+                    ? '✅ READY! Press Enter to confirm & print' 
+                    : 'Press keyboard (+) key, then Enter to confirm'}
+                </div>
+              </div>
+
+              {loading && (
+                <div style={{ textAlign: 'center', marginTop: 16, color: '#1976d2', fontWeight: 'bold' }}>
+                  Processing... Please wait.
+                </div>
+              )}
+            </div>
+
+            {/* Footer with Back Button */}
+            <div
+              style={{
+                padding: 16,
+                borderTop: '1px solid #ddd',
+                background: '#f9f9f9',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottomLeftRadius: 12,
+                borderBottomRightRadius: 12,
+              }}
+            >
+              <button
+                onClick={handleClosePaymentModal}
+                style={{
+                  padding: '10px 24px',
+                  background: '#f44336',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                ← Back (F1)
+              </button>
+              <div style={{ fontSize: 12, color: '#888' }}>
+                Press F1 to return to billing screen
+              </div>
+            </div>
           </div>
         </div>
       )}

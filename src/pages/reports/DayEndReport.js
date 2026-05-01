@@ -413,6 +413,8 @@ React.useEffect(() => {
               <div>Online Transfer Sales: <b>{submittedData.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               <div>Cheque Sales: <b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               <div>Returns / Refunds: <b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+              <div>Old Manual Bill Value: <b>{(submittedData.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : (typeof oldManualBillValue !== 'undefined' && oldManualBillValue !== null ? parseFloat(oldManualBillValue) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+              <div>Credit Customer Billings: <b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : (typeof creditCustomerBillings !== 'undefined' && creditCustomerBillings !== null ? parseFloat(creditCustomerBillings) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
 
               <h3 style={{ fontSize: 15, margin: '10px 0 4px 0' }}>CASH RECONCILIATION</h3>
               {(() => {
@@ -545,20 +547,6 @@ React.useEffect(() => {
           onChange={setManualBillEntries}
         />
 
-        <h3>Old Manual Bill Value</h3>
-        <div style={{ marginBottom: 12 }}> 
-          <span style={{ fontWeight: 'bold', fontSize: 16 }}>
-            {oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-          </span>
-        </div>
-
-        <h3>Credit Customer Billings</h3>
-        <div style={{ marginBottom: 12 }}>
-          <span style={{ fontWeight: 'bold', fontSize: 16 }}>
-            {creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-          </span>
-        </div>
-
           <h3>SYSTEM SALES SUMMARY (AUTO)</h3>
           <div style={{ marginBottom: 12, fontSize: 16 }}>
             <div>Total Sales: <b>{systemSalesSummary?.totalSales != null ? systemSalesSummary.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
@@ -567,6 +555,8 @@ React.useEffect(() => {
             <div>Online Transfer Sales: <b>{systemSalesSummary?.onlineTransferSales != null ? systemSalesSummary.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Cheque Sales: <b>{systemSalesSummary?.chequeSales != null ? systemSalesSummary.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Old Manual Bill Value: <b>{oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Credit Customer Billings: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
 
@@ -588,16 +578,7 @@ React.useEffect(() => {
             const liveDifference = Number(physicalCashCounted) - expectedCashCalc;
             return (
               <>
-                <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div>Physical Cash Counted: <b>{Number(physicalCashCounted).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div>Difference: <b>{liveDifference.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div>Status: <b>{
-                  liveDifference > 0
-                    ? 'EXCESS'
-                    : liveDifference < 0
-                      ? 'SHORT'
-                      : 'BALANCED'
-                }</b></div>
               </>
             );
           })()}

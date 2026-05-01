@@ -128,21 +128,21 @@ const Landing = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#f5f5f5', padding: '32px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#f5f5f5', padding: '20px', boxSizing: 'border-box' }}>
       {/* Alert Widget */}
       {alertSummary && alertSummary.totalActive > 0 && (
         <div style={{
-          maxWidth: 900,
-          margin: '0 auto 32px',
-          width: '80%'
+          maxWidth: 800,
+          margin: '0 auto 24px',
+          width: '100%'
         }}>
           <div
             onClick={handleAlertClick}
             style={{
               background: 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)',
               color: '#fff',
-              padding: '20px 32px',
-              borderRadius: 12,
+              padding: '16px 24px',
+              borderRadius: 10,
               boxShadow: '0 4px 16px rgba(255, 68, 68, 0.3)',
               cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
@@ -156,36 +156,36 @@ const Landing = () => {
               e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 68, 68, 0.3)';
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <FaExclamationTriangle size={32} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <FaExclamationTriangle size={28} />
                 <div>
-                  <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
+                  <div style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 2 }}>
                     {alertSummary.totalActive} Active Alert{alertSummary.totalActive !== 1 ? 's' : ''}
                   </div>
-                  <div style={{ fontSize: 14, opacity: 0.9 }}>
+                  <div style={{ fontSize: 12, opacity: 0.9 }}>
                     Products requiring attention
                   </div>
                 </div>
               </div>
               
-              <div style={{ display: 'flex', gap: 24 }}>
+              <div style={{ display: 'flex', gap: 16 }}>
                 {alertSummary.criticalCount > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.criticalCount}</div>
-                    <div style={{ fontSize: 12, opacity: 0.9 }}>CRITICAL</div>
+                    <div style={{ fontSize: 22, fontWeight: 'bold' }}>{alertSummary.criticalCount}</div>
+                    <div style={{ fontSize: 10, opacity: 0.9 }}>CRITICAL</div>
                   </div>
                 )}
                 {alertSummary.warningCount > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.warningCount}</div>
-                    <div style={{ fontSize: 12, opacity: 0.9 }}>WARNING</div>
+                    <div style={{ fontSize: 22, fontWeight: 'bold' }}>{alertSummary.warningCount}</div>
+                    <div style={{ fontSize: 10, opacity: 0.9 }}>WARNING</div>
                   </div>
                 )}
                 {alertSummary.infoCount > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 28, fontWeight: 'bold' }}>{alertSummary.infoCount}</div>
-                    <div style={{ fontSize: 12, opacity: 0.9 }}>INFO</div>
+                    <div style={{ fontSize: 22, fontWeight: 'bold' }}>{alertSummary.infoCount}</div>
+                    <div style={{ fontSize: 10, opacity: 0.9 }}>INFO</div>
                   </div>
                 )}
               </div>
@@ -196,19 +196,19 @@ const Landing = () => {
 
       {/* Dashboard Grid */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 48, width: '80%', maxWidth: 900, justifyItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 24, width: '100%', maxWidth: 800, justifyItems: 'center' }}>
           {links.map(link => (
             <Link key={link.to} to={link.to} style={{ textDecoration: 'none', color: '#333' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{
-                  width: 90,
-                  height: 90,
+                  width: 70,
+                  height: 70,
                   borderRadius: '50%',
                   background: link.color,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 16,
+                  marginBottom: 10,
                   boxShadow: '0 2px 12px #0002',
                   transition: 'transform 0.2s',
                 }}
@@ -216,10 +216,10 @@ const Landing = () => {
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
                   <span style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {link.icon}
+                    {React.cloneElement(link.icon, { size: 28 })}
                   </span>
                 </div>
-                <span style={{ fontSize: 18, fontWeight: 500 }}>{link.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, textAlign: 'center' }}>{link.label}</span>
               </div>
             </Link>
           ))}

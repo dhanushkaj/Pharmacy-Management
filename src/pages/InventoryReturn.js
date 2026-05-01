@@ -15,8 +15,7 @@ const InventoryReturn = () => {
   const [reason, setReason] = useState('');
   const [batchNo, setBatchNo] = useState('');
   const [customerId, setCustomerId] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [notes, setNotes] = useState('');
   const [productSearch, setProductSearch] = useState('');
@@ -56,6 +55,16 @@ const InventoryReturn = () => {
       setFilteredProducts(products);
     }
   }, [productSearch, products]);
+
+  const filteredCustomers = customerSearch.trim()
+    ? customers.filter(c => {
+        const searchLower = customerSearch.toLowerCase();
+        return (
+          c.name?.toLowerCase().includes(searchLower) ||
+          c.phoneNumber?.toLowerCase().includes(searchLower)
+        );
+      })
+    : customers;
 
   const loadProducts = async () => {
     try {
@@ -122,12 +131,8 @@ const InventoryReturn = () => {
       return;
     }
     if (returnType === 'FROM_CUSTOMER') {
-      if (isNewCustomer && !customerName.trim()) {
-        setError('Customer name is required for new customer');
-        return;
-      }
-      if (!isNewCustomer && !customerId) {
-        setError('Please select a customer or choose "New Customer"');
+      if (!customerId) {
+        setError('Please select a registered customer');
         return;
       }
     }
@@ -137,17 +142,6 @@ const InventoryReturn = () => {
     }
 
     try {
-      // Get customer name - either from dropdown or typed new customer
-      let finalCustomerName = null;
-      if (returnType === 'FROM_CUSTOMER') {
-        if (isNewCustomer) {
-          finalCustomerName = customerName.trim();
-        } else {
-          const selectedCustomer = customers.find(c => c.customerId === parseInt(customerId));
-          finalCustomerName = selectedCustomer ? selectedCustomer.name : null;
-        }
-      }
-
       const payload = {
         productId: parseInt(productId),
         returnType,
@@ -155,7 +149,7 @@ const InventoryReturn = () => {
         unitPrice: parseFloat(unitPrice),
         reason: reason.trim(),
         batchNo: batchNo.trim() || null,
-        customerName: finalCustomerName,
+        customerId: returnType === 'FROM_CUSTOMER' ? parseInt(customerId) : null,
         supplierId: returnType === 'TO_SUPPLIER' ? parseInt(supplierId) : null,
         notes: notes.trim() || null
       };
@@ -188,8 +182,7 @@ const InventoryReturn = () => {
     setReason('');
     setBatchNo('');
     setCustomerId('');
-    setCustomerName('');
-    setIsNewCustomer(false);
+    setCustomerSearch('');
     setSupplierId('');
     setNotes('');
   };
@@ -232,7 +225,13 @@ const InventoryReturn = () => {
               <label>Return Type *</label>
               <select
                 value={returnType}
-                onChange={(e) => setReturnType(e.target.value)}
+                onChange={(e) => {
+                  const nextType = e.target.value;
+                  setReturnType(nextType);
+                  setCustomerId('');
+                  setCustomerSearch('');
+                  setSupplierId('');
+                }}
                 style={{ width: '100%', padding: '8px' }}
               >
                 <option value="FROM_CUSTOMER">From Customer (Add to Stock)</option>
@@ -333,54 +332,36 @@ const InventoryReturn = () => {
             {returnType === 'FROM_CUSTOMER' && (
               <>
                 <div>
-                  <label>Customer *</label>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <input
-                        type="checkbox"
-                        checked={isNewCustomer}
-                        onChange={(e) => {
-                          setIsNewCustomer(e.target.checked);
-                          if (e.target.checked) {
-                            setCustomerId('');
-                          } else {
-                            setCustomerName('');
-                          }
-                        }}
-                      />
-                      New Customer
-                    </label>
-                  </div>
+                  <label>Search Customer</label>
+                  <input
+                    type="text"
+                    placeholder="Search by customer name or phone..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    style={{ width: '100%', padding: '8px' }}
+                  />
                 </div>
-                
-                {!isNewCustomer ? (
-                  <div>
-                    <label>Select Customer *</label>
-                    <select
-                      value={customerId}
-                      onChange={(e) => setCustomerId(e.target.value)}
-                      style={{ width: '100%', padding: '8px' }}
-                    >
-                      <option value="">-- Select Customer --</option>
-                      {customers.map(c => (
-                        <option key={c.customerId} value={c.customerId}>
-                          {c.name} {c.phoneNumber ? `- ${c.phoneNumber}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label>Customer Name *</label>
-                    <input
-                      type="text"
-                      placeholder="Enter new customer name"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      style={{ width: '100%', padding: '8px' }}
-                    />
-                  </div>
-                )}
+
+                <div>
+                  <label>Select Customer *</label>
+                  <select
+                    value={customerId}
+                    onChange={(e) => setCustomerId(e.target.value)}
+                    style={{ width: '100%', padding: '8px' }}
+                  >
+                    <option value="">-- Select Customer --</option>
+                    {filteredCustomers.map(c => (
+                      <option key={c.customerId} value={c.customerId}>
+                        {c.name} {c.phoneNumber ? `- ${c.phoneNumber}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {customerSearch.trim() && filteredCustomers.length === 0 && (
+                    <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                      No registered customers found.
+                    </small>
+                  )}
+                </div>
               </>
             )}
 

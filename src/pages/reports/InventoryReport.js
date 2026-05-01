@@ -5,38 +5,39 @@ import { api } from '../../utill/api';
 
 const InventoryReport = () => {
   const { token } = useContext(AuthContext);
-  const [products, setProducts] = useState([]);
+  const [originalProducts, setOriginalProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     searchProduct: '',
     categoryId: '',
-    searchType: 'all', // all, category, product
-    outOfStockOnly: false
+    outOfStockOnly: false, // NEW: Out of stock filter
+    searchType: 'all'
   });
-
 
   useEffect(() => {
     fetchCategories();
-    fetchInventoryReport();
   }, []);
 
-  const fetchInventoryReport = async () => {
-    setLoading(true);
-    try {
-      let url = '/api/reports/inventory';
-      if (filters.categoryId) {
-        url += `?categoryId=${filters.categoryId}`;
+  useEffect(() => {
+    const fetchAndReset = async () => {
+      setLoading(true);
+      try {
+        let url = '/api/reports/inventory';
+        if (filters.categoryId) {
+          url += `?categoryId=${filters.categoryId}`;
+        }
+        const data = await api(url, { method: 'GET', token });
+        setOriginalProducts(data || []); // Always REPLACE, never append
+      } catch (error) {
+        console.error('Failed to fetch inventory report:', error);
+        alert('Failed to load inventory report');
+      } finally {
+        setLoading(false);
       }
-      const data = await api(url, { method: 'GET', token });
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Failed to fetch inventory report:', error);
-      alert('Failed to load inventory report');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchAndReset();
+  }, [filters.categoryId, token]); // Added token for safety
 
   const fetchCategories = async () => {
     try {
@@ -47,42 +48,55 @@ const InventoryReport = () => {
     }
   };
 
-
-
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
   const getInventoryStock = (product) => {
-    // For new API, availableInventory is provided
     return product.availableInventory ?? 0;
   };
 
-  const filteredProducts = products.filter(product => {
-    // Out of stock filter
-    if (filters.outOfStockOnly && getInventoryStock(product) !== 0) {
-      return false;
+  // FIXED: Client-side filtering with outOfStockOnly + strong deduplication
+  const filteredProducts = React.useMemo(() => {
+    let result = [...originalProducts]; // Copy to avoid mutation
+    
+    // NEW: Out of stock filter (client-side)
+    if (filters.outOfStockOnly) {
+      result = result.filter(product => getInventoryStock(product) === 0);
     }
-    // Filter by product search
+    
+    // Search filter
     if (filters.searchProduct) {
       const searchLower = filters.searchProduct.toLowerCase();
-      const matchesName = product.name?.toLowerCase().includes(searchLower);
-      const matchesCode = product.productCode?.toLowerCase().includes(searchLower);
-      return matchesName || matchesCode;
+      result = result.filter(product => {
+        const matchesName = product.name?.toLowerCase().includes(searchLower);
+        const matchesCode = product.productCode?.toLowerCase().includes(searchLower);
+        return matchesName || matchesCode;
+      });
     }
-    return true;
-  });
+    
+    // STRONG deduplication using Map (prevents duplicates entirely)
+    const uniqueMap = new Map();
+    result.forEach(product => {
+      const key = `${product.productId}-${product.price ?? 'null'}`;
+      uniqueMap.set(key, product);
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [originalProducts, filters.outOfStockOnly, filters.searchProduct]);
 
   const exportToCSV = () => {
-    const headers = ['Product Code', 'Product Name', 'Category', 'Available Inventory', 'Min Stock', 'Max Stock', 'Status'];
+    const headers = ['Product Code', 'Product Name', 'Category', 'Selling Price', 'Available Inventory', 'Min Stock', 'Max Stock', 'Status'];
     const rows = filteredProducts.map(product => [
       product.productCode || '',
       product.name || '',
       product.categoryName || 'N/A',
+      product.price != null ? Number(product.price).toFixed(2) : '-',
       getInventoryStock(product),
       product.minStock || 0,
       product.maxStock || 0,
-      product.outOfStock ? 'OUT OF STOCK' : (getInventoryStock(product) < (product.minStock || 0) ? 'LOW STOCK' : 'IN STOCK')
+      getInventoryStock(product) === 0 ? 'OUT OF STOCK' : 
+      (getInventoryStock(product) < (product.minStock || 0) ? 'LOW STOCK' : 'IN STOCK')
     ]);
     const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -93,17 +107,14 @@ const InventoryReport = () => {
     a.click();
   };
 
-
   const getLowStockCount = () => {
     return filteredProducts.filter(product => {
       const stock = getInventoryStock(product);
-      return product.minStock && stock < product.minStock;
+      return stock > 0 && product.minStock && stock < product.minStock;
     }).length;
   };
 
-  const getOutOfStockCount = () => {
-    return filteredProducts.filter(product => getInventoryStock(product) === 0).length;
-  };
+  const outOfStockCount = originalProducts.filter(p => getInventoryStock(p) === 0).length;
 
   return (
     <div style={{ padding: 24, background: '#f5f5f5', minHeight: '100vh' }}>
@@ -142,7 +153,7 @@ const InventoryReport = () => {
           }}>
             <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>Total Products</div>
             <div style={{ fontSize: 28, fontWeight: 'bold', color: '#1976d2' }}>
-              {filteredProducts.length}
+              {originalProducts.length}
             </div>
           </div>
 
@@ -154,7 +165,7 @@ const InventoryReport = () => {
           }}>
             <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>Out of Stock</div>
             <div style={{ fontSize: 28, fontWeight: 'bold', color: '#d32f2f' }}>
-              {getOutOfStockCount()}
+              {outOfStockCount}
             </div>
           </div>
 
@@ -169,7 +180,6 @@ const InventoryReport = () => {
               {getLowStockCount()}
             </div>
           </div>
-
         </div>
 
         {/* Filters */}
@@ -224,7 +234,8 @@ const InventoryReport = () => {
               </select>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', marginTop: 24 }}>
+            {/* NEW: Out of Stock Checkbox */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
               <input
                 type="checkbox"
                 id="outOfStockOnly"
@@ -233,13 +244,13 @@ const InventoryReport = () => {
                 style={{ marginRight: 8 }}
               />
               <label htmlFor="outOfStockOnly" style={{ fontWeight: '500', cursor: 'pointer' }}>
-                Show only Out of Stock
+                Show only Out of Stock ({outOfStockCount})
               </label>
             </div>
           </div>
         </div>
 
-        {/* Inventory Table */}
+        {/* Rest of your table code stays exactly the same */}
         <div style={{
           background: '#fff',
           borderRadius: 8,
@@ -260,6 +271,7 @@ const InventoryReport = () => {
                   <th style={{ padding: 12, textAlign: 'left' }}>Product Code</th>
                   <th style={{ padding: 12, textAlign: 'left' }}>Product Name</th>
                   <th style={{ padding: 12, textAlign: 'left' }}>Category</th>
+                  <th style={{ padding: 12, textAlign: 'center' }}>Selling Price</th>
                   <th style={{ padding: 12, textAlign: 'center' }}>Available Inventory</th>
                   <th style={{ padding: 12, textAlign: 'center' }}>Min Stock</th>
                   <th style={{ padding: 12, textAlign: 'center' }}>Max Stock</th>
@@ -274,7 +286,7 @@ const InventoryReport = () => {
 
                   return (
                     <tr
-                      key={product.productId}
+                      key={`${product.productId}-${product.price}`} // FIXED: Stable key
                       style={{
                         borderBottom: '1px solid #ddd',
                         background: isOutOfStock ? '#ffebee' : isLowStock ? '#fff3e0' : '#fff'
@@ -283,13 +295,14 @@ const InventoryReport = () => {
                       <td style={{ padding: 12 }}>{product.productCode}</td>
                       <td style={{ padding: 12, fontWeight: '500' }}>{product.name}</td>
                       <td style={{ padding: 12 }}>{product.categoryName || 'N/A'}</td>
+                      <td style={{ padding: 12, textAlign: 'center' }}>{product.price != null ? Number(product.price).toFixed(2) : '-'}</td>
                       <td style={{ padding: 12, textAlign: 'center', fontWeight: 'bold', fontSize: 16 }}>
                         {stock}
                       </td>
                       <td style={{ padding: 12, textAlign: 'center' }}>{product.minStock || '-'}</td>
                       <td style={{ padding: 12, textAlign: 'center' }}>{product.maxStock || '-'}</td>
                       <td style={{ padding: 12, textAlign: 'center' }}>
-                        {product.outOfStock ? (
+                        {isOutOfStock ? (
                           <span style={{
                             padding: '4px 12px',
                             borderRadius: 12,
@@ -300,31 +313,29 @@ const InventoryReport = () => {
                           }}>
                             OUT OF STOCK
                           </span>
-                        ) : getInventoryStock(product) < (product.minStock || 0)
-                          ? (
-                              <span style={{
-                                padding: '4px 12px',
-                                borderRadius: 12,
-                                background: '#ff9800',
-                                color: '#fff',
-                                fontSize: 12,
-                                fontWeight: 'bold'
-                              }}>
-                                LOW STOCK
-                              </span>
-                            )
-                          : (
-                              <span style={{
-                                padding: '4px 12px',
-                                borderRadius: 12,
-                                background: '#4caf50',
-                                color: '#fff',
-                                fontSize: 12,
-                                fontWeight: 'bold'
-                              }}>
-                                IN STOCK
-                              </span>
-                            )}
+                        ) : isLowStock ? (
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: 12,
+                            background: '#ff9800',
+                            color: '#fff',
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}>
+                            LOW STOCK
+                          </span>
+                        ) : (
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: 12,
+                            background: '#4caf50',
+                            color: '#fff',
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}>
+                            IN STOCK
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

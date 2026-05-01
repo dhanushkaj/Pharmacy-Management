@@ -3,7 +3,7 @@ import { AuthContext } from "../components/AuthContext";
 import * as XLSX from "xlsx";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "";
-const pageSize = 10;
+const pageSize = 25;
 
 const BULK_COLUMNS = [
   "name",
@@ -381,6 +381,7 @@ const emptyForm = {
   maxDiscount: "",
   patientInstructions: "",
   binLocation: "",
+  packSize: "",
 };
 
 const ProductManagement = () => {
@@ -569,6 +570,7 @@ const ProductManagement = () => {
         expiryDate: form.expiryDate || null,
         patientInstructions: form.patientInstructions || null,
         binLocation: form.binLocation || null,
+        packSize: form.packSize?.trim() || null,
       };
 
       await createOrUpdate(payload, form.productId);
@@ -606,6 +608,7 @@ const ProductManagement = () => {
       maxDiscount: p.maxDiscount ?? "",
       patientInstructions: p.patientInstructions || "",
       binLocation: p.binLocation || "",
+      packSize: p.packSize || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -911,30 +914,30 @@ const ProductManagement = () => {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Product Management</h2>
+    <div style={{ padding: 16, boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
+      <h2 style={{ fontSize: 20, marginBottom: 12 }}>Product Management</h2>
 
       <form
         onSubmit={onSubmit}
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: 24,
-          marginBottom: 24,
+          gap: 16,
+          marginBottom: 20,
           background: "#f5f5f5",
-          padding: 20,
+          padding: 16,
           borderRadius: 8,
         }}
       >
         <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 180 }}
+          style={{ display: "flex", flexDirection: "column", minWidth: 150, flex: '1 1 150px' }}
         >
-          <label>Category</label>
+          <label style={{ fontSize: 13 }}>Category</label>
           <select
             name="categoryId"
             value={form.categoryId}
             onChange={handleChange}
-            style={{ padding: 8 }}
+            style={{ padding: 6, fontSize: 13 }}
           >
             <option value="">Select Category</option>
             {categories.map((c) => (
@@ -946,7 +949,7 @@ const ProductManagement = () => {
         </div>
 
         <div
-          style={{ display: "flex", flexDirection: "column", minWidth: 220 }}
+          style={{ display: "flex", flexDirection: "column", minWidth: 180, flex: '1 1 180px' }}
         >
           <label>Product Name</label>
           <input
@@ -1115,6 +1118,19 @@ const ProductManagement = () => {
           />
         </div>
 
+        <div
+          style={{ display: "flex", flexDirection: "column", minWidth: 140 }}
+        >
+          <label>Pack Size</label>
+          <input
+            name="packSize"
+            value={form.packSize}
+            onChange={handleChange}
+            placeholder="e.g. 10x10"
+            style={{ padding: 8 }}
+          />
+        </div>
+
         <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
           <button
             type="submit"
@@ -1275,6 +1291,7 @@ const ProductManagement = () => {
             <th>Max</th>
             <th>Max Disc %</th>
             <th>Bin</th>
+            <th>Pack Size</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1318,6 +1335,9 @@ const ProductManagement = () => {
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.binLocation || "-"}
+                </td>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  {p.packSize || "-"}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd", whiteSpace: "nowrap" }}>
                   <button

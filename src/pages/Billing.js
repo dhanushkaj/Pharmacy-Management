@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
@@ -26,7 +26,7 @@ const printStyles = `
 `;
 
 export default function Billing() {
-  const { token } = useContext(AuthContext);
+  const { token, hasRole } = useContext(AuthContext);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +35,7 @@ export default function Billing() {
   const [allCustomers, setAllCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerDropdownIndex, setCustomerDropdownIndex] = useState(0);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '' });
 
@@ -50,15 +51,35 @@ export default function Billing() {
   // Cart Section
   const [cartItems, setCartItems] = useState([]);
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
+  const [amountReceived, setAmountReceived] = useState('');
 
   // Bill Preview Modal
   const [showBillPreview, setShowBillPreview] = useState(false);
   const [createdBilling, setCreatedBilling] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
 
-  // Load store settings, customers and products on mount, inject print styles
+  // Track manual discount input
+  const [isDiscountManual, setIsDiscountManual] = useState(false);
+
+  // Customer billing history (Ctrl+H)
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [customerBills, setCustomerBills] = useState([]);
+  const [selectedHistoryBill, setSelectedHistoryBill] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyBillIndex, setHistoryBillIndex] = useState(0);
+  const [historyItemIndex, setHistoryItemIndex] = useState(0);
+  const [historySearch, setHistorySearch] = useState('');
+
+  // Billing return (Ctrl+R)
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnItem, setReturnItem] = useState(null);
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnProcessing, setReturnProcessing] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
     if (saved) {
@@ -98,34 +119,9 @@ export default function Billing() {
       // Handle paginated response or direct array
       const products = data?.content ? data.content : Array.isArray(data) ? data : [];
       
-      // Fetch inventory for each product to get selling prices
-      const productsWithPrices = await Promise.all(
-        products.map(async (product) => {
-          try {
-            const inventory = await api(`/api/products/${product.productId}/inventory`, { token });
-            // Get unique selling prices from inventory (price is returned as string, convert to number)
-            const prices = [...new Set(inventory.map(item => parseFloat(item.price) || 0))].filter(p => p > 0);
-            // Calculate total stock from all inventory items
-            const totalStock = inventory.reduce((sum, item) => sum + (item.stock || 0), 0);
-            return {
-              ...product,
-              sellingPrices: prices.length > 0 ? prices : null,
-              hasMultiplePrices: prices.length > 1,
-              totalStock: totalStock
-            };
-          } catch (err) {
-            console.warn(`⚠️ Failed to fetch inventory for product ${product.name}:`, err.message);
-            return {
-              ...product,
-              sellingPrices: null,
-              hasMultiplePrices: false,
-              totalStock: 0
-            };
-          }
-        })
-      );
-      
-      setAllProducts(productsWithPrices);
+      // Don't pre-fetch inventory for all products - this causes N+1 query problem!
+      // Inventory will be fetched on-demand when a product is selected
+      setAllProducts(products);
     } catch (err) {
       console.error('❌ Failed to load products:', err);
       setError('Failed to load products: ' + err.message);
@@ -146,6 +142,7 @@ export default function Billing() {
         c.address?.toLowerCase().includes(lower)
     );
     setFilteredCustomers(filtered);
+    setCustomerDropdownIndex(0);
   }, [customerSearch, allCustomers]);
 
   // Product search filter (ignore quantity prefix like 14*panadol)
@@ -155,30 +152,63 @@ export default function Billing() {
       setSelectedProductIndex(-1);
       return;
     }
-    // Support search when user types '12*' then product name (e.g., '12*panadol')
-    let searchName = productSearch;
-    // If input starts with quantity and '*', remove it for search
-    searchName = searchName.replace(/^\s*\d+\s*\*\s*/, '');
-    searchName = searchName.trim().toLowerCase();
+    // Remove quantity prefix (e.g., '12*') for search
+    let searchName = productSearch.replace(/^\s*\d+\s*\*\s*/, '').trim().toLowerCase();
     if (!searchName) {
       setFilteredProducts([]);
       setSelectedProductIndex(-1);
       return;
     }
-    const filtered = allProducts.filter(
-      (p) =>
-        p.name?.toLowerCase().includes(searchName) ||
-        p.genericName?.toLowerCase().includes(searchName) ||
-        p.category?.name?.toLowerCase().includes(searchName) ||
-        p.productCode?.toLowerCase().includes(searchName)
-    );
+    // Escape regex special characters in searchName
+    const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const safeSearchName = escapeRegex(searchName);
+    // 1. Exact match (full string)
+    let filtered = allProducts.filter(p => p.name?.toLowerCase() === safeSearchName);
+    // 2. Word boundary match (e.g., 'ATORVA' matches 'ATORVA 10MG', 'ATORVA TAB')
+    if (filtered.length === 0) {
+      const wordBoundary = new RegExp(`\\b${safeSearchName}\\b`, 'i');
+      filtered = allProducts.filter(p => wordBoundary.test(p.name));
+    }
+    // 3. Prefix match
+    if (filtered.length === 0) {
+      filtered = allProducts.filter(p => p.name?.toLowerCase().startsWith(safeSearchName));
+    }
+    // 4. Fallback: includes in name, generic, category, code
+    if (filtered.length === 0) {
+      filtered = allProducts.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(safeSearchName) ||
+          p.genericName?.toLowerCase().includes(safeSearchName) ||
+          p.category?.name?.toLowerCase().includes(safeSearchName) ||
+          p.productCode?.toLowerCase().includes(safeSearchName)
+      );
+    }
     setFilteredProducts(filtered);
     setSelectedProductIndex(-1);
   }, [productSearch, allProducts]);
 
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
-    setDiscountPercentage(customer.discountPercentage || 0);
+    // If CARD payment, cap to 2%
+    const custDisc = customer.discountPercentage || 0;
+    const effectiveDisc = paymentMethod === 'CARD' ? Math.min(custDisc, 2) : custDisc;
+    setDiscountPercentage(effectiveDisc);
+    // Set discountAmount to use only Customer Discount Base for first time
+    if (cartItems.length > 0) {
+      // Only use customer discount base (items without product discount, excluding returns)
+      const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (customer.discountPercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
+      setIsDiscountManual(false);
+    } else {
+      setDiscountAmount(0);
+      setIsDiscountManual(false);
+    }
     setCustomerSearch('');
     setFilteredCustomers([]);
   };
@@ -241,26 +271,11 @@ export default function Billing() {
     setFilteredProducts([]);
     setSelectedProductIndex(-1);
     
-    // Check if product has inventory and prices
-    if (!product.sellingPrices || product.sellingPrices.length === 0) {
-      alert('No inventory found for this product! Please add inventory first.');
-      setProductSearch('');
-      return;
-    }
+    // Fetch inventory on-demand for this product (lazy loading)
+    await fetchInventoryForProduct(product, quantity);
     
-    // If product has multiple prices, show price selection modal
-    if (product.hasMultiplePrices && product.sellingPrices.length > 1) {
-      await fetchInventoryForProduct(product, quantity);
-      // Don't clear selectedProduct here - it's needed for the price modal
-      setProductSearch('');
-    } else {
-      // Single price - add directly to cart
-      const price = product.sellingPrices[0];
-      addProductToCart(product, quantity, price);
-      // Clear search box and selected product after adding to cart
-      setProductSearch('');
-      setSelectedProduct(null);
-    }
+    // Clear search box after processing
+    setProductSearch('');
   };
 
   const handleProductSearchKeyDown = async (e) => {
@@ -313,21 +328,22 @@ export default function Billing() {
     }
   };
 
+  // Enhanced: Show all price levels FIFO (latest first, even if stock is zero)
+  //           Prepare for keyboard navigation in modal
   const fetchInventoryForProduct = async (product, quantity) => {
     if (!product || !product.productId) {
       console.error('Invalid product in fetchInventoryForProduct:', product);
       return;
     }
-    
     try {
-      const data = await api(`/api/products/${product.productId}/inventory`, { token });
-      
+      let data = await api(`/api/products/${product.productId}/inventory`, { token });
       if (!data || data.length === 0) {
         alert('No inventory found for this product! Please add inventory first.');
         return;
       }
-      
-      // Group by selling price (price is returned as string, convert to number)
+      // Sort inventory by createdAt ascending (FIFO: oldest first)
+      data = data.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      // Group by selling price and track latest date for each price group
       const priceGroups = {};
       data.forEach(item => {
         const price = parseFloat(item.price) || 0;
@@ -335,24 +351,31 @@ export default function Billing() {
           priceGroups[price] = {
             price,
             totalStock: 0,
-            items: []
+            items: [],
+            latestDate: item.createdAt ? new Date(item.createdAt) : new Date(0)
           };
         }
         priceGroups[price].totalStock += item.stock || 0;
         priceGroups[price].items.push(item);
+        // Track latest date for this price group
+        if (item.createdAt && new Date(item.createdAt) > priceGroups[price].latestDate) {
+          priceGroups[price].latestDate = new Date(item.createdAt);
+        }
       });
-      
-      const options = Object.values(priceGroups);
-      console.log('Price options:', options);
-      
+      // Sort price options: latest date first (FIFO), then by price desc
+      let options = Object.values(priceGroups).sort((a, b) => {
+        if (b.latestDate - a.latestDate !== 0) return b.latestDate - a.latestDate;
+        return b.price - a.price;
+      });
+      // Always show all price levels, even if stock is zero
+      options = options.map(opt => ({ ...opt, quantity }));
       if (options.length === 1) {
-        // Only one price, add directly to cart
         addProductToCart(product, quantity, options[0].price);
       } else {
-        // Multiple prices, show selection modal
-        setPriceOptions(options.map(opt => ({ ...opt, quantity })));
+        setPriceOptions(options);
         setSelectedProduct(product);
         setShowPriceOptions(true);
+        setSelectedPriceOptionIndex(0); // default to first
       }
     } catch (err) {
       console.error('Failed to fetch inventory:', err);
@@ -360,19 +383,32 @@ export default function Billing() {
     }
   };
 
-  const handleSelectPriceOption = (priceOption) => {
+  // Keyboard navigation for price modal
+  const [selectedPriceOptionIndex, setSelectedPriceOptionIndex] = useState(0);
+  const priceModalRef = useRef(null);
+  const handleSelectPriceOption = (priceOption, idx = null) => {
     if (!selectedProduct) {
       console.error('No product selected');
       setShowPriceOptions(false);
       setPriceOptions([]);
       return;
     }
-    addProductToCart(selectedProduct, priceOption.quantity, priceOption.price);
+    // If called from keyboard, use selectedPriceOptionIndex
+    const option = idx !== null ? priceOptions[idx] : priceOption;
+    addProductToCart(selectedProduct, option.quantity, option.price);
     setShowPriceOptions(false);
     setPriceOptions([]);
     setSelectedProduct(null);
     setProductSearch('');
+    setSelectedPriceOptionIndex(0);
   };
+
+  // Focus the price modal when it opens (must be at top level, not inside a function)
+  useEffect(() => {
+    if (showPriceOptions && priceModalRef.current) {
+      priceModalRef.current.focus();
+    }
+  }, [showPriceOptions]);
 
   const addProductToCart = (product, quantity = 1, unitPrice = null) => {
     console.log('Adding to cart:', product, 'Quantity:', quantity, 'Unit Price:', unitPrice);
@@ -398,27 +434,51 @@ export default function Billing() {
       alert('Warning: Product has no price set! Please check product configuration.');
     }
 
-    // Check if product already in cart with same price
+    // Allow inventory to go negative: Commented out stock validation
+    // if (product.totalStock !== undefined && product.totalStock < quantity) {
+    //   alert(`Insufficient stock for product '${product.name}'. Available: ${product.totalStock}, Requested: ${quantity}`);
+    //   return;
+    // }
+
+    // Check if product already in cart with same price (only match non-return items)
     const existingIndex = cartItems.findIndex((item) => 
-      item && item.product && item.product.productId === product.productId && item.unitPrice === finalPrice
+      item && item.product && !item.isReturn && item.product.productId === product.productId && item.unitPrice === finalPrice
     );
+    let newCartItems;
     if (existingIndex >= 0) {
       // Update quantity
       const updated = [...cartItems];
       updated[existingIndex].quantity += quantity;
+      // Keep productDiscount if already set
       updated[existingIndex].subtotal = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      newCartItems = updated;
       setCartItems(updated);
     } else {
-      // Add new item
-      setCartItems([
+      // Use product.maxDiscount if available, else 0
+      const maxDiscount = product.maxDiscount ? Number(product.maxDiscount) : 0;
+      newCartItems = [
         ...cartItems,
         {
           product,
           quantity,
           unitPrice,
+          productDiscount: maxDiscount,
           subtotal: quantity * unitPrice,
         },
-      ]);
+      ];
+      setCartItems(newCartItems);
+    }
+    // If customer is selected and discount is not manually overridden, recalculate discountAmount using only Customer Discount Base
+    if (selectedCustomer && !isDiscountManual) {
+      // Only use items with NO product discount for customer discount base (excluding returns)
+      const customerDiscountBase = newCartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (selectedCustomer.discountPercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
     setProductSearch('');
     setFilteredProducts([]);
@@ -440,14 +500,66 @@ export default function Billing() {
     setCartItems(cartItems.filter((_, i) => i !== index));
   };
 
-  // Calculate totals
-  const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountAmount = (subtotal * discountPercentage) / 100;
-  const grandTotal = subtotal - discountAmount;
+  // Calculate product-level and customer discounts separately
+  // Separate normal items and return items for calculations
+  const normalCartItems = cartItems.filter(item => !item.isReturn);
+  const returnCartItems = cartItems.filter(item => item.isReturn);
+
+  // Product discounts only apply if customer discount is also applied
+  const hasCustomerDiscount = discountPercentage > 0;
+
+  const productLevelDiscounts = normalCartItems.map(item => {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
+      return Math.min(item.unitPrice * item.quantity * (item.productDiscount / 100), item.unitPrice * item.quantity);
+    }
+    return 0;
+  });
+  const totalProductLevelDiscount = productLevelDiscounts.reduce((sum, d) => sum + d, 0);
+
+  const subtotalAfterProductDiscounts = normalCartItems.reduce((sum, item, idx) => {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity - productLevelDiscounts[idx]);
+    }
+    return sum + (item.unitPrice * item.quantity);
+  }, 0);
+
+  const customerDiscountBase = normalCartItems.reduce((sum, item) => {
+    if (!hasCustomerDiscount || !item.productDiscount || item.productDiscount === 0) {
+      return sum + (item.unitPrice * item.quantity);
+    }
+    return sum;
+  }, 0);
+  const customerDiscountTotal = customerDiscountBase * (discountPercentage / 100);
+
+  // Subtotal already has product discounts applied
+  const subtotal = Number(normalCartItems.reduce((sum, item) => {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100));
+    }
+    return sum + (item.unitPrice * item.quantity);
+  }, 0).toFixed(2));
+
+  const productDiscountTotal = normalCartItems.reduce((sum, item) => {
+    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity * (item.productDiscount / 100));
+    }
+    return sum;
+  }, 0);
+
+  const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
+  const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
+    ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+    : customerDiscountTotal;
+  const grandTotal = Number((subtotal - validDiscount).toFixed(2));
+
+  // Return refund total (positive number representing total refund to customer)
+  const returnRefundTotal = Number(returnCartItems.reduce((sum, item) => sum + Math.abs(item.subtotal), 0).toFixed(2));
+  // Net payable = what the customer actually pays (sale total minus return refunds)
+  const netPayable = Number((grandTotal - returnRefundTotal).toFixed(2));
 
   const handleProceedToConfirmation = () => {
     // Validation
-    if (!selectedCustomer) {
+    if (!selectedCustomer || !selectedCustomer.customerId || selectedCustomer.customerId === '' || selectedCustomer.customerId === null || selectedCustomer.customerId === undefined || selectedCustomer.customerId === 0) {
       alert('Please select or add a customer!');
       return;
     }
@@ -455,22 +567,32 @@ export default function Billing() {
       alert('Please add at least one product!');
       return;
     }
-    if (grandTotal < 0) {
+
+    const hasReturns = cartItems.some(item => item.isReturn);
+    const hasNormalItems = cartItems.some(item => !item.isReturn);
+
+    // Only block negative grand total if there are normal sale items
+    if (hasNormalItems && grandTotal < 0) {
       alert('Grand total cannot be negative!');
       return;
     }
 
-    // Navigate to confirmation page with state
-    // (For now, we'll just show a confirmation here - in production, use React Router navigate)
-    const confirmProceed = window.confirm(
-      `Confirm billing for ${selectedCustomer.name}?\n\n` +
-        `Subtotal: Rs. ${subtotal.toFixed(2)}\n` +
-        `Discount: ${discountPercentage}% (Rs. ${discountAmount.toFixed(2)})\n` +
+    let confirmMsg = `Confirm billing for ${selectedCustomer.name}?\n\n`;
+    if (hasNormalItems) {
+      confirmMsg += `Subtotal: Rs. ${subtotal.toFixed(2)}\n` +
+        `Discount: ${discountPercentage}% (Rs. ${discountAmount.toFixed ? discountAmount.toFixed(2) : discountAmount})\n` +
         `Grand Total: Rs. ${grandTotal.toFixed(2)}\n` +
-        `Payment: ${paymentMethod}`
-    );
+        `Payment: ${paymentMethod}\n`;
+    }
+    if (hasReturns) {
+      const returnCount = cartItems.filter(i => i.isReturn).length;
+      confirmMsg += `\n↩ ${returnCount} return item(s) — Refund: Rs. ${returnRefundTotal.toFixed(2)}\n`;
+    }
+    if (hasReturns && hasNormalItems) {
+      confirmMsg += `\n💰 NET PAYABLE: Rs. ${netPayable.toFixed(2)}`;
+    }
 
-    if (confirmProceed) {
+    if (window.confirm(confirmMsg)) {
       submitBilling();
     }
   };
@@ -479,34 +601,116 @@ export default function Billing() {
     setLoading(true);
     setError(null);
     try {
-      const request = {
-        customerId: selectedCustomer.customerId,
-        items: cartItems.map((item) => ({
-          productId: item.product.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          batchNo: item.product.batchNo || '',
-        })),
-        discountPercentage: parseFloat(discountPercentage) || 0,
-        paymentMethod,
-        notes: notes.trim() || null,
-      };
+      // Always send the sum of product + customer discount unless manually overridden
+      const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
+      const discountToSave = (isDiscountManual && discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
+        ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+        : calculatedDiscount;
+      
+      // Parse amount received
+      const parsedAmountReceived = amountReceived !== '' ? parseFloat(amountReceived) : 0;
 
-      const response = await api('/api/billings', {
-        method: 'POST',
-        body: request,
-        token,
-      });
+      // Separate return items from normal items
+      const normalItems = cartItems.filter(item => !item.isReturn);
+      const returnItems = cartItems.filter(item => item.isReturn);
 
-      // Reload store settings from localStorage to ensure latest data
-      const savedSettings = localStorage.getItem('storeSettings');
-      if (savedSettings) {
-        setStoreSettings(JSON.parse(savedSettings));
+      // Only submit billing if there are normal (non-return) items
+      let response = null;
+      if (normalItems.length > 0) {
+        const request = {
+          customerId: selectedCustomer.customerId,
+          items: normalItems.map((item) => ({
+            productId: item.product.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            batchNo: item.product.batchNo || '',
+          })),
+          discountPercentage: parseFloat(discountPercentage) || 0,
+          totalDiscount: discountToSave,
+          discountAmount: discountToSave,
+          paymentMethod,
+          notes: notes.trim() || null,
+          amountReceived: parsedAmountReceived,
+        };
+
+        response = await api('/api/billings', {
+          method: 'POST',
+          body: request,
+          token,
+        });
+        if (response) {
+          response.discountAmount = validDiscount;
+        }
       }
 
-      // Show bill preview modal
-      setCreatedBilling(response);
-      setShowBillPreview(true);
+      // Now process return items on backend (inventory restore + bin movement)
+      const returnResults = [];
+      for (const retItem of returnItems) {
+        try {
+          const retResponse = await api('/api/billings/return', {
+            method: 'POST',
+            body: {
+              billingItemId: retItem.billingItemId,
+              returnQty: retItem.returnQty,
+            },
+            token,
+          });
+          returnResults.push(retResponse);
+        } catch (retErr) {
+          console.error('Return processing failed for item:', retItem, retErr);
+          setError((prev) => (prev ? prev + '\n' : '') + `Return failed for ${retItem.product.name}: ${retErr.message}`);
+        }
+      }
+
+      if (response) {
+        // Attach return info to billing response for display
+        response.returnItems = returnResults;
+        response.returnRefundTotal = returnRefundTotal;
+        response.netPayable = netPayable;
+        response.returnCartItems = returnItems.map(ri => ({
+          productName: ri.product.name,
+          productCode: ri.product.productCode,
+          quantity: Math.abs(ri.quantity),
+          unitPrice: ri.unitPrice,
+          refundAmount: Math.abs(ri.subtotal),
+          originalBill: ri.originalBill,
+          discountPercentage: ri.productDiscount || 0,
+        }));
+        setCreatedBilling(response);
+        setShowBillPreview(true);
+      } else if (returnResults.length > 0) {
+        // Only returns, no normal sale items — still show a receipt
+        const returnOnlyBilling = {
+          billingNumber: 'RETURN',
+          billingDate: new Date().toISOString(),
+          customerName: selectedCustomer?.name || '',
+          customerPhone: selectedCustomer?.phone || '',
+          items: [],
+          subtotal: 0,
+          grandTotal: 0,
+          discountPercentage: 0,
+          paymentMethod: 'RETURN',
+          amountReceived: 0,
+          balanceAmount: 0,
+          notes: notes || '',
+          returnItems: returnResults,
+          returnRefundTotal: returnRefundTotal,
+          netPayable: -returnRefundTotal,
+          returnCartItems: returnItems.map(ri => ({
+            productName: ri.product.name,
+            productCode: ri.product.productCode,
+            quantity: Math.abs(ri.quantity),
+            unitPrice: ri.unitPrice,
+            refundAmount: Math.abs(ri.subtotal),
+            originalBill: ri.originalBill,
+            discountPercentage: ri.productDiscount || 0,
+          })),
+        };
+        setCreatedBilling(returnOnlyBilling);
+        setShowBillPreview(true);
+      } else {
+        setError('No items to process.');
+      }
 
     } catch (err) {
       setError(err.message || 'Failed to create billing');
@@ -539,232 +743,312 @@ export default function Billing() {
     setDiscountPercentage(0);
     setPaymentMethod('CASH');
     setNotes('');
+    setAmountReceived('');
     setCustomerSearch('');
     setProductSearch('');
     setCreatedBilling(null);
   };
 
+  // --- Ctrl+H: Customer billing history ---
+  const fetchCustomerBills = async () => {
+    if (!selectedCustomer || !selectedCustomer.customerId) {
+      alert('Please select a customer first!');
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      const data = await api(`/api/billings/customer/${selectedCustomer.customerId}?page=0&size=50`, { token });
+      const bills = data?.content ? data.content : Array.isArray(data) ? data : [];
+      setCustomerBills(bills);
+      setSelectedHistoryBill(null);
+      setSelectedHistoryItem(null);
+      setHistoryBillIndex(0);
+      setHistoryItemIndex(0);
+      setHistorySearch('');
+      setShowCustomerHistory(true);
+    } catch (err) {
+      console.error('Failed to load customer billing history:', err);
+      alert('Failed to load billing history: ' + (err.message || 'Error'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // --- Ctrl+R: open return popup for selected history item ---
+  const openReturnForItem = (bill, item) => {
+    const alreadyReturned = item.returnedQty || 0;
+    const maxReturnable = item.quantity - alreadyReturned;
+    if (maxReturnable <= 0) {
+      alert('All units for this item have already been returned.');
+      return;
+    }
+    setReturnItem({
+      ...item,
+      billingNumber: bill.billingNumber,
+      billingId: bill.billingId,
+      discountPercentage: bill.discountPercentage || 0,
+      maxReturnable,
+    });
+    setReturnQty(1);
+    setShowReturnModal(true);
+  };
+
+  // --- Process return ---
+  const handleProcessReturn = async () => {
+    if (!returnItem) return;
+    if (returnQty <= 0 || returnQty > returnItem.maxReturnable) {
+      alert(`Return quantity must be between 1 and ${returnItem.maxReturnable}`);
+      return;
+    }
+
+    // Calculate refund amount locally (same logic as backend)
+    const discPct = returnItem.discountPercentage || 0;
+    const itemGross = returnItem.unitPrice * returnQty;
+    const discDeducted = itemGross * (discPct / 100);
+    const refundAmount = itemGross - discDeducted;
+
+    const product = allProducts.find(p => p.productId === returnItem.productId) || {
+      productId: returnItem.productId,
+      productCode: returnItem.productCode,
+      name: returnItem.productName,
+    };
+
+    // Only add to cart — backend return is processed when billing is submitted
+    setCartItems(prev => [
+      ...prev,
+      {
+        product,
+        quantity: -returnQty,
+        unitPrice: returnItem.unitPrice,
+        productDiscount: discPct,
+        subtotal: -refundAmount,
+        isReturn: true,
+        originalBill: returnItem.billingNumber,
+        billingItemId: returnItem.billingItemId,
+        returnQty: returnQty,
+      },
+    ]);
+
+    alert(`Return added to cart: ${returnQty} x ${returnItem.productName}\nRefund: Rs. ${refundAmount.toFixed(2)} (after ${discPct}% discount deduction)\n\nReturn will be processed when you confirm the billing.`);
+    setShowReturnModal(false);
+    setReturnItem(null);
+    // Clear selected item so Enter from alert dismissal doesn't re-trigger return
+    setSelectedHistoryItem(null);
+    setHistoryItemIndex(-1);
+  };
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Ctrl+H: open customer billing history
+      if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        if (selectedCustomer) {
+          fetchCustomerBills();
+        } else {
+          alert('Please select a customer first to view billing history.');
+        }
+        return;
+      }
+
+      // --- History modal keyboard navigation ---
+      if (showCustomerHistory && !showReturnModal) {
+
+        // Escape: close modal or go back
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (selectedHistoryBill) {
+            // Go back to bills list
+            setSelectedHistoryBill(null);
+            setSelectedHistoryItem(null);
+            setHistoryItemIndex(0);
+          } else {
+            // Close modal
+            setShowCustomerHistory(false);
+            setSelectedHistoryItem(null);
+          }
+          return;
+        }
+
+        // Backspace: go back from items to bills list
+        if (e.key === 'Backspace' && selectedHistoryBill) {
+          e.preventDefault();
+          setSelectedHistoryBill(null);
+          setSelectedHistoryItem(null);
+          setHistoryItemIndex(0);
+          return;
+        }
+
+        // --- Bills list navigation (no bill selected yet) ---
+        if (!selectedHistoryBill && customerBills.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHistoryBillIndex(prev => Math.min(prev + 1, customerBills.length - 1));
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHistoryBillIndex(prev => Math.max(prev - 1, 0));
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const bill = customerBills[historyBillIndex];
+            if (bill) {
+              setSelectedHistoryBill(bill);
+              setHistoryItemIndex(0);
+              // Auto-select first item
+              const items = bill.items || [];
+              setSelectedHistoryItem(items.length > 0 ? items[0] : null);
+            }
+            return;
+          }
+        }
+
+        // --- Items list navigation (bill selected, viewing items) ---
+        if (selectedHistoryBill) {
+          const items = selectedHistoryBill.items || [];
+
+          if (e.key === 'ArrowDown' && items.length > 0) {
+            e.preventDefault();
+            const newIdx = Math.min(historyItemIndex + 1, items.length - 1);
+            setHistoryItemIndex(newIdx);
+            setSelectedHistoryItem(items[newIdx]);
+            return;
+          }
+          if (e.key === 'ArrowUp' && items.length > 0) {
+            e.preventDefault();
+            const newIdx = Math.max(historyItemIndex - 1, 0);
+            setHistoryItemIndex(newIdx);
+            setSelectedHistoryItem(items[newIdx]);
+            return;
+          }
+
+          // Ctrl+R or Enter: open return for selected item
+          if ((e.ctrlKey && e.key === 'r') || e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedHistoryItem) {
+              const returned = selectedHistoryItem.returnedQty || 0;
+              const returnable = selectedHistoryItem.quantity - returned;
+              if (returnable > 0) {
+                openReturnForItem(selectedHistoryBill, selectedHistoryItem);
+              } else {
+                alert('All units for this item have already been returned.');
+              }
+            }
+            return;
+          }
+        }
+      }
+
+      // Ctrl+R outside of history modal context (fallback)
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex]);
+
+  // Also, when cartItems change, update discountAmount if it was set by customer discount
+
+  // Always recalculate discountAmount using only Customer Discount Base when cart changes, if not manually overridden
+  useEffect(() => {
+    if (selectedCustomer && !isDiscountManual) {
+      // If CARD, cap to 2%
+      const effectivePercentage = paymentMethod === 'CARD' ? Math.min(selectedCustomer.discountPercentage || 0, 2) : (selectedCustomer.discountPercentage || 0);
+      if (paymentMethod === 'CARD' && discountPercentage > 2) {
+        setDiscountPercentage(2);
+      }
+      const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+        if (!item.productDiscount || item.productDiscount === 0) {
+          return sum + (item.unitPrice * item.quantity);
+        }
+        return sum;
+      }, 0);
+      const customerDiscountTotal = customerDiscountBase * (effectivePercentage / 100);
+      setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
+    }
+  }, [cartItems, selectedCustomer, isDiscountManual, paymentMethod]);
+
+  // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
+
   return (
-    <div style={{ padding: 20, fontFamily: 'Arial, sans-serif' }}>
-      <h2>Billing / Sales</h2>
+    <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
+      <h2 style={{ fontSize: 20, marginBottom: 12 }}>Billing / Sales</h2>
 
-      {error && <div style={{ color: 'red', marginBottom: 12, padding: 10, background: '#fee', border: '1px solid red' }}>{error}</div>}
+      {error && <div style={{ color: 'red', marginBottom: 10, padding: 8, background: '#fee', border: '1px solid red', fontSize: 13 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 24, marginTop: 20 }}>
-        {/* LEFT SIDE: Customer + Product Search */}
-        <div style={{ flex: 1, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa' }}>
-          <h3>Customer Section</h3>
-          {!selectedCustomer ? (
-            <>
-              <input
-                type="text"
-                placeholder="Search customer by name, phone, address..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8 }}
-              />
-              {filteredCustomers.length > 0 && (
-                <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 200, overflowY: 'auto' }}>
-                  {filteredCustomers.map((c) => (
-                    <div
-                      key={c.customerId}
-                      onClick={() => handleSelectCustomer(c)}
-                      style={{ padding: 10, cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                    >
-                      <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setShowNewCustomerModal(true)}
-                style={{
-                  marginTop: 12,
-                  padding: '10px 16px',
-                  background: '#4caf50',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                }}
-              >
-                + Add New Customer
-              </button>
-            </>
-          ) : (
-            <div style={{ padding: 12, background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 4 }}>
-              <p style={{ margin: 0 }}>
-                <strong>Selected:</strong> {selectedCustomer.name}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Phone:</strong> {selectedCustomer.phone}
-              </p>
-              {selectedCustomer.address && (
-                <p style={{ margin: 0 }}>
-                  <strong>Address:</strong> {selectedCustomer.address}
-                </p>
-              )}
-              <p style={{ margin: 0 }}>
-                <strong>Default Discount:</strong> {selectedCustomer.discountPercentage || 0}%
-              </p>
-              <button
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setDiscountPercentage(0);
-                }}
-                style={{ marginTop: 8, padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-              >
-                Change Customer
-              </button>
-            </div>
-          )}
-
-          <hr style={{ margin: '24px 0' }} />
-
-          <h3>Product Search & Add</h3>
-          <input
-            type="text"
-            placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
-            value={productSearch}
-            onChange={(e) => setProductSearch(e.target.value)}
-            onKeyDown={handleProductSearchKeyDown}
-            style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8 }}
-          />
-          <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
-            <strong>Quick Add Instructions:</strong><br />
-            1. Type product name - dropdown appears<br />
-            2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
-            3. Product automatically added to cart (qty: 1)<br />
-            4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />
-            5. If multiple prices available, a selection dialog will appear
-            <br />
-            <span style={{ fontSize: 10, color: '#999' }}>
-              {allProducts.length} total products | {filteredProducts.length} filtered
-            </span>
-          </small>
-          {filteredProducts.length > 0 && (
-            <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
-              {filteredProducts.filter(p => p != null).map((p, idx) => {
-                const isSelected = idx === selectedProductIndex;
-                
-                // If product has multiple prices, show each price as a separate row
-                if (p.hasMultiplePrices && p.sellingPrices && p.sellingPrices.length > 1) {
-                  return p.sellingPrices.map((price, priceIdx) => (
-                    <div
-                      key={`${p.productId}-${priceIdx}`}
-                      onClick={() => handleSelectProductFromDropdown(p)}
-                      style={{
-                        padding: 12,
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #eee',
-                        background: isSelected && priceIdx === 0 ? '#e3f2fd' : '#fff'
-                      }}
-                      onMouseEnter={() => setSelectedProductIndex(idx)}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
-                            {p.name || 'N/A'}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                            {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
-                            Rs. {price.toFixed(2)}
-                          </div>
-                          {priceIdx > 0 && (
-                            <div style={{ fontSize: 10, color: '#999' }}>
-                              Option {priceIdx + 1}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ));
-                }
-                
-                // Single price product - show in one row
-                return (
-                  <div
-                    key={p.productId}
-                    onClick={() => handleSelectProductFromDropdown(p)}
-                    style={{
-                      padding: 12,
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #eee',
-                      background: isSelected ? '#e3f2fd' : '#fff'
-                    }}
-                    onMouseEnter={() => setSelectedProductIndex(idx)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
-                          {p.name || 'N/A'}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                          {p.category?.name || 'N/A'} | Stock: {p.totalStock || 0} units
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                        {p.sellingPrices && p.sellingPrices.length > 0 ? (
-                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#4caf50' }}>
-                            Rs. {p.sellingPrices[0].toFixed(2)}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: '#ff9800' }}>
-                            No Price
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT SIDE: Cart + Totals + Payment */}
-        <div style={{ flex: 1, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa' }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'nowrap', height: 'calc(100vh - 120px)' }}>
+        {/* LEFT SIDE: Cart + Totals + Payment */}
+        <div style={{ flex: '1.5 1 400px', minWidth: 380, border: '1px solid #ccc', padding: 16, borderRadius: 8, background: '#fafafa', boxSizing: 'border-box', overflowY: 'auto' }}>
           <h3>Cart ({cartItems.length} items)</h3>
           {cartItems.length === 0 ? (
             <p style={{ color: '#999' }}>No items added yet</p>
           ) : (
             <div style={{ marginBottom: 16 }}>
               {cartItems.filter(item => item && item.product).map((item, idx) => (
-                <div key={idx} style={{ padding: 10, background: '#fff', border: '1px solid #ddd', borderRadius: 4, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div key={idx} style={{ padding: 6, background: item.isReturn ? '#ffebee' : '#fff', border: item.isReturn ? '1px solid #ef9a9a' : '1px solid #ddd', borderRadius: 4, marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4, wordWrap: 'break-word', whiteSpace: 'normal' }}>
-                        {item.product.name}
+                      <div style={{ fontSize: 13, fontWeight: 'bold', wordWrap: 'break-word', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: item.isReturn ? '#c62828' : 'inherit' }}>
+                        {item.isReturn ? '↩ ' : ''}{item.product.name}
+                        {item.isReturn && item.originalBill && (
+                          <span style={{ marginLeft: 6, color: '#e65100', fontSize: 11 }}>(Bill: {item.originalBill})</span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
-                        Code: {item.product.productCode}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13 }}>Unit Price: Rs. {item.unitPrice.toFixed(2)}</span>
-                        <span style={{ fontSize: 13 }}>|</span>
-                        <span style={{ fontSize: 13 }}>Qty:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
-                          style={{ width: 60, padding: 4, fontSize: 13 }}
-                        />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        <span style={{ fontSize: 12 }}>Rs. {item.unitPrice.toFixed(2)}</span>
+                        <span style={{ fontSize: 12, color: '#999' }}>×</span>
+                        {item.isReturn ? (
+                          <span style={{ fontSize: 12, fontWeight: 'bold', color: '#c62828' }}>{Math.abs(item.quantity)}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
+                            style={{ width: 50, padding: 2, fontSize: 12 }}
+                          />
+                        )}
+                        {/* Inline product discount — only visible when customer discount is active */}
+                        {!item.isReturn && discountPercentage > 0 && (
+                          <>
+                            <span style={{ fontSize: 11, color: '#999' }}>Disc:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={item.productDiscount || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? 0 : Number(parseFloat(e.target.value).toFixed(2));
+                                const updated = [...cartItems];
+                                updated[idx].productDiscount = val;
+                                setCartItems(updated);
+                              }}
+                              style={{ width: 45, padding: 2, fontSize: 11 }}
+                            />
+                            <span style={{ fontSize: 11, color: '#999' }}>%</span>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right', minWidth: 100 }}>
-                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#2196f3', marginBottom: 8 }}>
-                        Rs. {item.subtotal.toFixed(2)}
+                    <div style={{ textAlign: 'right', minWidth: 80, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 'bold', color: item.isReturn ? '#c62828' : '#2196f3' }}>
+                        {item.isReturn ? '-' : ''}Rs. {Math.abs(
+                          item.isReturn
+                            ? item.subtotal
+                            : (discountPercentage > 0 && item.productDiscount && item.productDiscount > 0
+                              ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
+                              : item.unitPrice * item.quantity)
+                        ).toFixed(2)}
                       </div>
                       <button
                         onClick={() => removeCartItem(idx)}
-                        style={{ padding: '6px 12px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                        style={{ padding: '3px 8px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 11 }}
                       >
-                        Remove
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -780,38 +1064,143 @@ export default function Billing() {
               <span>Subtotal:</span>
               <strong>Rs. {subtotal.toFixed(2)}</strong>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span>Customer Discount Base:</span>
+              <span>Rs. {customerDiscountBase.toFixed(2)}</span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span>Discount (%):</span>
+              <span>Customer Discount (%):</span>
               <input
                 type="number"
                 min="0"
-                max="100"
+                max={paymentMethod === 'CARD' ? 2 : 100}
                 step="0.01"
                 value={discountPercentage}
-                onChange={(e) => setDiscountPercentage(parseFloat(e.target.value) || 0)}
-                style={{ width: 80, padding: 4 }}
+                onChange={e => {
+                  let newPercentage = parseFloat(e.target.value) || 0;
+                  if (paymentMethod === 'CARD' && newPercentage > 2) {
+                    newPercentage = 2;
+                    alert('Maximum discount for card payment is 2%');
+                  }
+                  setDiscountPercentage(newPercentage);
+                  const newDiscountAmount = customerDiscountBase * newPercentage / 100;
+                  setDiscountAmount(newDiscountAmount);
+                  setIsDiscountManual(false);
+                }}
+                style={{ width: 80, padding: 4, marginRight: 8 }}
               />
+              <span>or Discount Amount:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min="0"
+                  max={subtotal}
+                  step="0.01"
+                  value={discountAmount !== null && discountAmount !== undefined && discountAmount !== '' ? Number(parseFloat(discountAmount).toFixed(2)) : ''}
+                  onChange={e => {
+                    const val = e.target.value === '' ? '' : Number(parseFloat(e.target.value).toFixed(2));
+                    setDiscountAmount(val);
+                    setIsDiscountManual(true);
+                  }}
+                  style={{ width: 100, padding: 4 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setDiscountAmount(''); setIsDiscountManual(false); }}
+                  style={{ padding: '2px 8px', marginLeft: 4, background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                  title="Clear Discount Amount"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+            {discountPercentage > 0 && productDiscountTotal > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span>Discount Amount:</span>
-              <span>-Rs. {discountAmount.toFixed(2)}</span>
+              <span>Product Discounts:</span>
+              <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
+            </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span>Total Discount Applied:</span>
+              <span>-Rs. {(
+                isDiscountManual
+                  ? (productDiscountTotal + (discountAmount ? Number(parseFloat(discountAmount).toFixed(2)) : 0))
+                  : (productDiscountTotal + customerDiscountTotal)
+              ).toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: 8 }}>
               <span>Grand Total:</span>
               <span>Rs. {grandTotal.toFixed(2)}</span>
             </div>
+            {returnCartItems.length > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: '#c62828', fontWeight: 'bold' }}>
+                  <span>↩ Return Refund ({returnCartItems.length} item{returnCartItems.length > 1 ? 's' : ''}):</span>
+                  <span>- Rs. {returnRefundTotal.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 'bold', borderTop: '2px solid #e65100', paddingTop: 8, marginTop: 8, color: '#e65100' }}>
+                  <span>NET PAYABLE:</span>
+                  <span>Rs. {netPayable.toFixed(2)}</span>
+                </div>
+              </>
+            )}
           </div>
 
           <hr style={{ margin: '16px 0' }} />
 
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Payment Method:</label>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ width: '100%', padding: 8 }}>
+            <select value={paymentMethod} onChange={(e) => {
+              const method = e.target.value;
+              setPaymentMethod(method);
+              // If CARD, cap customer discount to 2%
+              if (method === 'CARD' && discountPercentage > 2) {
+                setDiscountPercentage(2);
+                const newDiscountAmount = customerDiscountBase * 2 / 100;
+                setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                setIsDiscountManual(false);
+              }
+            }} style={{ width: '100%', padding: 8 }}>
               <option value="CASH">Cash</option>
               <option value="CARD">Card</option>
               <option value="MOBILE_PAYMENT">Mobile Payment</option>
+              <option value="ONLINE_TRANSFER">Online Transfer</option>
+              <option value="CREDIT">Credit</option>
+              <option value="CHEQUE">Cheque</option>
               <option value="OTHER">Other</option>
+              <option value="OLD_MANUAL">Old Manual</option>
             </select>
+          </div>
+
+          {/* Amount Received & Balance Section */}
+          <div style={{ marginBottom: 12, padding: 12, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Amount Received (Rs.):</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(e.target.value)}
+                placeholder="Enter amount given by customer"
+                style={{ width: '100%', padding: 8, fontSize: 16, boxSizing: 'border-box' }}
+              />
+            </div>
+            {amountReceived !== '' && parseFloat(amountReceived) > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontSize: 18, 
+                fontWeight: 'bold',
+                padding: 8,
+                background: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2',
+                borderRadius: 4,
+                color: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828'
+              }}>
+                <span>{parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:'}</span>
+                <span>Rs. {Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -836,6 +1225,175 @@ export default function Billing() {
           >
             {loading ? 'Processing...' : 'Confirm & Create Billing'}
           </button>
+        </div>
+
+        {/* RIGHT SIDE: Product Search (top) + Customer (bottom) */}
+        <div style={{ flex: '1 1 300px', minWidth: 280, display: 'flex', flexDirection: 'column', gap: 16, boxSizing: 'border-box', overflowY: 'auto' }}>
+
+          {/* RIGHT TOP: Product Search & Add */}
+          <div style={{ border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa' }}>
+            <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Product Search & Add</h3>
+            <input
+              type="text"
+              placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              onKeyDown={handleProductSearchKeyDown}
+              style={{ width: '100%', padding: 10, fontSize: 14, marginBottom: 8, boxSizing: 'border-box' }}
+            />
+            <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
+              <strong>Quick Add Instructions:</strong><br />
+              1. Type product name - dropdown appears<br />
+              2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
+              3. Product automatically added to cart (qty: 1)<br />
+              4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />
+              5. If multiple prices available, a selection dialog will appear
+              <br />
+              <span style={{ fontSize: 10, color: '#999' }}>
+                {allProducts.length} total products | {filteredProducts.length} filtered
+              </span>
+            </small>
+            {filteredProducts.length > 0 && (
+              <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
+                {filteredProducts.filter(p => p != null).map((p, idx) => {
+                  const isSelected = idx === selectedProductIndex;
+                  
+                  return (
+                    <div
+                      key={p.productId}
+                      onClick={() => handleSelectProductFromDropdown(p)}
+                      style={{
+                        padding: 12,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        background: isSelected ? '#e3f2fd' : '#fff'
+                      }}
+                      onMouseEnter={() => setSelectedProductIndex(idx)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
+                            {p.name || 'N/A'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                            {p.category?.name || 'N/A'} | Code: {p.productCode || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
+                          <div style={{ fontSize: 12, color: '#666' }}>
+                            Click to add
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT BOTTOM: Customer Section */}
+          <div style={{ border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa', marginTop: 16 }}>
+            <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Customer Section</h3>
+            {!selectedCustomer ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search customer... (↑↓ Enter)"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (filteredCustomers.length > 0) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setCustomerDropdownIndex(prev => Math.min(prev + 1, filteredCustomers.length - 1));
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setCustomerDropdownIndex(prev => Math.max(prev - 1, 0));
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const c = filteredCustomers[customerDropdownIndex];
+                        if (c) handleSelectCustomer(c);
+                      }
+                    }
+                    if (e.key === 'Escape') {
+                      setCustomerSearch('');
+                      setFilteredCustomers([]);
+                    }
+                  }}
+                  style={{ width: '100%', padding: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }}
+                />
+                {filteredCustomers.length > 0 && (
+                  <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 180, overflowY: 'auto' }}>
+                    {filteredCustomers.map((c, idx) => (
+                      <div
+                        key={c.customerId}
+                        onClick={() => handleSelectCustomer(c)}
+                        onMouseEnter={() => setCustomerDropdownIndex(idx)}
+                        style={{
+                          padding: 8,
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee',
+                          fontSize: 13,
+                          background: idx === customerDropdownIndex ? '#e3f2fd' : '#fff',
+                        }}
+                      >
+                        <strong>{c.name}</strong> - {c.phone} {c.address && `(${c.address})`}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowNewCustomerModal(true)}
+                  style={{
+                    marginTop: 12,
+                    padding: '10px 16px',
+                    background: '#4caf50',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Add New Customer
+                </button>
+              </>
+            ) : (
+              <div style={{ padding: 12, background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 4 }}>
+                <p style={{ margin: 0 }}>
+                  <strong>Selected:</strong> {selectedCustomer.name}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Phone:</strong> {selectedCustomer.phone}
+                </p>
+                {selectedCustomer.address && (
+                  <p style={{ margin: 0 }}>
+                    <strong>Address:</strong> {selectedCustomer.address}
+                  </p>
+                )}
+                <p style={{ margin: 0 }}>
+                  <strong>Default Discount:</strong> {selectedCustomer.discountPercentage || 0}%
+                </p>
+                <button
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setDiscountPercentage(0);
+                  }}
+                  style={{ marginTop: 8, padding: '6px 12px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                >
+                  Change Customer
+                </button>
+                <button
+                  onClick={fetchCustomerBills}
+                  style={{ marginTop: 8, marginLeft: 8, padding: '6px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                  title="Ctrl+H"
+                >
+                  📋 History (Ctrl+H)
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -909,7 +1467,24 @@ export default function Billing() {
           }}
           onClick={() => setShowPriceOptions(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 500 }}>
+          <div
+            ref={priceModalRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 500 }}
+            tabIndex={0}
+            onKeyDown={e => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedPriceOptionIndex(prev => (prev < priceOptions.length - 1 ? prev + 1 : prev));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedPriceOptionIndex(prev => (prev > 0 ? prev - 1 : 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSelectPriceOption(null, selectedPriceOptionIndex);
+              }
+            }}
+          >
             <h3>Select Selling Price</h3>
             <p style={{ color: '#666', marginBottom: 16 }}>
               This product has multiple selling prices in inventory. Please select one:
@@ -918,16 +1493,17 @@ export default function Billing() {
               {priceOptions.map((option, idx) => (
                 <div
                   key={idx}
-                  onClick={() => handleSelectPriceOption(option)}
+                  onClick={() => handleSelectPriceOption(option, idx)}
                   style={{
                     padding: 16,
-                    border: '2px solid #2196f3',
+                    border: selectedPriceOptionIndex === idx ? '3px solid #1976d2' : '2px solid #2196f3',
                     borderRadius: 8,
                     marginBottom: 12,
                     cursor: 'pointer',
-                    background: '#f0f8ff',
-                    ':hover': { background: '#e3f2fd' }
+                    background: selectedPriceOptionIndex === idx ? '#e3f2fd' : '#f0f8ff',
                   }}
+                  tabIndex={0}
+                  onMouseEnter={() => setSelectedPriceOptionIndex(idx)}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
@@ -999,10 +1575,10 @@ export default function Billing() {
             >
               <div style={{ fontSize: 48, marginBottom: 8 }}>✓</div>
               <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
-                Billing Created Successfully!
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Processed Successfully!' : 'Billing Created Successfully!'}
               </div>
               <div style={{ fontSize: 14, opacity: 0.9 }}>
-                Bill #{createdBilling.billingNumber}
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Receipt' : `Bill #${createdBilling.billingNumber}`}
               </div>
             </div>
 
@@ -1012,47 +1588,45 @@ export default function Billing() {
               style={{
                 width: 320,
                 margin: '0 auto',
-                padding: '24px 20px',
+                padding: '16px 12px',
                 fontFamily: 'monospace',
                 fontSize: 11,
-                lineHeight: 1.5,
+                lineHeight: 1.4,
                 background: '#fff',
+                color: '#000',
               }}
             >
               {/* Store Header */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 10 }}>
+                <div style={{ textAlign: 'center', marginBottom: 6 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
-                    style={{ maxWidth: 140, maxHeight: 70 }}
+                    style={{ maxWidth: 120, maxHeight: 50 }}
                   />
                 </div>
               )}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 2 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                 {storeSettings?.address || 'Store Address'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
-                Tel: {storeSettings?.phone || 'N/A'}
-              </div>
               {storeSettings?.email && (
-                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                   {storeSettings.email}
                 </div>
               )}
               {storeSettings?.taxId && (
-                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
+                <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 1 }}>
                   Tax ID: {storeSettings.taxId}
                 </div>
               )}
 
-              <div style={{ borderTop: '2px solid #000', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
               {/* Bill Details */}
-              <div style={{ fontSize: 11, marginBottom: 10 }}>
+              <div style={{ fontSize: 11, marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <strong>Invoice #:</strong>
                   <span>{createdBilling.billingNumber}</span>
@@ -1065,10 +1639,6 @@ export default function Billing() {
                   <strong>Customer:</strong>
                   <span>{createdBilling.customerName}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <strong>Phone:</strong>
-                  <span>{createdBilling.customerPhone}</span>
-                </div>
                 {createdBilling.paymentMethod && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <strong>Payment:</strong>
@@ -1077,87 +1647,157 @@ export default function Billing() {
                 )}
               </div>
 
-              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               {/* Items Table */}
-              <table style={{ width: '100%', fontSize: 10, marginBottom: 10, borderCollapse: 'collapse' }}>
+              <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 'bold' }}>Item</th>
-                    <th style={{ textAlign: 'center', padding: '6px 0', fontWeight: 'bold' }}>Qty</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Price</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>Total</th>
+                    <th style={{ textAlign: 'left', padding: '3px 0', fontWeight: 'bold' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {createdBilling.items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px dotted #ccc' }}>
-                      <td style={{ padding: '6px 0', fontSize: 10 }}>
-                        <div style={{ fontWeight: 'bold' }}>{item.productName}</div>
-                        {item.productCode && (
-                          <div style={{ fontSize: 8, color: '#666' }}>Code: {item.productCode}</div>
-                        )}
+                    <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '3px 0', fontSize: 10, fontWeight: 'bold' }}>
+                        {item.productName}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '6px 0' }}>{item.quantity}</td>
-                      <td style={{ textAlign: 'right', padding: '6px 0' }}>
+                      <td style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.unitPrice.toFixed(2)}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold' }}>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.subtotal.toFixed(2)}
                       </td>
                     </tr>
                   ))}
+                  {/* Return items */}
+                  {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan="4" style={{ padding: '4px 0 2px', fontWeight: 'bold', fontSize: 10, borderTop: '1px solid #000' }}>
+                          ↩ RETURNS:
+                        </td>
+                      </tr>
+                      {createdBilling.returnCartItems.map((ri, idx) => (
+                        <tr key={`ret-${idx}`} style={{ borderBottom: '1px solid #ccc' }}>
+                          <td style={{ padding: '2px 0', fontSize: 10, fontWeight: 'bold' }}>
+                            {ri.productName}
+                            <div style={{ fontSize: 8, fontWeight: 'bold' }}>Bill: {ri.originalBill}{ri.discountPercentage > 0 ? ` | Disc: ${ri.discountPercentage}%` : ''}</div>
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>{ri.quantity}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>
+                            {ri.unitPrice.toFixed(2)}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>
+                            -{ri.refundAmount.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
                 </tbody>
               </table>
 
-              <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               {/* Totals */}
-              <div style={{ fontSize: 11 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span>Subtotal:</span>
-                  <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
-                </div>
-                {createdBilling.discountPercentage > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#d32f2f' }}>
-                    <span>Discount ({createdBilling.discountPercentage}%):</span>
-                    <span>- Rs. {createdBilling.discountAmount.toFixed(2)}</span>
-                  </div>
+              <div style={{ fontSize: 11, fontWeight: 'bold' }}>
+                {createdBilling.items.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span>Subtotal:</span>
+                      <span>Rs. {createdBilling.subtotal.toFixed(2)}</span>
+                    </div>
+                    {((productDiscountTotal + customerDiscountTotal) > 0) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span>Discount:</span>
+                        <span>- Rs. {(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        paddingTop: 4,
+                        borderTop: '2px solid #000',
+                        fontSize: 14,
+                        marginTop: 2,
+                      }}
+                    >
+                      <span>GRAND TOTAL:</span>
+                      <span>Rs. {(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+                    </div>
+                  </>
                 )}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    paddingTop: 10,
-                    borderTop: '2px solid #000',
-                    fontWeight: 'bold',
-                    fontSize: 14,
-                    marginTop: 6,
-                  }}
-                >
-                  <span>GRAND TOTAL:</span>
-                  <span>Rs. {createdBilling.grandTotal.toFixed(2)}</span>
-                </div>
+
+                {/* Return Refund */}
+                {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, fontSize: 12 }}>
+                      <span>↩ Return Refund:</span>
+                      <span>- Rs. {createdBilling.returnRefundTotal.toFixed(2)}</span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        paddingTop: 4,
+                        borderTop: '2px solid #000',
+                        fontSize: 16,
+                        marginTop: 2,
+                      }}
+                    >
+                      <span>NET PAYABLE:</span>
+                      <span>Rs. {createdBilling.netPayable.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+
+                {/* Amount Received and Balance */}
+                {createdBilling.amountReceived > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, fontSize: 12 }}>
+                      <span>Received:</span>
+                      <span>Rs. {createdBilling.amountReceived.toFixed(2)}</span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontSize: 13,
+                      padding: '2px 0',
+                    }}>
+                      <span>{createdBilling.balanceAmount >= 0 ? 'Balance:' : 'Due:'}</span>
+                      <span>Rs. {Math.abs(createdBilling.balanceAmount).toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {createdBilling.notes && (
                 <>
-                  <div style={{ borderTop: '1px dashed #333', margin: '10px 0' }}></div>
-                  <div style={{ fontSize: 9, fontStyle: 'italic', wordWrap: 'break-word' }}>
-                    <strong>Notes:</strong> {createdBilling.notes}
+                  <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                  <div style={{ fontSize: 9, fontWeight: 'bold', wordWrap: 'break-word' }}>
+                    Notes: {createdBilling.notes}
                   </div>
                 </>
               )}
 
-              <div style={{ borderTop: '2px solid #000', margin: '12px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
               {/* Footer */}
-              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 12 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Thank You!</div>
-                <div style={{ fontSize: 9 }}>Please keep this bill for warranty claims</div>
+              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>No. of Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>Thank You, Come Again!</div>
+                <div style={{ fontSize: 10, fontWeight: 'bold' }}>Tel: {storeSettings?.phone || 'N/A'}</div>
               </div>
 
-              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 10, color: '#999' }}>
+              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 6, fontWeight: 'bold' }}>
                 Powered by Pharmacy Management System
               </div>
             </div>
@@ -1210,6 +1850,252 @@ export default function Billing() {
                 }}
               >
                 Close Without Print
+              </button>
+              {hasRole && hasRole('admin') && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) {
+                      try {
+                        await api(`/api/billings/${createdBilling.billingId}`, {
+                          method: 'DELETE',
+                          token,
+                        });
+                        alert('Billing deleted successfully.');
+                        setShowBillPreview(false);
+                        setCreatedBilling(null);
+                        resetForm();
+                      } catch (err) {
+                        alert('Failed to delete billing: ' + (err.message || 'Error'));
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '12px 32px',
+                    background: '#f44336',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Delete Billing
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Billing History Modal (Ctrl+H) */}
+      {showCustomerHistory && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+          }}
+          onClick={() => { setShowCustomerHistory(false); setSelectedHistoryItem(null); }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 900, width: '95%', maxHeight: '90vh', overflow: 'auto', padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>📋 Billing History — {selectedCustomer?.name}</h3>
+              <button onClick={() => { setShowCustomerHistory(false); setSelectedHistoryItem(null); }} style={{ background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>⌨ Use ↑↓ arrows to navigate, Enter to select, {selectedHistoryBill ? 'Ctrl+R / Enter to return item, Esc to go back' : 'Esc to close'}</div>
+            {historyLoading ? (
+              <div>Loading...</div>
+            ) : customerBills.length === 0 ? (
+              <div style={{ color: '#888', textAlign: 'center', padding: 32 }}>No billing history found for this customer.</div>
+            ) : (
+              <>
+                {!selectedHistoryBill ? (
+                  <>
+                  <div style={{ marginBottom: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="🔍 Search by bill number..."
+                      value={historySearch}
+                      onChange={e => { setHistorySearch(e.target.value); setHistoryBillIndex(0); }}
+                      style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #ccc', borderRadius: 4, boxSizing: 'border-box' }}
+                      autoFocus
+                    />
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#f0f0f0' }}>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Bill #</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Date</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Items</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Grand Total</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Discount %</th>
+                        <th style={{ padding: 8, border: '1px solid #ddd' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerBills.filter(b => !historySearch || (b.billingNumber && b.billingNumber.toLowerCase().includes(historySearch.toLowerCase()))).map((bill, idx) => (
+                        <tr key={bill.billingId}
+                          onClick={() => { setHistoryBillIndex(idx); }}
+                          onDoubleClick={() => { setHistoryBillIndex(idx); setSelectedHistoryBill(bill); setHistoryItemIndex(0); setSelectedHistoryItem((bill.items || [])[0] || null); }}
+                          style={{ cursor: 'pointer', background: idx === historyBillIndex ? '#e3f2fd' : 'transparent' }}
+                        >
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{bill.billingNumber}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{new Date(bill.billingDate).toLocaleDateString()}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>{bill.items?.length || 0}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Rs. {bill.grandTotal?.toFixed(2)}</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>{bill.discountPercentage || 0}%</td>
+                          <td style={{ padding: 8, border: '1px solid #ddd' }}>
+                            <button
+                              onClick={() => { setSelectedHistoryBill(bill); setHistoryItemIndex(0); setSelectedHistoryItem((bill.items || [])[0] || null); }}
+                              style={{ background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+                            >
+                              View Items (Enter)
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </>
+                ) : (
+                  <div>
+                    <button onClick={() => { setSelectedHistoryBill(null); setSelectedHistoryItem(null); }} style={{ marginBottom: 12, padding: '6px 16px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}>
+                      ← Back to Bills
+                    </button>
+                    <h4 style={{ marginBottom: 8 }}>Bill #{selectedHistoryBill.billingNumber} — {new Date(selectedHistoryBill.billingDate).toLocaleDateString()} — Discount: {selectedHistoryBill.discountPercentage || 0}%</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f0f0f0' }}>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Product</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Code</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Qty Sold</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Returned</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Returnable</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Unit Price</th>
+                          <th style={{ padding: 8, border: '1px solid #ddd' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedHistoryBill.items || []).map((item, idx) => {
+                          const returned = item.returnedQty || 0;
+                          const returnable = item.quantity - returned;
+                          const isSelected = idx === historyItemIndex;
+                          return (
+                            <tr key={item.billingItemId}
+                              onClick={() => { setHistoryItemIndex(idx); setSelectedHistoryItem(item); }}
+                              style={{ cursor: 'pointer', background: isSelected ? '#e3f2fd' : 'transparent' }}
+                            >
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>{item.productName}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>{item.productCode}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>{item.quantity}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center', color: returned > 0 ? '#c62828' : '#888' }}>{returned}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold', color: returnable > 0 ? '#2e7d32' : '#888' }}>{returnable}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Rs. {item.unitPrice?.toFixed(2)}</td>
+                              <td style={{ padding: 8, border: '1px solid #ddd' }}>
+                                {returnable > 0 ? (
+                                  <button
+                                    onClick={() => openReturnForItem(selectedHistoryBill, item)}
+                                    style={{ background: '#e65100', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+                                    title="Ctrl+R"
+                                  >
+                                    ↩ Return (Ctrl+R)
+                                  </button>
+                                ) : (
+                                  <span style={{ color: '#888', fontSize: 12 }}>Fully returned</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Return Quantity Modal (Ctrl+R) */}
+      {showReturnModal && returnItem && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000,
+          }}
+          onClick={() => setShowReturnModal(false)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 480, width: '90%', padding: 24 }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#e65100' }}>↩ Process Return</h3>
+            <div style={{ marginBottom: 16, background: '#fff3e0', padding: 12, borderRadius: 6, border: '1px solid #ffe0b2' }}>
+              <div><strong>Product:</strong> {returnItem.productName} ({returnItem.productCode})</div>
+              <div><strong>From Bill:</strong> {returnItem.billingNumber}</div>
+              <div><strong>Unit Price:</strong> Rs. {returnItem.unitPrice?.toFixed(2)}</div>
+              <div><strong>Sold Qty:</strong> {returnItem.quantity}</div>
+              <div><strong>Already Returned:</strong> {returnItem.returnedQty || 0}</div>
+              <div><strong>Max Returnable:</strong> {returnItem.maxReturnable}</div>
+              <div><strong>Original Bill Discount:</strong> {returnItem.discountPercentage}%</div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>Return Quantity:</label>
+              <input
+                type="number"
+                min="1"
+                max={returnItem.maxReturnable}
+                value={returnQty}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setReturnQty('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num) && num >= 0 && num <= returnItem.maxReturnable) {
+                      setReturnQty(num);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // Clamp on blur (when user leaves the field)
+                  const num = parseInt(returnQty, 10);
+                  if (isNaN(num) || num < 1) setReturnQty(1);
+                  else if (num > returnItem.maxReturnable) setReturnQty(returnItem.maxReturnable);
+                }}
+                style={{ width: '100%', padding: 8, fontSize: 16, boxSizing: 'border-box' }}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleProcessReturn(); }}
+              />
+            </div>
+
+            {/* Refund calculation preview */}
+            <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>Gross Amount:</span>
+                <span>Rs. {(returnItem.unitPrice * returnQty).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#c62828' }}>
+                <span>Discount Deduction ({returnItem.discountPercentage}%):</span>
+                <span>- Rs. {(returnItem.unitPrice * returnQty * returnItem.discountPercentage / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 16, borderTop: '2px solid #333', paddingTop: 8, marginTop: 4 }}>
+                <span>Refund Amount:</span>
+                <span>Rs. {(returnItem.unitPrice * returnQty * (1 - returnItem.discountPercentage / 100)).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowReturnModal(false)}
+                style={{ padding: '8px 20px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleProcessReturn}
+                disabled={returnProcessing}
+                style={{ padding: '8px 20px', background: returnProcessing ? '#ccc' : '#e65100', color: '#fff', border: 'none', borderRadius: 4, cursor: returnProcessing ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+              >
+                {returnProcessing ? 'Processing...' : `Confirm Return (${returnQty} units)`}
               </button>
             </div>
           </div>

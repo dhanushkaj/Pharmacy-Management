@@ -4,7 +4,7 @@ import { AuthContext } from '../components/AuthContext';
 
 const API_BASE = process.env.REACT_APP_API_BASE || '';
 
-const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0' };
+const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' };
 
 const CustomerManagement = () => {
   const { token: ctxToken } = useContext(AuthContext);
@@ -76,6 +76,7 @@ const CustomerManagement = () => {
         email: form.email?.trim() || null,
         address: form.address?.trim() || null,
         discountPercentage: parseFloat(form.discountPercentage) || 0,
+        birthday: form.birthday || null,
       };
 
       const isUpdate = !!form.customerId;
@@ -109,6 +110,7 @@ const CustomerManagement = () => {
       email: c.email || '',
       address: c.address || '',
       discountPercentage: c.discountPercentage || '0',
+      birthday: c.birthday || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -202,6 +204,18 @@ const CustomerManagement = () => {
             style={{ padding: 8 }}
           />
         </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 180 }}>
+          <label>Birthday</label>
+          <input
+            type="date"
+            name="birthday"
+            value={form.birthday}
+            onChange={handleChange}
+            style={{ padding: 8 }}
+          />
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150 }}>
           <label>Discount %</label>
           <input
@@ -269,6 +283,7 @@ const CustomerManagement = () => {
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Phone</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Email</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Address</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Birthday</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Discount %</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Actions</th>
           </tr>
@@ -281,6 +296,7 @@ const CustomerManagement = () => {
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.phone || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.email || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.address || '-'}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.birthday ? c.birthday : '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.discountPercentage || 0}%</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>
                 <button

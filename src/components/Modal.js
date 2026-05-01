@@ -5,14 +5,16 @@ const Modal = ({ open, title, children, onClose }) => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-      background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+      background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16, boxSizing: 'border-box', zIndex: 1000
     }}>
       <div style={{
-        background: '#fff', padding: 32, borderRadius: 8, minWidth: 320, boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+        background: '#fff', padding: 24, borderRadius: 8, minWidth: 280, maxWidth: '90vw', maxHeight: '85vh',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.2)', overflowY: 'auto', boxSizing: 'border-box'
       }}>
-        <h3>{title}</h3>
+        <h3 style={{ marginTop: 0, fontSize: 18 }}>{title}</h3>
         {children}
-        <button style={{ marginTop: 24 }} onClick={onClose}>Close</button>
+        <button style={{ marginTop: 20 }} onClick={onClose}>Close</button>
       </div>
     </div>
   );

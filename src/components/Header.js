@@ -42,38 +42,45 @@ const Header = () => {
 
   return (
     <header style={{
-      background: '#1976d2',
+      position: 'relative',
+      background: 'linear-gradient(90deg, #183153 0%, #1976d2 30%, #64b5f6 100%)',
       color: '#fff',
-      padding: '18px 32px',
-      fontSize: '1.5rem',
+      padding: '12px 20px 12px 0',
+      fontSize: '1.2rem',
       fontWeight: 'bold',
       letterSpacing: '1px',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between'
+      justifyContent: 'space-between',
+      minHeight: 56,
+      borderLeft: 'none',
+      boxShadow: '0 2px 8px 0 rgba(25,118,210,0.10)',
+      flexWrap: 'nowrap',
+      gap: 8
     }}>
-      <span>Pharmacy Management System</span>
-      <nav>
-        {!token && <Link to="/login" style={{ color: '#fff', marginRight: 24, textDecoration: 'none', fontSize: '1rem' }}>Login</Link>}
+      {/* Curved SVG transition at top-left */}
+      <span style={{ letterSpacing: '1px', textShadow: '0 2px 8px #1565c0', marginLeft: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '1.1rem' }}>Pharmacy Management System</span>
+      <nav style={{ flexShrink: 0 }}>
+        {!token && <Link to="/login" style={{ color: '#fff', marginRight: 16, textDecoration: 'none', fontSize: '0.9rem' }}>Login</Link>}
         {token && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {/* Alert Bell Icon */}
             <div style={{ position: 'relative', cursor: 'pointer' }} onClick={handleAlertClick}>
-              <FaBell size={24} style={{ color: criticalCount > 0 ? '#ff4444' : '#fff' }} />
+              <FaBell size={20} style={{ color: criticalCount > 0 ? '#ff4444' : '#fff' }} />
               {alertCount > 0 && (
                 <span style={{
                   position: 'absolute',
-                  top: -8,
-                  right: -8,
+                  top: -6,
+                  right: -6,
                   background: '#ff4444',
                   color: '#fff',
                   borderRadius: '50%',
-                  width: 20,
-                  height: 20,
+                  width: 16,
+                  height: 16,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.7rem',
+                  fontSize: '0.6rem',
                   fontWeight: 'bold',
                   border: '2px solid #1976d2'
                 }}>
@@ -82,8 +89,8 @@ const Header = () => {
               )}
             </div>
             
-            {username && <span style={{ color: '#fff', fontSize: '0.9rem' }}>Welcome, {username}</span>}
-            <button onClick={handleLogout} style={{ color: '#1976d2', background: '#fff', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>Logout</button>
+            {username && <span style={{ color: '#fff', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>Hi, {username}</span>}
+            <button onClick={handleLogout} style={{ color: '#1976d2', background: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }}>Logout</button>
           </div>
         )}
       </nav>

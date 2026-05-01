@@ -20,7 +20,12 @@ const Login = () => {
       });
       if (!res.ok) throw new Error('Invalid credentials');
       const data = await res.json();
-      login(data.token, data.role);
+      // Parse roles as array if needed
+      let roles = data.roles;
+      if (typeof roles === 'string') {
+        try { roles = JSON.parse(roles); } catch { roles = [roles]; }
+      }
+      login(data.token, roles, data.username);
       navigate('/');
     } catch (err) {
       setError('Login failed');

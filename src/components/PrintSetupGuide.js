@@ -37,21 +37,25 @@ export default function PrintSetupGuide() {
   ];
 
   const kioskModeSteps = isMac ? [
-    'Close this browser window',
-    'Navigate to: /Users/[YourUsername]/Documents/pharmacy/New_Pharmacy_Project/',
+    'Make sure the pharmacy frontend is running (npm start)',
+    'Open Finder and navigate to the pharmacy frontend folder',
     'Double-click "start-pharmacy-mac.command"',
     'If prompted, allow execution in Security & Privacy settings',
-    'The app will launch in kiosk mode with auto-printing enabled'
+    'The app will launch in kiosk mode with auto-printing enabled',
+    'To exit kiosk mode, press Cmd+Q'
   ] : isWindows ? [
-    'Close this browser window',
-    'Navigate to: C:\\...\\pharmacy\\New_Pharmacy_Project\\',
+    'Make sure the pharmacy frontend is running (npm start)',
+    'Open File Explorer and navigate to the pharmacy frontend folder',
     'Double-click "start-pharmacy-windows.bat"',
-    'The app will launch in kiosk mode with auto-printing enabled'
+    'If Chrome is not found, the script will try Microsoft Edge',
+    'The app will launch in kiosk mode with auto-printing enabled',
+    'To exit kiosk mode, press Alt+F4'
   ] : [
-    'Close this browser window',
+    'Make sure the pharmacy frontend is running (npm start)',
     'Open terminal in pharmacy project folder',
     'Run: google-chrome --kiosk --kiosk-printing --app=http://localhost:3000',
-    'The app will launch in kiosk mode with auto-printing enabled'
+    'The app will launch in kiosk mode with auto-printing enabled',
+    'To exit kiosk mode, press Alt+F4'
   ];
 
   if (!isOpen) {

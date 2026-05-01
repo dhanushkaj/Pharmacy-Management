@@ -17,6 +17,7 @@ import ProductBin from './pages/ProductBin';
 import SettingsSecurity from './pages/SettingsSecurity';
 import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
+import DayEndReport from './pages/reports/DayEndReport';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
 import InventoryReport from './pages/reports/InventoryReport';
@@ -28,9 +29,12 @@ import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
-import PrintSetupGuide from './components/PrintSetupGuide';
+
+// import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
 import GRNListView from './pages/GRNListView';
+import UserProfile from './pages/UserProfile';
+import AdminUserManagement from './pages/AdminUserManagement';
 
 const AppContent = () => {
   const location = useLocation();
@@ -58,6 +62,7 @@ const AppContent = () => {
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
+            <Route path="/reports/day-end" element={<PrivateRoute><DayEndReport /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
@@ -69,14 +74,19 @@ const AppContent = () => {
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />
+            <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
+            <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
+            <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}
-        {!isAuthPage && <PrintSetupGuide />}
+        {/* {!isAuthPage && <PrintSetupGuide />} */}
       </div>
     </div>
   );
 };
+
+import CustomerCreditReport from './pages/CustomerCreditReport';
 
 const App = () => (
   <AuthProvider>

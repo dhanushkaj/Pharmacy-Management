@@ -18,6 +18,7 @@ const GRNListView = () => {
   const [grns, setGrns] = useState([]);
   const [filteredGrns, setFilteredGrns] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [paidFilter, setPaidFilter] = useState(""); // "", "paid", "unpaid"
   const [selectedGrn, setSelectedGrn] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,27 +48,28 @@ const GRNListView = () => {
 
   // Filter GRNs when search term changes
   useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredGrns(grns);
-    } else {
+    let filtered = grns;
+    if (searchTerm.trim() !== "") {
       const searchLower = searchTerm.toLowerCase();
-      const filtered = grns.filter((grn) => {
-        // Search in GRN Code
+      filtered = filtered.filter((grn) => {
         const grnCodeMatch = grn.grnCode.toLowerCase().includes(searchLower);
-        
-        // Search in PO Code
-        const poCodeMatch = grn.purchaseOrderCode && 
-          grn.purchaseOrderCode.toLowerCase().includes(searchLower);
-        
-        // Search in Date (formatted)
+        const poCodeMatch = grn.purchaseOrderCode && grn.purchaseOrderCode.toLowerCase().includes(searchLower);
+        const supplierMatch = grn.supplierName && grn.supplierName.toLowerCase().includes(searchLower);
+        const productMatch = Array.isArray(grn.items) && grn.items.some(item => item.productName && item.productName.toLowerCase().includes(searchLower));
         const dateStr = formatDate(grn.createdAt);
         const dateMatch = dateStr && dateStr.toLowerCase().includes(searchLower);
-        
-        return grnCodeMatch || poCodeMatch || dateMatch;
+        // Paid status search
+        const paidMatch = (searchLower === "paid" && grn.paid) || (searchLower === "unpaid" && !grn.paid);
+        return grnCodeMatch || poCodeMatch || supplierMatch || productMatch || dateMatch || paidMatch;
       });
-      setFilteredGrns(filtered);
     }
-  }, [searchTerm, grns]);
+    if (paidFilter === "paid") {
+      filtered = filtered.filter(grn => grn.paid);
+    } else if (paidFilter === "unpaid") {
+      filtered = filtered.filter(grn => !grn.paid);
+    }
+    setFilteredGrns(filtered);
+  }, [searchTerm, grns, paidFilter]);
 
   const loadGrns = async () => {
     setLoading(true);
@@ -192,14 +194,19 @@ const GRNListView = () => {
       )}
 
       {/* Search Box */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'center' }}>
         <input
           type="text"
-          placeholder="Search by GRN Code, PO Code, or Date..."
+          placeholder="Search by GRN Code, PO Code, Supplier, Product, Date, Paid/Unpaid..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={searchInput}
         />
+        <select value={paidFilter} onChange={e => setPaidFilter(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}>
+          <option value="">All</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
+        </select>
         {searchTerm && (
           <span style={{ marginLeft: 12, color: "#666" }}>
             Found {filteredGrns.length} result(s)
@@ -218,8 +225,13 @@ const GRNListView = () => {
               <tr style={{ background: "#f8f9fa" }}>
                 <th style={th}>GRN Code</th>
                 <th style={th}>PO Code</th>
+                <th style={th}>Supplier</th>
                 <th style={th}>Created Date</th>
                 <th style={th}>Status</th>
+                <th style={th}>Paid</th>
+                <th style={th}>Due Date</th>
+                <th style={th}>Due Days</th>
+                <th style={th}>Cheque Date</th>
                 <th style={th}>Approved By</th>
                 <th style={th}>Approved Date</th>
                 <th style={th}>Actions</th>
@@ -230,8 +242,13 @@ const GRNListView = () => {
                 <tr key={grn.id} style={tr}>
                   <td style={td}>{grn.grnCode}</td>
                   <td style={td}>{grn.purchaseOrderCode}</td>
+                  <td style={td}>{grn.supplierName || 'N/A'}</td>
                   <td style={td}>{formatDate(grn.createdAt)}</td>
                   <td style={td}>{getStatusBadge(grn.status)}</td>
+                  <td style={td}>{grn.paid ? 'Paid' : 'Unpaid'}</td>
+                  <td style={td}>{grn.paymentDueDate ? formatDate(grn.paymentDueDate) : 'N/A'}</td>
+                  <td style={td}>{typeof grn.paymentDueDays === 'number' ? grn.paymentDueDays : 'N/A'}</td>
+                  <td style={td}>{grn.chequeDate ? formatDate(grn.chequeDate) : 'N/A'}</td>
                   <td style={td}>{grn.approvedUser || "N/A"}</td>
                   <td style={td}>{formatDate(grn.approvedDate)}</td>
                   <td style={td}>
@@ -355,8 +372,28 @@ const GRNListView = () => {
                 <span>{selectedGrn.purchaseOrderCode}</span>
               </div>
               <div style={detailRow}>
+                <strong>Supplier:</strong>
+                <span>{selectedGrn.supplierName || 'N/A'}</span>
+              </div>
+              <div style={detailRow}>
                 <strong>Status:</strong>
                 {getStatusBadge(selectedGrn.status)}
+              </div>
+              <div style={detailRow}>
+                <strong>Paid:</strong>
+                <span>{selectedGrn.paid ? 'Paid' : 'Unpaid'}</span>
+              </div>
+              <div style={detailRow}>
+                <strong>Due Date:</strong>
+                <span>{selectedGrn.paymentDueDate ? formatDate(selectedGrn.paymentDueDate) : 'N/A'}</span>
+              </div>
+              <div style={detailRow}>
+                <strong>Due Days:</strong>
+                <span>{typeof selectedGrn.paymentDueDays === 'number' ? selectedGrn.paymentDueDays : 'N/A'}</span>
+              </div>
+              <div style={detailRow}>
+                <strong>Cheque Date:</strong>
+                <span>{selectedGrn.chequeDate ? formatDate(selectedGrn.chequeDate) : 'N/A'}</span>
               </div>
               <div style={detailRow}>
                 <strong>Created Date:</strong>
@@ -422,7 +459,15 @@ const GRNListView = () => {
               </tfoot>
             </table>
 
-            <div style={{ marginTop: 24, textAlign: "right" }}>
+            <div style={{ marginTop: 24, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              {selectedGrn.status === "PENDING" && (
+                <button
+                  onClick={() => navigate(`/grn?grnId=${selectedGrn.id}`)}
+                  style={btnApprove}
+                >
+                  Edit & Approve
+                </button>
+              )}
               <button onClick={closeDetailsModal} style={btnSecondary}>
                 Close
               </button>

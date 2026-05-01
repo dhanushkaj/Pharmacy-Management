@@ -73,12 +73,13 @@ const SalesReport = () => {
     setProductFilter('');
   };
 
-  // Filter by customer or billing number if needed
-  const filteredSales = groupedSales.filter(s =>
-    !productFilter ||
-    (s.customerName && s.customerName.toLowerCase().includes(productFilter.toLowerCase())) ||
-    (s.billingNumber && s.billingNumber.toLowerCase().includes(productFilter.toLowerCase()))
-  );
+  // Filter by product name in items
+  const filteredSales = groupedSales.filter(s => {
+    if (!productFilter) return true;
+    const filter = productFilter.toLowerCase();
+    // Match if any item in the bill matches the product name
+    return s.items && s.items.some(item => item.productName && item.productName.toLowerCase().includes(filter));
+  });
 
   const totalSales = filteredSales.reduce((sum, s) => sum + s.totalSales, 0);
   const totalQuantity = filteredSales.reduce((sum, s) => sum + s.totalQuantity, 0);

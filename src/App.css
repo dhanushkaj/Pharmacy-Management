@@ -7,9 +7,140 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0; /* Prevent flex item from overflowing */
+  overflow-x: hidden;
 }
 .content-area {
   flex: 1;
-  padding: 32px;
+  padding: 24px;
   background: #fff;
+  overflow-x: auto;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments for small screens (1200x1024 and below) */
+@media screen and (max-width: 1280px) {
+  .content-area {
+    padding: 16px;
+  }
+}
+
+@media screen and (max-width: 1024px) {
+  .content-area {
+    padding: 12px;
+  }
+}
+
+/* Table responsive styles */
+.responsive-table {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.responsive-table table {
+  min-width: 600px;
+}
+
+/* Form responsive styles */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row > * {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Card grid responsive */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+/* Button group responsive */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Input and select base styles for consistency */
+input, select, textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Prevent horizontal scroll on body */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Small screen optimizations for 1200x1024 monitors */
+@media screen and (max-width: 1280px), screen and (max-height: 1024px) {
+  /* Reduce all font sizes slightly */
+  body {
+    font-size: 14px;
+  }
+  
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.3rem; }
+  h3 { font-size: 1.1rem; }
+  h4 { font-size: 1rem; }
+  
+  /* Tighter spacing */
+  table {
+    font-size: 13px;
+  }
+  
+  table th, table td {
+    padding: 6px 8px !important;
+  }
+  
+  /* Smaller buttons */
+  button {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  /* Smaller inputs */
+  input, select, textarea {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  
+  /* Reduce margins and paddings in forms */
+  form {
+    gap: 12px;
+  }
+  
+  /* Better modal sizing */
+  .modal-content {
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+}
+
+/* Even smaller screens */
+@media screen and (max-width: 1024px) {
+  body {
+    font-size: 13px;
+  }
+  
+  h2 { font-size: 1.2rem; }
+  h3 { font-size: 1rem; }
+  
+  table {
+    font-size: 12px;
+  }
+  
+  table th, table td {
+    padding: 4px 6px !important;
+  }
 }

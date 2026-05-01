@@ -24,7 +24,7 @@ const printStyles = `
 `;
 
 export default function BillingHistory() {
-  const { token } = useContext(AuthContext);
+  const { token, hasRole } = useContext(AuthContext);
   const [billings, setBillings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -187,10 +187,10 @@ export default function BillingHistory() {
       b.billingDate ? new Date(b.billingDate).toLocaleString() : '',
       b.customerName || 'Walk-in Customer',
       b.customerPhone || 'N/A',
-      b.totalAmount?.toFixed(2) || '0.00',
+      (b.subtotal - (b.discountAmount || 0)).toFixed(2), // grand total
       b.paidAmount?.toFixed(2) || '0.00',
       b.changeAmount?.toFixed(2) || '0.00',
-      b.discountPercentage?.toFixed(2) || '0.00',
+      (b.discountAmount !== undefined ? b.discountAmount.toFixed(2) : (b.discountPercentage?.toFixed(2) || '0.00')), // always use discountAmount if present
       b.paymentMethod || 'N/A',
       b.items?.length || 0,
       b.printed ? 'Yes' : 'No'
@@ -219,6 +219,19 @@ export default function BillingHistory() {
     a.download = `billing_history_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Delete billing handler (admin only)
+  const handleDelete = async (billingId) => {
+    if (!hasRole || !hasRole('admin')) return;
+    if (!window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) return;
+    try {
+      await api(`/api/billings/${billingId}`, { method: 'DELETE', token });
+      setBillings(billings => billings.filter(b => b.billingId !== billingId));
+      alert('Billing deleted successfully.');
+    } catch (err) {
+      alert('Failed to delete billing: ' + (err.message || 'Error'));
+    }
   };
 
   return (
@@ -268,7 +281,11 @@ export default function BillingHistory() {
               <option value="CASH">Cash</option>
               <option value="CARD">Card</option>
               <option value="MOBILE_PAYMENT">Mobile Payment</option>
+              <option value="ONLINE_TRANSFER">Online Transfer</option>
+              <option value="CREDIT">Credit</option>
+              <option value="CHEQUE">Cheque</option>
               <option value="OTHER">Other</option>
+              <option value="OLD_MANUAL">Old Manual</option>
             </select>
           </div>
           <button
@@ -307,7 +324,8 @@ export default function BillingHistory() {
 
       {!loading && billings.length > 0 && (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', minWidth: 900 }}>
             <thead>
               <tr style={{ background: '#e3f2fd' }}>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Billing #</th>
@@ -315,6 +333,8 @@ export default function BillingHistory() {
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Customer</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Phone</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Total (Rs.)</th>
+                <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Received (Rs.)</th>
+                <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Balance (Rs.)</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Payment</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Printed</th>
                 <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Actions</th>
@@ -330,7 +350,15 @@ export default function BillingHistory() {
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerName || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerPhone || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
-                    <strong>{billing.grandTotal?.toFixed(2)}</strong>
+                    <strong>{(billing.grandTotal || (billing.subtotal - (billing.discountAmount || 0))).toFixed(2)}</strong>
+                  </td>
+                  <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
+                    {billing.amountReceived ? billing.amountReceived.toFixed(2) : '-'}
+                  </td>
+                  <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right', color: billing.balanceAmount >= 0 ? '#2e7d32' : '#c62828' }}>
+                    {billing.amountReceived > 0 ? (
+                      <span>{billing.balanceAmount >= 0 ? '+' : ''}{billing.balanceAmount?.toFixed(2) || '0.00'}</span>
+                    ) : '-'}
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>{billing.paymentMethod}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>
@@ -361,9 +389,25 @@ export default function BillingHistory() {
                           border: 'none',
                           borderRadius: 4,
                           cursor: 'pointer',
+                          marginRight: 4,
                         }}
                       >
                         Mark Printed
+                      </button>
+                    )}
+                    {hasRole && hasRole('admin') && (
+                      <button
+                        onClick={() => handleDelete(billing.billingId)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f44336',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Delete
                       </button>
                     )}
                   </td>
@@ -371,6 +415,7 @@ export default function BillingHistory() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
@@ -485,9 +530,9 @@ export default function BillingHistory() {
             <div
               id="thermal-bill"
               style={{
-                width: 300,
+                width: 320,
                 margin: '0 auto',
-                padding: 20,
+                padding: '24px 20px',
                 fontFamily: 'monospace',
                 fontSize: 11,
                 lineHeight: 1.5,
@@ -496,15 +541,15 @@ export default function BillingHistory() {
             >
               {/* Store Header */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                <div style={{ textAlign: 'center', marginBottom: 10 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
-                    style={{ maxWidth: 120, maxHeight: 60 }}
+                    style={{ maxWidth: 140, maxHeight: 70 }}
                   />
                 </div>
               )}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 4 }}>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
               <div style={{ textAlign: 'center', fontSize: 9, marginBottom: 2 }}>
@@ -524,45 +569,54 @@ export default function BillingHistory() {
                 </div>
               )}
 
-              <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '10px 0' }}></div>
 
               {/* Bill Details */}
-              <div style={{ fontSize: 10, marginBottom: 8 }}>
-                <div><strong>Bill #:</strong> {selectedBilling.billingNumber}</div>
-                <div><strong>Date:</strong> {new Date(selectedBilling.billingDate).toLocaleString()}</div>
-                <div><strong>Customer:</strong> {selectedBilling.customerName}</div>
-                <div><strong>Phone:</strong> {selectedBilling.customerPhone}</div>
+              <div style={{ fontSize: 11, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Invoice #:</strong>
+                  <span>{selectedBilling.billingNumber}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Date:</strong>
+                  <span>{new Date(selectedBilling.billingDate).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>Customer:</strong>
+                  <span>{selectedBilling.customerName}</span>
+                </div>
                 {selectedBilling.paymentMethod && (
-                  <div><strong>Payment:</strong> {selectedBilling.paymentMethod}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <strong>Payment:</strong>
+                    <span>{selectedBilling.paymentMethod}</span>
+                  </div>
                 )}
+                <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: 12 }}>REPRINT</div>
               </div>
 
-              <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              {/* Items */}
-              <table style={{ width: '100%', fontSize: 9, marginBottom: 8 }}>
+              {/* Items Table */}
+              <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '4px 0' }}>Item</th>
-                    <th style={{ textAlign: 'center', padding: '4px 0' }}>Qty</th>
-                    <th style={{ textAlign: 'right', padding: '4px 0' }}>Price</th>
-                    <th style={{ textAlign: 'right', padding: '4px 0' }}>Total</th>
+                    <th style={{ textAlign: 'left', padding: '3px 0', fontWeight: 'bold' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedBilling.items.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px dotted #ccc' }}>
-                      <td style={{ padding: '4px 0', fontSize: 10 }}>
+                    <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '3px 0', fontSize: 10, fontWeight: 'bold' }}>
                         {item.productName}
-                        {item.productCode && (
-                          <div style={{ fontSize: 8, color: '#666' }}>({item.productCode})</div>
-                        )}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '4px 0' }}>{item.quantity}</td>
-                      <td style={{ textAlign: 'right', padding: '4px 0' }}>
+                      <td style={{ textAlign: 'center', padding: '3px 0', fontWeight: 'bold' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.unitPrice.toFixed(2)}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 'bold' }}>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold' }}>
                         {item.subtotal.toFixed(2)}
                       </td>
                     </tr>
@@ -570,53 +624,74 @@ export default function BillingHistory() {
                 </tbody>
               </table>
 
-              <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               {/* Totals */}
-              <div style={{ fontSize: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span>Subtotal:</span>
                   <span>Rs. {selectedBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {selectedBilling.discountPercentage > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>Discount ({selectedBilling.discountPercentage}%):</span>
-                    <span>- Rs. {selectedBilling.discountAmount.toFixed(2)}</span>
+                {selectedBilling.discountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span>Discount:</span>
+                    <span>- Rs. {Number(selectedBilling.discountAmount).toFixed(2)}</span>
                   </div>
                 )}
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    paddingTop: 8,
-                    borderTop: '1px solid #000',
-                    fontWeight: 'bold',
-                    fontSize: 12,
+                    paddingTop: 4,
+                    borderTop: '2px solid #000',
+                    fontSize: 14,
+                    marginTop: 2,
                   }}
                 >
                   <span>GRAND TOTAL:</span>
-                  <span>Rs. {selectedBilling.grandTotal.toFixed(2)}</span>
+                  <span>Rs. {(selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))).toFixed(2)}</span>
                 </div>
+
+                {/* Amount Received and Balance */}
+                {selectedBilling.amountReceived > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, fontSize: 12 }}>
+                      <span>Received:</span>
+                      <span>Rs. {selectedBilling.amountReceived.toFixed(2)}</span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontSize: 13,
+                      padding: '2px 0',
+                    }}>
+                      <span>{selectedBilling.balanceAmount >= 0 ? 'Balance:' : 'Due:'}</span>
+                      <span>Rs. {Math.abs(selectedBilling.balanceAmount).toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {selectedBilling.notes && (
                 <>
-                  <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
-                  <div style={{ fontSize: 9, fontStyle: 'italic' }}>
-                    <strong>Notes:</strong> {selectedBilling.notes}
+                  <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+                  <div style={{ fontSize: 9, fontWeight: 'bold', wordWrap: 'break-word' }}>
+                    Notes: {selectedBilling.notes}
                   </div>
                 </>
               )}
 
-              <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
               {/* Footer */}
-              <div style={{ textAlign: 'center', fontSize: 9, marginTop: 12 }}>
-                <div style={{ marginBottom: 4 }}>Thank you for your business!</div>
-                <div>Please come again</div>
+              <div style={{ textAlign: 'center', fontSize: 10, marginTop: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>No. of Items Sold: {selectedBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>Thank You, Come Again!</div>
+                <div style={{ fontSize: 10, fontWeight: 'bold' }}>Tel: {storeSettings?.phone || 'N/A'}</div>
               </div>
 
-              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 8, color: '#666' }}>
+              <div style={{ textAlign: 'center', fontSize: 8, marginTop: 6, fontWeight: 'bold' }}>
                 Powered by Pharmacy Management System
               </div>
             </div>

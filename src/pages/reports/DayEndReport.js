@@ -19,7 +19,7 @@ const DayEndReport = () => {
           <li><b>Cash Sales:</b> Only sales paid by cash. Auto-filled from billing.</li>
           <li><b>Expected Cash:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <i>Cash Sales - Returns - Supplier Payments + Old Manual Bill Value + Manual Bill Entries Total - Credit Customer Billings</i>
+              <i>Cash Sales + Manual Bill Entries Total</i>
             </span>
           </li>
           <li><b>Physical Cash Counted:</b> Actual cash you count, based on denominations entered.</li>
@@ -307,6 +307,9 @@ React.useEffect(() => {
         onlineTransferSales: parseFloat(onlineTransferSales) || 0,
         chequeSales: parseFloat(chequeSales) || 0,
         returns: parseFloat(returns) || 0,
+        oldManualBillTotal: parseFloat(oldManualBillValue) || 0,
+        creditCustomerTotal: parseFloat(creditCustomerBillings) || 0,
+        manualBillEntries: manualBillEntries,
         expectedCash: parseFloat(expectedCash) || 0,
         physicalCashCounted: parseFloat(physicalCashCounted) || 0,
         difference: parseFloat(difference) || 0,
@@ -346,132 +349,129 @@ React.useEffect(() => {
             <div
               id="dayend-report-print"
               style={{
-                background: '#fff',
-                padding: 16, // reduced from 40
-                borderRadius: 6, // reduced from 10
-                boxShadow: '0 1px 6px rgba(0,0,0,0.08)', // lighter shadow
-                maxWidth: 700, // reduced from 900
+                width: 320,
                 margin: '0 auto',
-                fontFamily: 'Segoe UI, Arial, sans-serif',
-                border: '1px solid #1976d2', // thinner border
-                fontSize: 13, // smaller base font
-                lineHeight: 1.3 // tighter line spacing
+                padding: '16px 12px',
+                fontFamily: 'monospace',
+                fontSize: 11,
+                lineHeight: 1.4,
+                background: '#fff',
+                color: '#000',
               }}
             >
-              <div className="day-end-report">
-               
-                <h2>Day-End Report</h2>
-                <div>Branch: <b>{submittedData.branch}</b></div>
-                <div>POS ID: <b>{submittedData.posId}</b></div>
-                <div>Cashier: <b>{submittedData.cashier}</b></div>
-                <div>Business Date: <b>{new Date().toLocaleDateString()}</b></div>
-                <div>Shift: <b>{submittedData.shift}</b></div>
-                <div>Day End No: <b>{submittedData.dayEndNo}</b></div>
+              {/* Store Header */}
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 4 }}>
+                DAY-END REPORT
               </div>
-              <hr style={{ margin: '8px 0' }} />
-              <h3>PHYSICAL CASH VALUE (BREAKDOWN)</h3>
-              <table style={{ width: '100%', marginBottom: 6, fontSize: 12 }}>
-                <thead><tr><th>Denomination</th><th>Qty</th><th>Value</th></tr></thead>
-                <tbody>
-                  {submittedData.noteDenominations.map((n, i) => (
-                    <tr key={i}><td>{n.value}</td><td>{n.qty}</td><td>{n.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-              <h4 style={{ margin: '8px 0 4px 0', fontSize: 13 }}>Coins</h4>
-              <table style={{ width: '100%', marginBottom: 6, fontSize: 12 }}>
-                <thead><tr><th>Denomination</th><th>Qty</th><th>Value</th></tr></thead>
-                <tbody>
-                  {submittedData.coinDenominations.map((c, i) => (
-                    <tr key={i}><td>{c.value}</td><td>{c.qty}</td><td>{c.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13 }}>
-                TOTAL PHYSICAL CASH: Rs. {Number(submittedData.noteDenominations.reduce((sum, n) => sum + n.total, 0) + submittedData.coinDenominations.reduce((sum, c) => sum + c.total, 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+              
+              <div style={{ fontSize: 10, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Branch:</span><b>{submittedData.branch}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>POS ID:</span><b>{submittedData.posId}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><b>{submittedData.cashier}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Date:</span><b>{new Date().toLocaleDateString()}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shift:</span><b>{submittedData.shift}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Day End No:</span><b>{submittedData.dayEndNo}</b></div>
               </div>
 
-              <h3 style={{ fontSize: 15, margin: '10px 0 4px 0' }}>NON-CASH COLLECTIONS</h3>
-              <div>Card Payments: <b>{submittedData.cardPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Online Transfers: <b>{submittedData.onlineTransfers.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Customer Cheque Payments: <b>{submittedData.customerChequePayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              <h3 style={{ fontSize: 15, margin: '10px 0 4px 0' }}>SUPPLIER PAYMENTS (SAME DAY)</h3>
-              <table style={{ width: '100%', marginBottom: 6, fontSize: 12 }}>
-                <thead><tr><th>Supplier Name</th><th>Mode</th><th>Amount</th></tr></thead>
-                <tbody>
-                  {submittedData.supplierPayments.map((sp, i) => (
-                    <tr key={i}><td>{sp.supplierName}</td><td>{sp.mode}</td><td>{sp.amount}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SUPPLIER PAYMENTS</div>
+              {submittedData.supplierPayments && submittedData.supplierPayments.length > 0 ? (
+                <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #000' }}>
+                      <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold' }}>Supplier</th>
+                      <th style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>Mode</th>
+                      <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submittedData.supplierPayments.map((sp, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #ccc' }}>
+                        <td style={{ padding: '2px 0', fontWeight: 'bold' }}>{sp.supplierName}</td>
+                        <td style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>{sp.mode}</td>
+                        <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>{parseFloat(sp.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ fontSize: 10, fontStyle: 'italic', marginBottom: 4 }}>No supplier payments</div>
+              )}
 
-              <h3 style={{ fontSize: 15, margin: '10px 0 4px 0' }}>SYSTEM SALES SUMMARY (AUTO)</h3>
-              <div>Total Sales: <b>{submittedData.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Cash Sales: <b>{submittedData.cashSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Card Sales: <b>{submittedData.cardSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Online Transfer Sales: <b>{submittedData.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Cheque Sales: <b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              <div>Returns / Refunds: <b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              <h3 style={{ fontSize: 15, margin: '10px 0 4px 0' }}>CASH RECONCILIATION</h3>
+              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SYSTEM SALES SUMMARY</div>
+              <div style={{ fontSize: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Sales:</span><b>{submittedData.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash Sales:</span><b>{submittedData.cashSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card Sales:</span><b>{submittedData.cardSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Online Transfer:</span><b>{submittedData.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{(submittedData.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Customer:</span><b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(submittedData.manualBillEntries) ? submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>CASH RECONCILIATION</div>
               {(() => {
-                // Calculate supplier payments total
-                let supplierPaymentsTotal = 0;
-                if (Array.isArray(submittedData.supplierPayments)) {
-                  supplierPaymentsTotal = submittedData.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
-                }
                 const cashSalesNum = parseFloat(submittedData.cashSales) || 0;
-                const returnsNum = parseFloat(submittedData.returns) || 0;
-                // Use submittedData fields or fallback to form state if missing
-                let oldManualNum = 0;
-                if (submittedData.oldManualBillTotal != null) {
-                  oldManualNum = parseFloat(submittedData.oldManualBillTotal) || 0;
-                } else if (typeof oldManualBillValue !== 'undefined' && oldManualBillValue !== null) {
-                  oldManualNum = parseFloat(oldManualBillValue) || 0;
-                }
-                let creditCustomerNum = 0;
-                if (submittedData.creditCustomerTotal != null) {
-                  creditCustomerNum = parseFloat(submittedData.creditCustomerTotal) || 0;
-                } else if (typeof creditCustomerBillings !== 'undefined' && creditCustomerBillings !== null) {
-                  creditCustomerNum = parseFloat(creditCustomerBillings) || 0;
-                }
-                // Manual Bill Entries: try to get from submittedData if present, else from form state
                 let manualBillEntriesNum = 0;
                 if (Array.isArray(submittedData.manualBillEntries)) {
                   manualBillEntriesNum = submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
-                } else if (Array.isArray(manualBillEntries)) {
-                  manualBillEntriesNum = manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
                 }
-                const expectedCashCalc = cashSalesNum - returnsNum - supplierPaymentsTotal + oldManualNum + manualBillEntriesNum - creditCustomerNum;
+                // Expected Cash = Cash Sales + Manual Bill Entries only
+                const expectedCashCalc = cashSalesNum + manualBillEntriesNum;
                 return (
-                  <>
-                    <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                    <div>Physical Cash Counted: <b>{Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                    <div>Difference: <b>{(Number(cashValue) - expectedCashCalc).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                     <div>Status: <b>{
+                  <div style={{ fontSize: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Expected Cash:</span>
+                      <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
+                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill Entry)</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Physical Cash:</span>
+                      <b>{Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Difference:</span>
+                      <b>{(Number(cashValue) - expectedCashCalc).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, paddingTop: 2, borderTop: '1px solid #000' }}>
+                      <span>Status:</span>
+                      <b style={{ fontSize: 12 }}>{
                         Number(cashValue) > expectedCashCalc
                           ? 'EXCESS'
                           : Number(cashValue) < expectedCashCalc
                           ? 'SHORT'
                           : 'BALANCED'
-                      }</b></div>
-                  
-                  </>
+                      }</b>
+                    </div>
+                  </div>
                 );
               })()}
 
-              <h3>SIGN OFF</h3>
-              <div>Cashier Signature: ___________________</div>
-              <div>Supervisor Signature: ___________________</div>
-              <div>Printed On: {new Date(submittedData.printedOn).toLocaleString()}</div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
-              <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SIGN OFF</div>
+              <div style={{ fontSize: 10, marginBottom: 8 }}>
+                <div>Cashier: ___________________</div>
+                <div style={{ marginTop: 4 }}>Supervisor: ___________________</div>
+              </div>
+              <div style={{ fontSize: 8, textAlign: 'center', fontWeight: 'bold' }}>
+                Printed: {new Date(submittedData.printedOn).toLocaleString()}
+              </div>
+
+              <div style={{ textAlign: 'center', marginTop: 12 }} className="no-print">
                 <button
                   onClick={() => window.print()}
-                  style={{ fontSize: 18, padding: '10px 32px', background: '#388e3c', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                  style={{ fontSize: 14, padding: '8px 24px', background: '#388e3c', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
                 >
-                  Print Report
+                  🖨️ Print Report
                 </button>
               </div>
             </div>
@@ -545,20 +545,6 @@ React.useEffect(() => {
           onChange={setManualBillEntries}
         />
 
-        <h3>Old Manual Bill Value</h3>
-        <div style={{ marginBottom: 12 }}> 
-          <span style={{ fontWeight: 'bold', fontSize: 16 }}>
-            {oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-          </span>
-        </div>
-
-        <h3>Credit Customer Billings</h3>
-        <div style={{ marginBottom: 12 }}>
-          <span style={{ fontWeight: 'bold', fontSize: 16 }}>
-            {creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-          </span>
-        </div>
-
           <h3>SYSTEM SALES SUMMARY (AUTO)</h3>
           <div style={{ marginBottom: 12, fontSize: 16 }}>
             <div>Total Sales: <b>{systemSalesSummary?.totalSales != null ? systemSalesSummary.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
@@ -567,6 +553,8 @@ React.useEffect(() => {
             <div>Online Transfer Sales: <b>{systemSalesSummary?.onlineTransferSales != null ? systemSalesSummary.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Cheque Sales: <b>{systemSalesSummary?.chequeSales != null ? systemSalesSummary.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Old Manual Bill Value: <b>{oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Credit Customer Billings: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
 
@@ -588,16 +576,7 @@ React.useEffect(() => {
             const liveDifference = Number(physicalCashCounted) - expectedCashCalc;
             return (
               <>
-                <div>Expected Cash: <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div>Physical Cash Counted: <b>{Number(physicalCashCounted).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div>Difference: <b>{liveDifference.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div>Status: <b>{
-                  liveDifference > 0
-                    ? 'EXCESS'
-                    : liveDifference < 0
-                      ? 'SHORT'
-                      : 'BALANCED'
-                }</b></div>
               </>
             );
           })()}

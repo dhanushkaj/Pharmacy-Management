@@ -84,6 +84,54 @@ export default function Billing() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isPaymentReady, setIsPaymentReady] = useState(false);
 
+  // Sales Target Dashboard (Mini Widget)
+  const [salesTargetData, setSalesTargetData] = useState(null);
+  const [salesTargetLoading, setSalesTargetLoading] = useState(true);
+
+  // Mini Progress Bar Component for Sales Target
+  const MiniProgressBar = ({ value, max, color }) => {
+    const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+    const isOverTarget = value > max && max > 0;
+    
+    return (
+      <div style={{ 
+        height: 8, 
+        background: '#e0e0e0', 
+        borderRadius: 4, 
+        overflow: 'hidden',
+        marginTop: 4
+      }}>
+        <div style={{ 
+          width: `${Math.min(percentage, 100)}%`, 
+          height: '100%', 
+          background: isOverTarget ? '#4caf50' : color,
+          borderRadius: 4,
+          transition: 'width 0.5s ease'
+        }} />
+      </div>
+    );
+  };
+
+  // Fetch Sales Target Dashboard Data
+  const fetchSalesTargetData = async () => {
+    try {
+      const res = await fetch('/api/sales-targets/dashboard', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSalesTargetData(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch sales target data:', error);
+    } finally {
+      setSalesTargetLoading(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('storeSettings');
     if (saved) {
@@ -98,10 +146,19 @@ export default function Billing() {
     fetchCustomers();
     fetchProducts();
     
+    // Fetch sales target data initially
+    fetchSalesTargetData();
+    
+    // Auto-refresh sales target data every 5 minutes (300000ms)
+    const salesTargetInterval = setInterval(() => {
+      fetchSalesTargetData();
+    }, 300000);
+    
     return () => {
       if (styleEl.parentNode) {
         document.head.removeChild(styleEl);
       }
+      clearInterval(salesTargetInterval);
     };
   }, []);
 
@@ -1355,6 +1412,90 @@ export default function Billing() {
                 >
                   📋 History (Ctrl+H)
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mini Sales Target Widget */}
+          <div style={{ 
+            border: '1px solid #1976d2', 
+            padding: 12, 
+            borderRadius: 8, 
+            background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+            marginTop: 16 
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h4 style={{ fontSize: 13, margin: 0, color: '#1565c0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📊 Today's Target
+              </h4>
+              <button 
+                onClick={fetchSalesTargetData}
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  fontSize: 12,
+                  color: '#1976d2',
+                  padding: '2px 6px',
+                  borderRadius: 4
+                }}
+                title="Refresh (auto-refreshes every 5 min)"
+              >
+                🔄
+              </button>
+            </div>
+            
+            {salesTargetLoading ? (
+              <div style={{ textAlign: 'center', padding: 8, color: '#666', fontSize: 12 }}>Loading...</div>
+            ) : salesTargetData ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 2 }}>
+                  <span>Sales</span>
+                  <span style={{ fontWeight: 'bold', color: '#2196f3' }}>
+                    Rs. {(parseFloat(salesTargetData.todaySales) || 0).toLocaleString()}
+                  </span>
+                </div>
+                <MiniProgressBar
+                  value={parseFloat(salesTargetData.todaySales) || 0}
+                  max={parseFloat(salesTargetData.todayTarget) || 0}
+                  color="#2196f3"
+                />
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  marginTop: 8,
+                  fontSize: 10,
+                  color: '#666'
+                }}>
+                  <span>Target: Rs. {(parseFloat(salesTargetData.todayTarget) || 0).toLocaleString()}</span>
+                  <span style={{ 
+                    fontWeight: 'bold',
+                    color: parseFloat(salesTargetData.todayProgress) >= 100 ? '#4caf50' : 
+                           parseFloat(salesTargetData.todayProgress) >= 80 ? '#ff9800' : '#f44336'
+                  }}>
+                    {(parseFloat(salesTargetData.todayProgress) || 0).toFixed(1)}%
+                  </span>
+                </div>
+                {/* Status indicator */}
+                <div style={{ 
+                  marginTop: 8, 
+                  padding: '4px 8px', 
+                  borderRadius: 4,
+                  textAlign: 'center',
+                  fontSize: 10,
+                  fontWeight: 'bold',
+                  background: parseFloat(salesTargetData.todayProgress) >= 100 ? '#e8f5e9' : 
+                             parseFloat(salesTargetData.todayProgress) >= 80 ? '#fff3e0' : '#ffebee',
+                  color: parseFloat(salesTargetData.todayProgress) >= 100 ? '#2e7d32' : 
+                         parseFloat(salesTargetData.todayProgress) >= 80 ? '#e65100' : '#c62828'
+                }}>
+                  {parseFloat(salesTargetData.todayProgress) >= 100 ? '🎉 Target Achieved!' : 
+                   parseFloat(salesTargetData.todayProgress) >= 80 ? '💪 Almost There!' : '⚠️ Keep Pushing!'}
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 8, color: '#666', fontSize: 11 }}>
+                No target set for today
               </div>
             )}
           </div>

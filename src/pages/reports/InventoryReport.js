@@ -114,6 +114,101 @@ const InventoryReport = () => {
     }).length;
   };
 
+  const getOverstockCount = () => {
+    return filteredProducts.filter(product => {
+      const stock = getInventoryStock(product);
+      return product.maxStock && stock > product.maxStock;
+    }).length;
+  };
+
+  // Export Low Stock to CSV - fetches from backend endpoint
+  const exportLowStockToCSV = async () => {
+    if (!filters.categoryId) {
+      alert('Please select a category first to export low stock report');
+      return;
+    }
+    
+    try {
+      const lowStockProducts = await api(`/api/reports/inventory/low-stock?categoryId=${filters.categoryId}`, { method: 'GET', token });
+      
+      if (!lowStockProducts || lowStockProducts.length === 0) {
+        alert('No low stock products to export');
+        return;
+      }
+      
+      const headers = ['Product Code', 'Product Name', 'Category', 'Selling Price', 'Current Stock', 'Min Stock', 'Shortage Qty', 'Status'];
+      const rows = lowStockProducts.map(product => {
+        const stock = product.availableInventory ?? 0;
+        const shortageQty = (product.minStock || 0) - stock;
+        return [
+          product.productCode || '',
+          product.name || '',
+          product.categoryName || 'N/A',
+          product.price != null ? Number(product.price).toFixed(2) : '-',
+          stock,
+          product.minStock || 0,
+          shortageQty > 0 ? shortageQty : 0,
+          stock === 0 ? 'OUT OF STOCK' : 'LOW STOCK'
+        ];
+      });
+      const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const categoryName = categories.find(c => c.categoryId == filters.categoryId)?.name || 'category';
+      a.download = `low_stock_report_${categoryName}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    } catch (error) {
+      console.error('Failed to fetch low stock report:', error);
+      alert('Failed to export low stock report: ' + (error.message || 'Unknown error'));
+    }
+  };
+
+  // Export Overstock to CSV - fetches from backend endpoint
+  const exportOverstockToCSV = async () => {
+    if (!filters.categoryId) {
+      alert('Please select a category first to export overstock report');
+      return;
+    }
+    
+    try {
+      const overstockProducts = await api(`/api/reports/inventory/overstock?categoryId=${filters.categoryId}`, { method: 'GET', token });
+      
+      if (!overstockProducts || overstockProducts.length === 0) {
+        alert('No overstock products to export');
+        return;
+      }
+      
+      const headers = ['Product Code', 'Product Name', 'Category', 'Selling Price', 'Current Stock', 'Max Stock', 'Excess Qty', 'Status'];
+      const rows = overstockProducts.map(product => {
+        const stock = product.availableInventory ?? 0;
+        const excessQty = stock - (product.maxStock || 0);
+        return [
+          product.productCode || '',
+          product.name || '',
+          product.categoryName || 'N/A',
+          product.price != null ? Number(product.price).toFixed(2) : '-',
+          stock,
+          product.maxStock || 0,
+          excessQty > 0 ? excessQty : 0,
+          'OVERSTOCK'
+        ];
+      });
+      const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const categoryName = categories.find(c => c.categoryId == filters.categoryId)?.name || 'category';
+      a.download = `overstock_report_${categoryName}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    } catch (error) {
+      console.error('Failed to fetch overstock report:', error);
+      alert('Failed to export overstock report: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   const outOfStockCount = originalProducts.filter(p => getInventoryStock(p) === 0).length;
 
   return (
@@ -178,6 +273,18 @@ const InventoryReport = () => {
             <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>Low Stock</div>
             <div style={{ fontSize: 28, fontWeight: 'bold', color: '#ff9800' }}>
               {getLowStockCount()}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#fff',
+            padding: 20,
+            borderRadius: 8,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>Overstock</div>
+            <div style={{ fontSize: 28, fontWeight: 'bold', color: '#9c27b0' }}>
+              {getOverstockCount()}
             </div>
           </div>
         </div>
@@ -247,6 +354,71 @@ const InventoryReport = () => {
                 Show only Out of Stock ({outOfStockCount})
               </label>
             </div>
+          </div>
+
+          {/* Stock Level Export Buttons */}
+          <div style={{ 
+            marginTop: 20, 
+            paddingTop: 20, 
+            borderTop: '1px solid #eee',
+            display: 'flex',
+            gap: 12,
+            flexWrap: 'wrap',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontWeight: '500', color: '#666', marginRight: 8 }}>Export by Stock Level:</span>
+            
+            <button
+              onClick={exportLowStockToCSV}
+              disabled={!filters.categoryId}
+              style={{
+                padding: '10px 16px',
+                background: !filters.categoryId ? '#ccc' : '#ff9800',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: !filters.categoryId ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}
+              title={!filters.categoryId ? 'Please select a category first' : 'Export products below minimum stock level'}
+            >
+              ⬇️ Low Stock Export
+            </button>
+
+            <button
+              onClick={exportOverstockToCSV}
+              disabled={!filters.categoryId}
+              style={{
+                padding: '10px 16px',
+                background: !filters.categoryId ? '#ccc' : '#9c27b0',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: !filters.categoryId ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}
+              title={!filters.categoryId ? 'Please select a category first' : 'Export products above maximum stock level'}
+            >
+              ⬆️ Overstock Export
+            </button>
+
+            {!filters.categoryId && (
+              <span style={{ fontSize: 12, color: '#d32f2f', marginLeft: 8 }}>
+                ⚠️ Select a category to enable exports
+              </span>
+            )}
+
+            {filters.categoryId && (
+              <span style={{ fontSize: 12, color: '#666', marginLeft: 8 }}>
+                📁 Category: {categories.find(c => c.categoryId == filters.categoryId)?.name || 'Selected'}
+              </span>
+            )}
           </div>
         </div>
 

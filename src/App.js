@@ -29,6 +29,7 @@ import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
+import SalesTargetManagement from './pages/SalesTargetManagement';
 
 // import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
@@ -77,6 +78,7 @@ const AppContent = () => {
             <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
             <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
             <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />
+            <Route path="/sales-targets" element={<PrivateRoute><SalesTargetManagement /></PrivateRoute>} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}

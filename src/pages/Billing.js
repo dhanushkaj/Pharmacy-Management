@@ -740,29 +740,9 @@ export default function Billing() {
         }));
         setCreatedBilling(response);
         
-        // Direct print mode: print immediately without showing modal
+        // Direct print mode: set flag and let useEffect handle printing
         if (directPrintMode) {
           setIsDirectPrintMode(true);
-          // Wait for state to update and DOM to render the thermal print div
-          setTimeout(() => {
-            const printElement = document.getElementById('billing-thermal-print');
-            if (printElement) {
-              window.print();
-              // After print, close everything
-              setTimeout(() => {
-                setCreatedBilling(null);
-                setIsDirectPrintMode(false);
-                setCartItems([]);
-                setDiscountPercentage(0);
-                setDiscountAmount(0);
-                setAmountReceived('');
-                setNotes('');
-                setIsPaymentReady(false);
-              }, 500);
-            } else {
-              console.error('Print element not found');
-            }
-          }, 500);
         } else {
           setShowBillPreview(true);
         }
@@ -798,16 +778,13 @@ export default function Billing() {
         
         // Direct print mode for return-only bills
         if (directPrintMode) {
-          setTimeout(() => {
-            window.print();
-          }, 300);
+          setIsDirectPrintMode(true);
         } else {
           setShowBillPreview(true);
         }
       } else {
         setError('No items to process.');
       }
-
     } catch (err) {
       setError(err.message || 'Failed to create billing');
     } finally {
@@ -836,6 +813,65 @@ export default function Billing() {
     setShowBillPreview(false);
     setShowPaymentModal(false);
   };
+
+  // Effect: Handle direct print when thermal print div becomes available
+  useEffect(() => {
+    if (isDirectPrintMode && createdBilling) {
+      // Wait for DOM to render the thermal print div
+      const timer = setTimeout(() => {
+        const printElement = document.getElementById('billing-thermal-print');
+        if (printElement) {
+          console.log('Printing thermal bill...');
+          
+          // Method 1: Use iframe to print directly (bypasses dialog on some systems)
+          try {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(printElement.outerHTML);
+            iframeDoc.close();
+            
+            iframe.onload = () => {
+              iframe.contentWindow.print();
+              // Remove iframe after print
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+                resetForm();
+                setIsDirectPrintMode(false);
+              }, 100);
+            };
+            
+            // Fallback if onload doesn't work
+            setTimeout(() => {
+              if (document.body.contains(iframe)) {
+                try {
+                  iframe.contentWindow.print();
+                } catch (e) {
+                  console.error('Print failed:', e);
+                  window.print();
+                }
+              }
+            }, 200);
+          } catch (e) {
+            console.error('Iframe print failed, using standard print:', e);
+            window.print();
+            setTimeout(() => {
+              resetForm();
+              setIsDirectPrintMode(false);
+            }, 500);
+          }
+        } else {
+          console.error('Thermal print element not found');
+          setIsDirectPrintMode(false);
+        }
+      }, 150); // Increased delay for DOM rendering
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isDirectPrintMode, createdBilling]);
 
   const resetForm = () => {
     setSelectedCustomer(null);
@@ -2259,13 +2295,21 @@ export default function Billing() {
             position: 'fixed',
             top: -10000,
             left: -10000,
-            width: 280,
+            width: '280px',
+            maxWidth: '280px',
             padding: '12px 8px',
             fontFamily: 'monospace',
             fontSize: '10px',
             lineHeight: 1.3,
             background: '#fff',
             color: '#000',
+            boxSizing: 'border-box',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            visibility: 'visible',
+            display: 'block',
+            margin: 0,
+            border: 'none',
           }}
         >
           {/* Store Logo */}

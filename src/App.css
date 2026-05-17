@@ -144,3 +144,60 @@ html, body {
     padding: 4px 6px !important;
   }
 }
+
+/* Print styles - show only thermal bill content */
+@media print {
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* Hide all page content except print divs */
+  body > div {
+    display: none !important;
+  }
+  
+  /* Show the thermal print div */
+  #billing-thermal-print {
+    display: block !important;
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    width: 280px !important;
+    max-width: 280px !important;
+    margin: 0 !important;
+    padding: 12px 8px !important;
+    background: #fff !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+    visibility: visible !important;
+  }
+  
+  /* Ensure all content inside thermal print div is visible */
+  #billing-thermal-print * {
+    background: transparent !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  
+  #billing-thermal-print table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  #billing-thermal-print tr, 
+  #billing-thermal-print td,
+  #billing-thermal-print th {
+    display: table-cell !important;
+    visibility: visible !important;
+  }
+  
+  /* Remove all page margins */
+  @page {
+    margin: 0;
+    padding: 0;
+  }
+}

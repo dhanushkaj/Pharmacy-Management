@@ -60,6 +60,7 @@ export default function Billing() {
   const [showBillPreview, setShowBillPreview] = useState(false);
   const [createdBilling, setCreatedBilling] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
+  const [isDirectPrintMode, setIsDirectPrintMode] = useState(false);
 
   // Track manual discount input
   const [isDiscountManual, setIsDiscountManual] = useState(false);
@@ -739,12 +740,29 @@ export default function Billing() {
         }));
         setCreatedBilling(response);
         
-        // Direct print mode: print immediately without showing bill preview modal
+        // Direct print mode: print immediately without showing modal
         if (directPrintMode) {
-          // Wait a moment for state to update, then trigger print
+          setIsDirectPrintMode(true);
+          // Wait for state to update and DOM to render the thermal print div
           setTimeout(() => {
-            window.print();
-          }, 300);
+            const printElement = document.getElementById('billing-thermal-print');
+            if (printElement) {
+              window.print();
+              // After print, close everything
+              setTimeout(() => {
+                setCreatedBilling(null);
+                setIsDirectPrintMode(false);
+                setCartItems([]);
+                setDiscountPercentage(0);
+                setDiscountAmount(0);
+                setAmountReceived('');
+                setNotes('');
+                setIsPaymentReady(false);
+              }, 500);
+            } else {
+              console.error('Print element not found');
+            }
+          }, 500);
         } else {
           setShowBillPreview(true);
         }
@@ -1961,7 +1979,7 @@ export default function Billing() {
       )}
 
       {/* Bill Preview Modal after successful billing creation */}
-      {showBillPreview && createdBilling && (
+      {(showBillPreview || createdBilling) && createdBilling && !isDirectPrintMode && (
         <div
           style={{
             position: 'fixed',
@@ -2007,9 +2025,8 @@ export default function Billing() {
               </div>
             </div>
 
-            {/* Thermal Bill Content - 60mm Format */}
+            {/* Thermal Bill Content shown in Modal - 60mm Format */}
             <div
-              id="billing-thermal-print"
               style={{
                 width: '100%',
                 maxWidth: 280,
@@ -2024,7 +2041,7 @@ export default function Billing() {
             >
               {/* Store Logo */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                <div style={{ textAlign: 'center', marginBottom: 1 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
@@ -2075,49 +2092,50 @@ export default function Billing() {
 
               <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
 
-              {/* Items Header */}
-              <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 1, display: 'flex', justifyContent: 'space-between', lineHeight: 1.1 }}>
-                <span style={{ flex: 1 }}>Item</span>
-                <span style={{ width: '20px', textAlign: 'center' }}>Qty</span>
-                <span style={{ width: '30px', textAlign: 'right' }}>Price</span>
-                <span style={{ width: '30px', textAlign: 'right' }}>Amount</span>
-              </div>
-              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+              {/* Items Table */}
+              <table style={{ width: '100%', marginBottom: 2, borderCollapse: 'collapse', fontSize: '10px', lineHeight: 1.2 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #000' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold', fontSize: '9px' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '35px' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {createdBilling.items.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '2px 0', fontSize: '10px', fontWeight: 'bold', wordBreak: 'break-word' }}>
+                        {item.productName.substring(0, 18)}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '2px 2px', fontSize: '10px' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 2px', fontSize: '10px' }}>{item.unitPrice.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>{item.subtotal.toFixed(2)}</td>
+                    </tr>
+                  ))}
 
-              {/* Items Body */}
-              <div style={{ marginBottom: 2, fontSize: '9px' }}>
-                {createdBilling.items.map((item, idx) => (
-                  <div key={idx} style={{ marginBottom: 1, lineHeight: 1.1 }}>
-                    <div style={{ fontSize: '8px', fontWeight: 'bold' }}>
-                      {item.productName.substring(0, 20)}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                      <span>Qty: {item.quantity}  Price: {item.unitPrice.toFixed(2)}</span>
-                      <span style={{ textAlign: 'right', minWidth: '30px' }}>{item.subtotal.toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))}
+                  {/* Return items inside table */}
+                  {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                    <>
+                      <tr style={{ borderTop: '1px solid #000' }}>
+                        <td colSpan="4" style={{ padding: '2px 0', fontSize: '9px', fontWeight: 'bold' }}>↩ RETURNS:</td>
+                      </tr>
+                      {createdBilling.returnCartItems.map((ri, idx) => (
+                        <tr key={`ret-${idx}`} style={{ borderBottom: '1px solid #ccc' }}>
+                          <td style={{ padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>
+                            {ri.productName.substring(0, 18)}
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '2px 2px', fontSize: '10px' }}>{ri.quantity}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 2px', fontSize: '10px' }}>{ri.unitPrice.toFixed(2)}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>-{ri.refundAmount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
+                </tbody>
+              </table>
 
-                {/* Return items */}
-                {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
-                  <>
-                    <div style={{ borderTop: '1px solid #000', margin: '2px 0', paddingTop: 1 }}>
-                      <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 1 }}>↩ RETURNS:</div>
-                    </div>
-                    {createdBilling.returnCartItems.map((ri, idx) => (
-                      <div key={`ret-${idx}`} style={{ marginBottom: 1, lineHeight: 1.1 }}>
-                        <div style={{ fontSize: '8px', fontWeight: 'bold' }}>
-                          {ri.productName.substring(0, 18)}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                          <span>Qty: {ri.quantity}  Price: {ri.unitPrice.toFixed(2)}</span>
-                          <span style={{ textAlign: 'right', minWidth: '30px' }}>-{ri.refundAmount.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
+              <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
 
               <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
 
@@ -2233,7 +2251,150 @@ export default function Billing() {
         </div>
       )}
 
-      {/* Customer Billing History Modal (Ctrl+H) */}
+      {/* Thermal Print Div for Direct Print Mode - Hidden from view but printable */}
+      {isDirectPrintMode && createdBilling && (
+        <div
+          id="billing-thermal-print"
+          style={{
+            position: 'fixed',
+            top: -10000,
+            left: -10000,
+            width: 280,
+            padding: '12px 8px',
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            lineHeight: 1.3,
+            background: '#fff',
+            color: '#000',
+          }}
+        >
+          {/* Store Logo */}
+          {storeSettings?.logo && (
+            <div style={{ textAlign: 'center', marginBottom: 1 }}>
+              <img
+                src={storeSettings.logo}
+                alt="Logo"
+                style={{ maxWidth: 80, maxHeight: 40, objectFit: 'contain' }}
+              />
+            </div>
+          )}
+
+          {/* Store Header */}
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: 1, lineHeight: 1.2 }}>
+            {storeSettings?.storeName || 'PHARMACY'}
+          </div>
+          <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1 }}>
+            {storeSettings?.address || 'Store Address'}
+          </div>
+          {storeSettings?.phone && (
+            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1 }}>
+              Ph: {storeSettings.phone}
+            </div>
+          )}
+          {storeSettings?.email && (
+            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 2, lineHeight: 1.1 }}>
+              {storeSettings.email}
+            </div>
+          )}
+
+          <div style={{ borderTop: '2px solid #000', margin: '3px 0' }}></div>
+
+          {/* Bill Details */}
+          <div style={{ fontSize: '9px', marginBottom: 2, lineHeight: 1.2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Bill No</span>
+              <span>{createdBilling.billingNumber}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Date</span>
+              <span>{new Date(createdBilling.billingDate).toLocaleDateString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Cashier</span>
+              <span style={{ fontSize: '8px' }}>{createdBilling.cashierName || 'N/A'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Customer</span>
+              <span style={{ fontSize: '8px' }}>{createdBilling.customerName}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+
+          {/* Items Table */}
+          <table style={{ width: '100%', marginBottom: 2, borderCollapse: 'collapse', fontSize: '10px', lineHeight: 1.2 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #000' }}>
+                <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold', fontSize: '9px' }}>Item</th>
+                <th style={{ textAlign: 'center', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Qty</th>
+                <th style={{ textAlign: 'right', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '35px' }}>Price</th>
+                <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {createdBilling.items.map((item, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                  <td style={{ padding: '2px 0', fontSize: '10px', fontWeight: 'bold', wordBreak: 'break-word' }}>
+                    {item.productName.substring(0, 18)}
+                  </td>
+                  <td style={{ textAlign: 'center', padding: '2px 2px', fontSize: '10px' }}>{item.quantity}</td>
+                  <td style={{ textAlign: 'right', padding: '2px 2px', fontSize: '10px' }}>{item.unitPrice.toFixed(2)}</td>
+                  <td style={{ textAlign: 'right', padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>{item.subtotal.toFixed(2)}</td>
+                </tr>
+              ))}
+
+              {/* Return items inside table */}
+              {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                <>
+                  <tr style={{ borderTop: '1px solid #000' }}>
+                    <td colSpan="4" style={{ padding: '2px 0', fontSize: '9px', fontWeight: 'bold' }}>↩ RETURNS:</td>
+                  </tr>
+                  {createdBilling.returnCartItems.map((ri, idx) => (
+                    <tr key={`ret-${idx}`} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>
+                        {ri.productName.substring(0, 18)}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '2px 2px', fontSize: '10px' }}>{ri.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 2px', fontSize: '10px' }}>{ri.unitPrice.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>-{ri.refundAmount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+
+          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+
+          {/* Totals */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Subtotal</span>
+              <span>{createdBilling.subtotal.toFixed(2)}</span>
+            </div>
+            {((productDiscountTotal + customerDiscountTotal) > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Discount ({((productDiscountTotal + customerDiscountTotal) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                <span>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
+              <span>TOTAL AMOUNT</span>
+              <span>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+
+          {/* Footer */}
+          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 2, lineHeight: 1.2 }}>
+            <div style={{ fontWeight: 'bold', marginBottom: 1 }}>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: 1 }}>Thank You Come Again!</div>
+          </div>
+        </div>
+      )}
       {showCustomerHistory && (
         <div
           style={{

@@ -62,6 +62,14 @@ export default function BillingHistory() {
       const savedSettings = localStorage.getItem('storeSettings');
       if (savedSettings) {
         setStoreSettings(JSON.parse(savedSettings));
+        return;
+      }
+      
+      // If not in localStorage, fetch from backend
+      const data = await api('/api/store-settings', { token });
+      if (data) {
+        setStoreSettings(data);
+        localStorage.setItem('storeSettings', JSON.stringify(data));
       }
     } catch (err) {
       console.log('Error loading store settings:', err);
@@ -542,7 +550,7 @@ export default function BillingHistory() {
             >
               {/* Store Logo */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                <div style={{ textAlign: 'center', marginBottom: 1 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
@@ -593,29 +601,29 @@ export default function BillingHistory() {
 
               <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
 
-              {/* Items Header */}
-              <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 1, display: 'flex', justifyContent: 'space-between', lineHeight: 1.1 }}>
-                <span style={{ flex: 1 }}>Item</span>
-                <span style={{ width: '20px', textAlign: 'center' }}>Qty</span>
-                <span style={{ width: '30px', textAlign: 'right' }}>Price</span>
-                <span style={{ width: '30px', textAlign: 'right' }}>Amount</span>
-              </div>
-              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
-
-              {/* Items Body */}
-              <div style={{ marginBottom: 2, fontSize: '9px' }}>
-                {selectedBilling.items.map((item, idx) => (
-                  <div key={idx} style={{ marginBottom: 1, lineHeight: 1.1 }}>
-                    <div style={{ fontSize: '8px', fontWeight: 'bold' }}>
-                      {item.productName.substring(0, 20)}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                      <span>Qty: {item.quantity}  Price: {item.unitPrice.toFixed(2)}</span>
-                      <span style={{ textAlign: 'right', minWidth: '30px' }}>{item.subtotal.toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {/* Items Table */}
+              <table style={{ width: '100%', marginBottom: 2, borderCollapse: 'collapse', fontSize: '10px', lineHeight: 1.2 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #000' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold', fontSize: '9px' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '2px 2px', fontWeight: 'bold', fontSize: '9px', width: '35px' }}>Price</th>
+                    <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold', fontSize: '9px', width: '30px' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedBilling.items.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #ccc' }}>
+                      <td style={{ padding: '2px 0', fontSize: '10px', fontWeight: 'bold', wordBreak: 'break-word' }}>
+                        {item.productName.substring(0, 18)}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '2px 2px', fontSize: '10px' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 2px', fontSize: '10px' }}>{item.unitPrice.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 0', fontSize: '10px', fontWeight: 'bold' }}>{item.subtotal.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
               <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
 

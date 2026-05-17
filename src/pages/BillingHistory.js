@@ -2,27 +2,6 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
-// Add print styles
-const printStyles = `
-  @media print {
-    body * {
-      visibility: hidden;
-    }
-    #thermal-bill, #thermal-bill * {
-      visibility: visible;
-    }
-    #thermal-bill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 80mm !important;
-    }
-    .no-print {
-      display: none !important;
-    }
-  }
-`;
-
 export default function BillingHistory() {
   const { token, hasRole } = useContext(AuthContext);
   const [billings, setBillings] = useState([]);
@@ -42,18 +21,9 @@ export default function BillingHistory() {
   const [selectedBilling, setSelectedBilling] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
 
-  // Load store settings and inject print styles
+  // Load store settings
   useEffect(() => {
     loadStoreSettings();
-    
-    // Inject print styles
-    const styleEl = document.createElement('style');
-    styleEl.innerHTML = printStyles;
-    document.head.appendChild(styleEl);
-    
-    return () => {
-      document.head.removeChild(styleEl);
-    };
   }, []);
 
   const loadStoreSettings = async () => {

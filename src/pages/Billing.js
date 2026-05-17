@@ -2,29 +2,6 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
-// Print styles for thermal printer
-const printStyles = `
-  @media print {
-    body * {
-      visibility: hidden;
-    }
-    #billing-thermal-print, #billing-thermal-print * {
-      visibility: visible;
-    }
-    #billing-thermal-print {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 80mm !important;
-      margin: 0;
-      padding: 10mm !important;
-    }
-    .no-print {
-      display: none !important;
-    }
-  }
-`;
-
 export default function Billing() {
   const { token, hasRole } = useContext(AuthContext);
   const [error, setError] = useState(null);
@@ -139,11 +116,6 @@ export default function Billing() {
       setStoreSettings(JSON.parse(saved));
     }
     
-    // Inject print styles
-    const styleEl = document.createElement('style');
-    styleEl.innerHTML = printStyles;
-    document.head.appendChild(styleEl);
-    
     fetchCustomers();
     fetchProducts();
     
@@ -156,9 +128,6 @@ export default function Billing() {
     }, 300000);
     
     return () => {
-      if (styleEl.parentNode) {
-        document.head.removeChild(styleEl);
-      }
       clearInterval(salesTargetInterval);
     };
   }, []);
@@ -822,52 +791,18 @@ export default function Billing() {
         const printElement = document.getElementById('billing-thermal-print');
         if (printElement) {
           console.log('Printing thermal bill...');
+          window.print();
           
-          // Method 1: Use iframe to print directly (bypasses dialog on some systems)
-          try {
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-            
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            iframeDoc.open();
-            iframeDoc.write(printElement.outerHTML);
-            iframeDoc.close();
-            
-            iframe.onload = () => {
-              iframe.contentWindow.print();
-              // Remove iframe after print
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-                resetForm();
-                setIsDirectPrintMode(false);
-              }, 100);
-            };
-            
-            // Fallback if onload doesn't work
-            setTimeout(() => {
-              if (document.body.contains(iframe)) {
-                try {
-                  iframe.contentWindow.print();
-                } catch (e) {
-                  console.error('Print failed:', e);
-                  window.print();
-                }
-              }
-            }, 200);
-          } catch (e) {
-            console.error('Iframe print failed, using standard print:', e);
-            window.print();
-            setTimeout(() => {
-              resetForm();
-              setIsDirectPrintMode(false);
-            }, 500);
-          }
+          // Reset after print dialog closes
+          setTimeout(() => {
+            resetForm();
+            setIsDirectPrintMode(false);
+          }, 500);
         } else {
           console.error('Thermal print element not found');
           setIsDirectPrintMode(false);
         }
-      }, 150); // Increased delay for DOM rendering
+      }, 150); // Delay for DOM rendering
       
       return () => clearTimeout(timer);
     }

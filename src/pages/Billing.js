@@ -2002,17 +2002,18 @@ export default function Billing() {
                 width: '100%',
                 maxWidth: 260,
                 margin: '0 auto',
-                padding: '12px 4px',
+                padding: '8px 3px',
                 fontFamily: 'monospace',
-                fontSize: '10px',
-                lineHeight: 1.3,
+                fontSize: '9px',
+                lineHeight: 1.2,
                 background: '#fff',
                 color: '#000',
+                fontWeight: '600',
               }}
             >
               {/* Store Logo */}
               {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 2 }}>
+                <div style={{ textAlign: 'center', marginBottom: 1 }}>
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
@@ -2022,70 +2023,70 @@ export default function Billing() {
               )}
 
               {/* Store Header */}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: 1, lineHeight: 1.3 }}>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '10px', marginBottom: 0, lineHeight: 1.1 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.2 }}>
+              <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
                 {storeSettings?.address || 'Store Address'}
               </div>
               {storeSettings?.phone && (
-                <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.2 }}>
+                <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.1, fontWeight: '600' }}>
                   Ph: {storeSettings.phone}
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid #000', margin: '3px 0' }}></div>
+              <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
 
               {/* Bill Details */}
-              <div style={{ fontSize: '8px', marginBottom: 2, lineHeight: 1.4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Bill No</span>
+              <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Bill No:</span>
                   <span>{createdBilling.billingNumber}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Date</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Date:</span>
                   <span>{new Date(createdBilling.billingDate).toLocaleDateString()}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Cashier</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Cashier:</span>
                   <span>{createdBilling.cashierName || 'N/A'}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Customer</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Customer:</span>
                   <span>{createdBilling.customerName}</span>
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
               {/* Items List */}
-              <div style={{ marginBottom: 2, lineHeight: 1.6 }}>
+              <div style={{ marginBottom: 0 }}>
                 {createdBilling.items.map((item, idx) => (
-                  <div key={idx} style={{ fontSize: '9px', marginBottom: 2 }}>
-                    <div style={{ fontWeight: 'bold', wordBreak: 'break-word' }}>
+                  <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
                       {item.productName.substring(0, 22)}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                      <span>Qty: {item.quantity}</span>
-                      <span>Price: {item.unitPrice.toFixed(2)}</span>
-                      <span style={{ fontWeight: 'bold' }}>{item.subtotal.toFixed(2)}</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                      <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
+                      <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice.toFixed(2)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{item.subtotal.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
 
                 {/* Return items */}
                 {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
-                  <div style={{ marginTop: 2, paddingTop: 1, borderTop: '1px dashed #000' }}>
-                    <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 1 }}>↩ RETURNS:</div>
+                  <div style={{ marginTop: 1, paddingTop: 1, borderTop: '1px dashed #000' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 0 }}>↩ RETURNS:</div>
                     {createdBilling.returnCartItems.map((ri, idx) => (
-                      <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 2 }}>
-                        <div style={{ fontWeight: 'bold', wordBreak: 'break-word' }}>
+                      <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 1, fontWeight: '600' }}>
+                        <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: 0 }}>
                           {ri.productName.substring(0, 22)}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                          <span>Qty: {ri.quantity}</span>
-                          <span>Price: {ri.unitPrice.toFixed(2)}</span>
-                          <span style={{ fontWeight: 'bold' }}>-{ri.refundAmount.toFixed(2)}</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>Q:{ri.quantity}</span>
+                          <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{ri.unitPrice.toFixed(2)}</span>
+                          <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>-{ri.refundAmount.toFixed(2)}</span>
                         </div>
                       </div>
                     ))}
@@ -2093,32 +2094,46 @@ export default function Billing() {
                 )}
               </div>
 
-              <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
               {/* Totals */}
-              <div style={{ fontSize: '8px', fontWeight: 'bold', lineHeight: 1.5, marginBottom: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Subtotal</span>
-                  <span>{createdBilling.subtotal.toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
                 </div>
                 {((productDiscountTotal + customerDiscountTotal) > 0) && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
                     <span>Discount ({((productDiscountTotal + customerDiscountTotal) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
-                    <span>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+                    <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontWeight: 'bold' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
-                  <span>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+              {/* Payment Summary */}
+              <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Amount Paid</span>
+                  <span style={{ textAlign: 'right' }}>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Balance</span>
+                  <span style={{ textAlign: 'right' }}>{((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
               {/* Footer */}
-              <div style={{ textAlign: 'left', fontSize: '7px', marginTop: 2, lineHeight: 1.4 }}>
+              <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
                 <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
-                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '8px', marginTop: 1 }}>Thank You Come Again!</div>
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
               </div>
             </div>
 
@@ -2217,12 +2232,13 @@ export default function Billing() {
             left: -10000,
             width: '280px',
             maxWidth: '280px',
-            padding: '12px 8px',
+            padding: '8px 3px',
             fontFamily: 'monospace',
-            fontSize: '10px',
-            lineHeight: 1.3,
+            fontSize: '9px',
+            lineHeight: 1.2,
             background: '#fff',
             color: '#000',
+            fontWeight: '600',
             boxSizing: 'border-box',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
@@ -2244,75 +2260,75 @@ export default function Billing() {
           )}
 
           {/* Store Header */}
-          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: 1, lineHeight: 1.2 }}>
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '10px', marginBottom: 0, lineHeight: 1.1 }}>
             {storeSettings?.storeName || 'PHARMACY'}
           </div>
-          <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1 }}>
+          <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
             {storeSettings?.address || 'Store Address'}
           </div>
           {storeSettings?.phone && (
-            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1 }}>
+            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
               Ph: {storeSettings.phone}
             </div>
           )}
           {storeSettings?.email && (
-            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 2, lineHeight: 1.1 }}>
+            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.1, fontWeight: '600' }}>
               {storeSettings.email}
             </div>
           )}
 
-          <div style={{ borderTop: '2px solid #000', margin: '3px 0' }}></div>
+          <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
 
           {/* Bill Details */}
-          <div style={{ fontSize: '9px', marginBottom: 2, lineHeight: 1.2 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Bill No</span>
+          <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Bill No:</span>
               <span>{createdBilling.billingNumber}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Date</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Date:</span>
               <span>{new Date(createdBilling.billingDate).toLocaleDateString()}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Cashier</span>
-              <span style={{ fontSize: '8px' }}>{createdBilling.cashierName || 'N/A'}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Cashier:</span>
+              <span>{createdBilling.cashierName || 'N/A'}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Customer</span>
-              <span style={{ fontSize: '8px' }}>{createdBilling.customerName}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Customer:</span>
+              <span>{createdBilling.customerName}</span>
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
           {/* Items List */}
-          <div style={{ marginBottom: 2, lineHeight: 1.6 }}>
+          <div style={{ marginBottom: 0 }}>
             {createdBilling.items.map((item, idx) => (
-              <div key={idx} style={{ fontSize: '9px', marginBottom: 2 }}>
-                <div style={{ fontWeight: 'bold', wordBreak: 'break-word' }}>
+              <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
+                <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
                   {item.productName.substring(0, 22)}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span>Qty: {item.quantity}</span>
-                  <span>Price: {item.unitPrice.toFixed(2)}</span>
-                  <span style={{ fontWeight: 'bold' }}>{item.subtotal.toFixed(2)}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                  <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
+                  <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice.toFixed(2)}</span>
+                  <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{item.subtotal.toFixed(2)}</span>
                 </div>
               </div>
             ))}
 
             {/* Return items */}
             {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
-              <div style={{ marginTop: 2, paddingTop: 1, borderTop: '1px dashed #000' }}>
-                <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 1 }}>↩ RETURNS:</div>
+              <div style={{ marginTop: 1, paddingTop: 1, borderTop: '1px dashed #000' }}>
+                <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 0 }}>↩ RETURNS:</div>
                 {createdBilling.returnCartItems.map((ri, idx) => (
-                  <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 2 }}>
-                    <div style={{ fontWeight: 'bold', wordBreak: 'break-word' }}>
+                  <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 1, fontWeight: '600' }}>
+                    <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: 0 }}>
                       {ri.productName.substring(0, 22)}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                      <span>Qty: {ri.quantity}</span>
-                      <span>Price: {ri.unitPrice.toFixed(2)}</span>
-                      <span style={{ fontWeight: 'bold' }}>-{ri.refundAmount.toFixed(2)}</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                      <span style={{ whiteSpace: 'nowrap' }}>Q:{ri.quantity}</span>
+                      <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{ri.unitPrice.toFixed(2)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>-{ri.refundAmount.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
@@ -2320,32 +2336,46 @@ export default function Billing() {
             )}
           </div>
 
-          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
           {/* Totals */}
-          <div style={{ fontSize: '8px', fontWeight: 'bold', lineHeight: 1.5, marginBottom: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Subtotal</span>
-              <span>{createdBilling.subtotal.toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
             </div>
             {((productDiscountTotal + customerDiscountTotal) > 0) && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
                 <span>Discount ({((productDiscountTotal + customerDiscountTotal) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
-                <span>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+                <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontWeight: 'bold' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
               <span>TOTAL</span>
-              <span>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #000', margin: '2px 0' }}></div>
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Payment Summary */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Amount Paid</span>
+              <span style={{ textAlign: 'right' }}>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Balance</span>
+              <span style={{ textAlign: 'right' }}>{((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
           {/* Footer */}
-          <div style={{ textAlign: 'left', fontSize: '7px', marginTop: 2, lineHeight: 1.4 }}>
+          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
             <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
-            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '8px', marginTop: 1 }}>Thank You Come Again!</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
           </div>
         </div>
       )}

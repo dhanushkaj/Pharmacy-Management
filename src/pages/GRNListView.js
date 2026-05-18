@@ -1,8 +1,7 @@
-import React, { useContext, useEffect, useState, useMemo } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../utill/api";
 import { AuthContext } from "../components/AuthContext";
-
-const API_BASE = process.env.REACT_APP_API_BASE || "";
 
 // Helper function to safely parse JSON
 const safeJson = async (res) => {
@@ -39,6 +38,7 @@ const GRNListView = () => {
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
   );
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
   // Load all GRNs
   useEffect(() => {

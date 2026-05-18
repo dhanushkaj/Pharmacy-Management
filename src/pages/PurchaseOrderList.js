@@ -1,8 +1,7 @@
 // src/pages/PurchaseOrdersList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-
-const API_BASE = process.env.REACT_APP_API_BASE || "";
+import { api } from "../utill/api";
 
 async function safeJson(res) {
   const text = await res.text();
@@ -87,6 +86,7 @@ export default function PurchaseOrdersList() {
 
   const token = localStorage.getItem("token") || "";
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
   // isAdmin gate (ONLY admins can see Actions column)
   const isAdmin = useMemo(() => {

@@ -19,10 +19,11 @@ export const onUnauthorized = () => {
 export async function api(path, { method = 'GET', body, token, headers } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    credentials: 'include',  // IMPORTANT: Send cookies with every request
+    credentials: 'include',  // IMPORTANT: Send cookies with every request (including HTTP-only token cookie)
     headers: {
       'Content-Type': 'application/json',
-      // Note: We no longer send Authorization header - token is in HTTP-only cookie
+      // Token parameter is IGNORED - it's in HTTP-only cookie
+      // Only send Authorization header if explicitly provided (not used for token cookie)
       ...(headers || {}),
     },
     body: body ? JSON.stringify(body) : undefined,

@@ -1,17 +1,12 @@
 // src/pages/CustomerManagement.js
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
+import { api } from '../utill/api';
 import { AuthContext } from '../components/AuthContext';
-
-const API_BASE = process.env.REACT_APP_API_BASE || '';
 
 const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' };
 
 const CustomerManagement = () => {
-  const { token: ctxToken } = useContext(AuthContext);
-
-  // normalize token (AuthContext or localStorage)
-  const token = useMemo(() => ctxToken || localStorage.getItem('token') || '', [ctxToken]);
-  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const { token } = useContext(AuthContext);
 
   const [list, setList] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -19,6 +14,10 @@ const CustomerManagement = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+
+  // Auth headers
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
   // ---- helpers --------------------------------------------------------------
   const tryParseError = (txt, fallback) => {
@@ -41,9 +40,7 @@ const CustomerManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/customers`, { headers: { ...authHeaders } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Failed to load customers');
+      const data = await api('/api/customers', { token });
       // Handle paginated response (data.content) or direct array
       setList(Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : []);
     } catch (e) {

@@ -1,20 +1,9 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../components/AuthContext';
-
-const API_BASE = process.env.REACT_APP_API_BASE || ''; // '' if using CRA proxy to /api
-
-function tryParseError(text, fallback) {
-  try {
-    const j = JSON.parse(text);
-    return j?.error || j?.message || fallback || 'Request failed';
-  } catch {
-    return text || fallback || 'Request failed';
-  }
-}
+import { api } from '../utill/api';
 
 const SupplierManagement = () => {
-  const { token: ctxToken } = useContext(AuthContext);
-  const token = useMemo(() => ctxToken || localStorage.getItem('token') || '', [ctxToken]);
+  const { token } = useContext(AuthContext);
 
   const [list, setList] = useState([]);
   const [form, setForm] = useState({ supplierId: null, name: '', contact: '', email: '', address: '' });
@@ -22,15 +11,11 @@ const SupplierManagement = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/suppliers`, { headers: { ...authHeaders } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || res.statusText);
+      const data = await api('/api/suppliers', { token });
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e.message || 'Failed to load suppliers');
@@ -59,16 +44,10 @@ const SupplierManagement = () => {
       };
 
       const isEdit = !!form.supplierId;
-      const url = isEdit ? `${API_BASE}/api/suppliers/${form.supplierId}` : `${API_BASE}/api/suppliers`;
       const method = isEdit ? 'PUT' : 'POST';
+      const path = isEdit ? `/api/suppliers/${form.supplierId}` : '/api/suppliers';
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.text();
-      if (!res.ok) throw new Error(tryParseError(data, res.statusText));
+      await api(path, { method, body: payload, token });
       await load();
       reset();
     } catch (e) {
@@ -90,12 +69,7 @@ const SupplierManagement = () => {
     if (!window.confirm(`Delete supplier #${id}?`)) return;
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/suppliers/${id}`, {
-        method: 'DELETE',
-        headers: { ...authHeaders }
-      });
-      const text = await res.text();
-      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
+      await api(`/api/suppliers/${id}`, { method: 'DELETE', token });
       // Optimistic update
       setList(prev => prev.filter(s => s.supplierId !== id));
       if (form.supplierId === id) reset();

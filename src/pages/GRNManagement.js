@@ -1,8 +1,7 @@
-import React, { useContext, useEffect, useState, useMemo } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
+import { api } from "../utill/api";
 import { getLastPrices } from "../utill/lastPriceApi";
 import { AuthContext } from "../components/AuthContext";
-
-const API_BASE = process.env.REACT_APP_API_BASE || "";
 
 // Helper function to safely parse JSON
 const safeJson = async (res) => {
@@ -43,6 +42,7 @@ const GRNManagement = () => {
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
   );
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
   useEffect(() => {
     let abort = false;
@@ -61,13 +61,7 @@ const GRNManagement = () => {
       setError("");
       try {
         // Fetch with large size to get all purchase orders for dropdown
-        const res = await fetch(`${API_BASE}/api/purchase-orders?page=0&size=1000`, {
-          headers: { ...authHeaders },
-        });
-        const data = await safeJson(res);
-        if (!res.ok) {
-          throw new Error(data?.message || "Failed to load purchase orders");
-        }
+        const data = await api('/api/purchase-orders?page=0&size=1000', { token });
         if (!abort) {
           // Spring Boot paginated response has 'content' array
           const orders = data.content || (Array.isArray(data) ? data : []);
@@ -92,14 +86,7 @@ const GRNManagement = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns/${grnId}`, {
-        headers: { ...authHeaders },
-      });
-      const data = await safeJson(res);
-      
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to load GRN");
-      }
+      const data = await api(`/api/grns/${grnId}`, { token });
       
       console.log("Loaded GRN:", data);
       setLoadedGrn(data);
@@ -219,20 +206,11 @@ const GRNManagement = () => {
         })),
       };
 
-      const res = await fetch(`${API_BASE}/api/grns`, {
-        method: "POST",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-        },
+      const data = await api('/api/grns', {
+        method: 'POST',
         body: JSON.stringify(payload),
+        token,
       });
-
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to create GRN");
-      }
 
       setCreatedGrnId(data.id);
       alert("GRN Created Successfully!");
@@ -282,19 +260,11 @@ const GRNManagement = () => {
         })),
       };
 
-      const res = await fetch(`${API_BASE}/api/grns/${loadedGrn.id}`, {
-        method: "PUT",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-        },
+      const data = await api(`/api/grns/${loadedGrn.id}`, {
+        method: 'PUT',
         body: JSON.stringify(payload),
+        token,
       });
-
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to update GRN");
-      }
 
       setLoadedGrn(data);
       setGrnItems((data.items || []).map((it) => ({
@@ -329,24 +299,13 @@ const GRNManagement = () => {
     try {
       console.log("Approving GRN:", createdGrnId, "with user:", approvedUser);
       
-      const res = await fetch(`${API_BASE}/api/grns/${createdGrnId}/approve`, {
-        method: "PUT",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-        },
+      const data = await api(`/api/grns/${createdGrnId}/approve`, {
+        method: 'PUT',
         body: JSON.stringify({ approvedUser: approvedUser.trim() }),
+        token,
       });
 
-      const data = await safeJson(res);
-      
-      console.log("Response status:", res.status);
       console.log("Response data:", data);
-
-      if (!res.ok) {
-        const errorMsg = data?.message || data?.error || "Failed to approve GRN";
-        throw new Error(errorMsg);
-      }
 
       setApproved(true);
       alert("GRN Approved and Inventory Updated!");
@@ -396,20 +355,11 @@ const GRNManagement = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns/${createdGrnId}/reject`, {
-        method: "PUT",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-        },
+      const data = await api(`/api/grns/${createdGrnId}/reject`, {
+        method: 'PUT',
         body: JSON.stringify({ reason: rejectReason }),
+        token,
       });
-
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to reject GRN");
-      }
 
       alert("GRN Rejected Successfully");
       console.log("Rejected:", data);

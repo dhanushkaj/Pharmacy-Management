@@ -2023,14 +2023,14 @@ export default function Billing() {
               )}
 
               {/* Store Header */}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '10px', marginBottom: 0, lineHeight: 1.1 }}>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', marginBottom: 0, lineHeight: 1.1 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
-              <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+              <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
                 {storeSettings?.address || 'Store Address'}
               </div>
               {storeSettings?.phone && (
-                <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.1, fontWeight: '600' }}>
+                <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 1, lineHeight: 1.1, fontWeight: '700' }}>
                   Ph: {storeSettings.phone}
                 </div>
               )}
@@ -2134,6 +2134,7 @@ export default function Billing() {
               <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
                 <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
                 <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
+                <div style={{ textAlign: 'center', fontSize: '9px', marginTop: 1, fontWeight: '700' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
               </div>
             </div>
 
@@ -2260,14 +2261,14 @@ export default function Billing() {
           )}
 
           {/* Store Header */}
-          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '10px', marginBottom: 0, lineHeight: 1.1 }}>
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', marginBottom: 0, lineHeight: 1.1 }}>
             {storeSettings?.storeName || 'PHARMACY'}
           </div>
-          <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+          <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
             {storeSettings?.address || 'Store Address'}
           </div>
           {storeSettings?.phone && (
-            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+            <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 0, lineHeight: 1.1, fontWeight: '700' }}>
               Ph: {storeSettings.phone}
             </div>
           )}
@@ -2376,6 +2377,7 @@ export default function Billing() {
           <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
             <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
             <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
+            <div style={{ textAlign: 'center', fontSize: '8px', marginTop: 1, fontWeight: '600' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
           </div>
         </div>
       )}

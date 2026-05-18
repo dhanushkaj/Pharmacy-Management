@@ -78,22 +78,17 @@ export default function PurchaseOrdersList() {
   // sorting (by orderCode)
   const [sortAsc, setSortAsc] = useState(true);
 
-  // Edit modal state
   const [editingPO, setEditingPO] = useState(null);
   const [editSupplier, setEditSupplier] = useState("");
   const [editNeededDate, setEditNeededDate] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const token = localStorage.getItem("token") || "";
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const API_BASE = process.env.REACT_APP_API_BASE || '';
-
   // isAdmin gate (ONLY admins can see Actions column)
   const isAdmin = useMemo(() => {
-    const all = [...readLocalRoles(), ...readJwtRoles(token)].map(normalizeRole);
+    const all = readLocalRoles().map(normalizeRole);
     const set = new Set(all);
     return set.has("admin");
-  }, [token, localStorage.getItem("roles")]);
+  }, [localStorage.getItem("roles")]);
 
   // column count changes if Actions is hidden
   const colCount = isAdmin ? 6 : 5;
@@ -105,12 +100,7 @@ export default function PurchaseOrdersList() {
       setLoading(true);
       setErr("");
       try {
-        const res = await fetch(`${API_BASE}/api/purchase-orders?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`, {
-          headers: { ...authHeaders },
-        });
-        const data = await safeJson(res);
-        if (!res.ok)
-          throw new Error(data?.message || "Failed to load purchase orders");
+        const data = await api(`/api/purchase-orders?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`);
         // Handle paginated response
         const orderList = data.content || [];
         if (!abort) {
@@ -135,12 +125,7 @@ export default function PurchaseOrdersList() {
     let abort = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/suppliers`, {
-          headers: { ...authHeaders },
-        });
-        const data = await safeJson(res);
-        if (!res.ok)
-          throw new Error(data?.message || "Failed to load suppliers");
+        const data = await api('/api/suppliers');
         if (!abort) setSuppliers(Array.isArray(data) ? data : []);
       } catch (e) {
         if (!abort) setErr((prev) => prev || e.message);
@@ -179,13 +164,9 @@ export default function PurchaseOrdersList() {
     setDeletingId(id);
     setErr("");
     try {
-      const res = await fetch(`${API_BASE}/api/purchase-orders/${id}`, {
+      await api(`/api/purchase-orders/${id}`, {
         method: "DELETE",
-        headers: { ...authHeaders },
       });
-      const data = await safeJson(res);
-      if (!res.ok)
-        throw new Error(data?.message || "Failed to delete purchase order");
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } catch (e) {
       setErr(e.message || "Failed to delete purchase order");
@@ -216,13 +197,10 @@ export default function PurchaseOrdersList() {
       if (editSupplier) body.supplierId = parseInt(editSupplier);
       if (editNeededDate) body.neededDate = editNeededDate;
 
-      const res = await fetch(`${API_BASE}/api/purchase-orders/${editingPO.id}`, {
+      const data = await api(`/api/purchase-orders/${editingPO.id}`, {
         method: "PUT",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: body,
       });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to update purchase order");
 
       // Update the order in the list
       setOrders((prev) =>

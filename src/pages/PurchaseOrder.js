@@ -48,11 +48,6 @@ const PurchaseOrder = () => {
   });
   const [creatingProduct, setCreatingProduct] = useState(false);
 
-  // Auth headers
-  const token = localStorage.getItem("token") || "";
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const API_BASE = process.env.REACT_APP_API_BASE || '';
-
   // --------- ROLE GATE (reworked)
   function readJwtRoles(jwtToken) {
     try {
@@ -97,7 +92,7 @@ const PurchaseOrder = () => {
 
   function getAllRoles() {
     const fromStorage = readLocalRoles();
-    const fromJwt = readJwtRoles(token);
+    const fromJwt = [];  // Token is in HTTP-only cookie, can't read roles from it
     const all = [...fromStorage, ...fromJwt].map(normalizeRole);
     return Array.from(new Set(all)); // de-dupe
   }
@@ -106,8 +101,8 @@ const PurchaseOrder = () => {
     const roles = getAllRoles();
     const allowedSet = new Set(["admin"]);
     return roles.some((r) => allowedSet.has(r));
-    // re-evaluate when token or local roles change
-  }, [token, localStorage.getItem("roles")]);
+    // re-evaluate when local roles change
+  }, [localStorage.getItem("roles")]);
   // --------- END ROLE GATE
 
   // --- Load categories for product modal
@@ -115,7 +110,7 @@ const PurchaseOrder = () => {
     let abort = false;
     async function loadCategories() {
       try {
-        const data = await api('/api/categories', { token });
+        const data = await api('/api/categories');
         if (!abort) setCategories(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error("Failed to load categories:", e.message);
@@ -125,7 +120,7 @@ const PurchaseOrder = () => {
     return () => {
       abort = true;
     };
-  }, [token]);
+  }, []);
 
   // --- Load suppliers
   useEffect(() => {
@@ -134,7 +129,7 @@ const PurchaseOrder = () => {
       setLoadingSup(true);
       setErr("");
       try {
-        const data = await api('/api/suppliers', { token });
+        const data = await api('/api/suppliers');
         if (!abort) setSuppliers(Array.isArray(data) ? data : []);
       } catch (e) {
         if (!abort) setErr(e.message);
@@ -146,7 +141,7 @@ const PurchaseOrder = () => {
     return () => {
       abort = true;
     };
-  }, [token]);
+  }, []);
 
   // --- Product search (by name/generic/productCode on backend)
   useEffect(() => {
@@ -158,7 +153,7 @@ const PurchaseOrder = () => {
       }
       setSearching(true);
       try {
-        const data = await api(`/api/products/search?q=${encodeURIComponent(debouncedQuery)}`, { token });
+        const data = await api(`/api/products/search?q=${encodeURIComponent(debouncedQuery)}`);
         if (!abort) setResults(Array.isArray(data) ? data : []);
       } catch {
         if (!abort) setResults([]);
@@ -241,8 +236,7 @@ const PurchaseOrder = () => {
 
       const data = await api('/api/purchase-orders', {
         method: 'POST',
-        body: JSON.stringify(payload),
-        token,
+        body: payload,
       });
 
       navigate(`/purchase-order/${data.id}`, {
@@ -298,8 +292,7 @@ const PurchaseOrder = () => {
 
       const data = await api('/api/products', {
         method: 'POST',
-        body: JSON.stringify(payload),
-        token,
+        body: payload,
       });
 
       // Close modal

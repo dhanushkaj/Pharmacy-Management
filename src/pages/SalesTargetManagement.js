@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../components/AuthContext';
+import { api } from '../utill/api';
 
 const SalesTargetManagement = () => {
-  const { token } = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -26,26 +27,21 @@ const SalesTargetManagement = () => {
   // Fetch targets for selected month
   useEffect(() => {
     fetchTargets();
-  }, [selectedYear, selectedMonth, token]);
+  }, [selectedYear, selectedMonth]);
 
   const fetchTargets = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sales-targets/${selectedYear}/${selectedMonth}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch targets');
-      const data = await res.json();
+      const data = await api(`/api/sales-targets/${selectedYear}/${selectedMonth}`);
       
       // Convert array to object keyed by day
       const targetsMap = {};
-      data.forEach(t => {
-        targetsMap[t.day] = t.targetAmount;
-      });
+      if (Array.isArray(data)) {
+        data.forEach(t => {
+          targetsMap[t.day] = t.targetAmount;
+        });
+      }
       setTargets(targetsMap);
     } catch (err) {
       setError(err.message);
@@ -77,16 +73,11 @@ const SalesTargetManagement = () => {
         }
       }
 
-      const res = await fetch(`/api/sales-targets/${selectedYear}/${selectedMonth}`, {
+      await api(`/api/sales-targets/${selectedYear}/${selectedMonth}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(targetsList)
+        body: targetsList
       });
 
-      if (!res.ok) throw new Error('Failed to save targets');
       setSuccess('Targets saved successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {

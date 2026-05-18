@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../utill/api";
 import { AuthContext } from "../components/AuthContext";
@@ -29,16 +29,7 @@ const GRNListView = () => {
   const [totalElements, setTotalElements] = useState(0);
   const pageSize = 20;
 
-  const { token: ctxToken } = useContext(AuthContext);
-  const token = useMemo(
-    () => ctxToken || localStorage.getItem("token") || "",
-    [ctxToken]
-  );
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token]
-  );
-  const API_BASE = process.env.REACT_APP_API_BASE || '';
+  const { isAuthenticated } = useContext(AuthContext);
 
   // Load all GRNs
   useEffect(() => {
@@ -75,13 +66,7 @@ const GRNListView = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`, {
-        headers: { ...authHeaders },
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to load GRNs");
-      }
+      const data = await api(`/api/grns?page=${currentPage}&size=${pageSize}&sortBy=createdAt&sortDir=desc`);
       // Handle paginated response
       const grnList = data.content || [];
       setGrns(grnList);
@@ -132,15 +117,9 @@ const GRNListView = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns/${grnId}`, {
+      await api(`/api/grns/${grnId}`, {
         method: "DELETE",
-        headers: { ...authHeaders },
       });
-
-      if (!res.ok) {
-        const data = await safeJson(res);
-        throw new Error(data?.message || "Failed to delete GRN");
-      }
 
       alert(`GRN ${grnCode} deleted successfully`);
       // Reload the GRN list

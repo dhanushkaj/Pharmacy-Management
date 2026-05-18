@@ -208,8 +208,7 @@ const GRNManagement = () => {
 
       const data = await api('/api/grns', {
         method: 'POST',
-        body: JSON.stringify(payload),
-        token,
+        body: payload,
       });
 
       setCreatedGrnId(data.id);
@@ -262,8 +261,7 @@ const GRNManagement = () => {
 
       const data = await api(`/api/grns/${loadedGrn.id}`, {
         method: 'PUT',
-        body: JSON.stringify(payload),
-        token,
+        body: payload,
       });
 
       setLoadedGrn(data);
@@ -301,8 +299,7 @@ const GRNManagement = () => {
       
       const data = await api(`/api/grns/${createdGrnId}/approve`, {
         method: 'PUT',
-        body: JSON.stringify({ approvedUser: approvedUser.trim() }),
-        token,
+        body: { approvedUser: approvedUser.trim() },
       });
 
       console.log("Response data:", data);
@@ -357,8 +354,7 @@ const GRNManagement = () => {
     try {
       const data = await api(`/api/grns/${createdGrnId}/reject`, {
         method: 'PUT',
-        body: JSON.stringify({ reason: rejectReason }),
-        token,
+        body: { reason: rejectReason },
       });
 
       alert("GRN Rejected Successfully");

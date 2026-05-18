@@ -6,7 +6,7 @@ import { AuthContext } from '../components/AuthContext';
 const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' };
 
 const CustomerManagement = () => {
-  const { token } = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
 
   const [list, setList] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -15,9 +15,6 @@ const CustomerManagement = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  // Auth headers
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const API_BASE = process.env.REACT_APP_API_BASE || '';
 
   // ---- helpers --------------------------------------------------------------
   const tryParseError = (txt, fallback) => {
@@ -40,7 +37,7 @@ const CustomerManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const data = await api('/api/customers', { token });
+      const data = await api('/api/customers');
       // Handle paginated response (data.content) or direct array
       setList(Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : []);
     } catch (e) {
@@ -53,7 +50,7 @@ const CustomerManagement = () => {
   useEffect(() => {
     loadCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authHeaders]);
+  }, []);
 
   // ---- CRUD -----------------------------------------------------------------
   const onSubmit = async (e) => {
@@ -78,17 +75,14 @@ const CustomerManagement = () => {
 
       const isUpdate = !!form.customerId;
       const url = isUpdate
-        ? `${API_BASE}/api/customers/${form.customerId}`
-        : `${API_BASE}/api/customers`;
+        ? `/api/customers/${form.customerId}`
+        : `/api/customers`;
       const method = isUpdate ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      await api(url, {
         method,
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload),
+        body: payload,
       });
-      const text = await res.text();
-      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
 
       await loadCustomers();
       reset();
@@ -116,16 +110,13 @@ const CustomerManagement = () => {
     if (!window.confirm(`Delete customer #${id}?`)) return;
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+      await api(`/api/customers/${id}`, {
         method: 'DELETE',
-        headers: { ...authHeaders },
       });
-      const text = await res.text();
-      if (!res.ok) throw new Error(tryParseError(text, res.statusText));
       // server returns "Customer Deleted {id}"
       await loadCustomers();
       if (form.customerId === id) reset();
-      alert(text);
+      alert(`Customer #${id} deleted successfully`);
     } catch (e) {
       setError(e.message);
     }

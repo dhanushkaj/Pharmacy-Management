@@ -5,24 +5,24 @@ import { AuthContext } from './AuthContext';
 import { getAlertSummary } from '../utill/alertApi';
 
 const Header = () => {
-  const { username, token, logout } = useContext(AuthContext);
+  const { username, isAuthenticated, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [alertCount, setAlertCount] = useState(0);
   const [criticalCount, setCriticalCount] = useState(0);
   const [showAlertDropdown, setShowAlertDropdown] = useState(false);
 
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       fetchAlertSummary();
       // Refresh every 5 minutes
       const interval = setInterval(fetchAlertSummary, 5 * 60 * 1000);
       return () => clearInterval(interval);
     }
-  }, [token]);
+  }, [isAuthenticated]);
 
   const fetchAlertSummary = async () => {
     try {
-      const summary = await getAlertSummary(token);
+      const summary = await getAlertSummary();
       setAlertCount(summary.totalActive || 0);
       setCriticalCount(summary.criticalCount || 0);
     } catch (error) {
@@ -61,8 +61,8 @@ const Header = () => {
       {/* Curved SVG transition at top-left */}
       <span style={{ letterSpacing: '1px', textShadow: '0 2px 8px #1565c0', marginLeft: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '1.1rem' }}>Pharmacy Management System</span>
       <nav style={{ flexShrink: 0 }}>
-        {!token && <Link to="/login" style={{ color: '#fff', marginRight: 16, textDecoration: 'none', fontSize: '0.9rem' }}>Login</Link>}
-        {token && (
+        {!isAuthenticated && <Link to="/login" style={{ color: '#fff', marginRight: 16, textDecoration: 'none', fontSize: '0.9rem' }}>Login</Link>}
+        {isAuthenticated && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {/* Alert Bell Icon */}
             <div style={{ position: 'relative', cursor: 'pointer' }} onClick={handleAlertClick}>

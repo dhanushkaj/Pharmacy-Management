@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fa';
 import { AuthContext } from '../components/AuthContext';
 import { getAlertSummary } from '../utill/alertApi';
+import { api } from '../utill/api';
 
 // Links kept for reference but hidden
 const links = [
@@ -156,7 +157,7 @@ const ProgressBar = ({ label, value, max, color, showPercentage = true }) => {
 };
 
 const Landing = () => {
-  const { token } = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
   const navigate = useNavigate();
   const [alertSummary, setAlertSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -164,41 +165,51 @@ const Landing = () => {
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      fetchAlertSummary();
-      fetchDashboardData();
-    }
-  }, [token]);
-
-  const fetchAlertSummary = async () => {
-    try {
-      const summary = await getAlertSummary(token);
-      setAlertSummary(summary);
-    } catch (error) {
-      console.error('Failed to fetch alert summary:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchDashboardData = async () => {
-    try {
-      const res = await fetch('/api/sales-targets/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDashboardData(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-    } finally {
+    console.log('Landing component mounted, isAuthenticated:', isAuthenticated);
+    
+    if (!isAuthenticated) {
+      console.log('Not authenticated, skipping dashboard load');
       setDashboardLoading(false);
+      return;
     }
-  };
+    
+    const loadDashboard = async () => {
+      console.log('Loading dashboard data...');
+      try {
+        // Fetch alert summary
+        console.log('Fetching alert summary...');
+        const summary = await getAlertSummary();
+        console.log('Alert summary received:', summary);
+        setAlertSummary(summary);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch alert summary:', error);
+        setLoading(false);
+      }
+      
+      // Fetch dashboard data using api utility (handles HTTP-only cookie automatically)
+      try {
+        console.log('Fetching dashboard data...');
+        const dashboardResponse = await api('/api/sales-targets/dashboard');
+        console.log('Dashboard response:', JSON.stringify(dashboardResponse, null, 2));
+        
+        if (dashboardResponse) {
+          setDashboardData(dashboardResponse);
+          console.log('Dashboard data set successfully');
+        } else {
+          console.warn('No valid dashboard response');
+          setDashboardData(null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+        setDashboardData(null);
+      } finally {
+        setDashboardLoading(false);
+      }
+    };
+    
+    loadDashboard();
+  }, [isAuthenticated]);
 
   const handleAlertClick = () => {
     navigate('/reports/alerts');

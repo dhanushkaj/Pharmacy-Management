@@ -612,17 +612,31 @@ export default function Billing() {
     setShowPaymentModal(true);
   };
 
-  // Close Payment Modal and reset form (F1 or Back button)
+  // Close Payment Modal (F1 or Back button) - keep cart intact
   const handleClosePaymentModal = () => {
     setShowPaymentModal(false);
     setIsPaymentReady(false);
-    resetForm();
+    // Don't call resetForm() - this keeps cart, customer, and all data intact
+    setAmountReceived('');
+    setNotes('');
+    setCreatedBilling(null);
   };
 
-  // Direct submit and print (after clicking + and Enter)
+  // Clear cart with confirmation
+  const handleClearCart = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is already empty!');
+      return;
+    }
+    if (window.confirm('Are you sure you want to clear the entire cart and customer selection? This cannot be undone.')) {
+      resetForm(true); // true = clear customer too
+    }
+  };
+
+  // Direct submit and print (after clicking Shift+plus and Enter)
   const handleDirectSubmitAndPrint = async () => {
     if (!isPaymentReady) {
-      alert('Please click the (+) button first to confirm!');
+      alert('Please press Shift+(+) first to confirm!');
       return;
     }
     await submitBilling(true); // true = direct print mode
@@ -767,9 +781,20 @@ export default function Billing() {
     // Auto-print with slight delay for modal to render
     setTimeout(() => {
       window.print();
+      
+      // Auto-close print dialog after 1.5 seconds
+      setTimeout(() => {
+        const event = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          keyCode: 27,
+          code: 'Escape',
+          bubbles: true,
+        });
+        document.dispatchEvent(event);
+      }, 1500);
     }, 300);
     
-    // Close modal after print dialog (or immediate in kiosk mode)
+    // Close modal after print completes
     setTimeout(() => {
       resetForm();
       setShowBillPreview(false);
@@ -793,11 +818,23 @@ export default function Billing() {
           console.log('Printing thermal bill...');
           window.print();
           
-          // Reset after print dialog closes
+          // Auto-close print dialog after 1.5 seconds
+          setTimeout(() => {
+            // Simulate Escape key to close print dialog
+            const event = new KeyboardEvent('keydown', {
+              key: 'Escape',
+              keyCode: 27,
+              code: 'Escape',
+              bubbles: true,
+            });
+            document.dispatchEvent(event);
+          }, 1500);
+          
+          // Reset after print completes
           setTimeout(() => {
             resetForm();
             setIsDirectPrintMode(false);
-          }, 500);
+          }, 2500);
         } else {
           console.error('Thermal print element not found');
           setIsDirectPrintMode(false);
@@ -808,8 +845,8 @@ export default function Billing() {
     }
   }, [isDirectPrintMode, createdBilling]);
 
-  const resetForm = () => {
-    setSelectedCustomer(null);
+  const resetForm = (clearCustomer = true) => {
+    if (clearCustomer) setSelectedCustomer(null);
     setCartItems([]);
     setDiscountPercentage(0);
     setDiscountAmount(0);
@@ -923,8 +960,8 @@ export default function Billing() {
           return;
         }
 
-        // + key (plus): set ready state
-        if (e.key === '+' || e.key === '=') {
+        // + key (plus): set ready state - only on Shift+Plus combination
+        if ((e.key === '+' || e.key === '=') && e.shiftKey) {
           e.preventDefault();
           setIsPaymentReady(true);
           return;
@@ -1172,6 +1209,30 @@ export default function Billing() {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Clear Cart Button */}
+          {cartItems.length > 0 && (
+            <button
+              onClick={handleClearCart}
+              style={{
+                width: '100%',
+                padding: 10,
+                marginBottom: 12,
+                background: '#f44336',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 'bold',
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'background 0.3s',
+              }}
+              onMouseOver={(e) => e.target.style.background = '#d32f2f'}
+              onMouseOut={(e) => e.target.style.background = '#f44336'}
+            >
+              🗑️ Clear Cart & Customer
+            </button>
           )}
 
           <hr style={{ margin: '16px 0' }} />
@@ -1853,16 +1914,16 @@ export default function Billing() {
               </div>
 
               {/* Notes */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Notes (optional):</label>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold', fontSize: 12 }}>Notes (optional):</label>
                 <textarea 
                   value={notes} 
                   onChange={(e) => {
                     setNotes(e.target.value);
                     setIsPaymentReady(false); // Reset ready state
                   }} 
-                  rows="2" 
-                  style={{ width: '100%', padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #ccc', boxSizing: 'border-box' }} 
+                  rows="1" 
+                  style={{ width: '100%', padding: 6, fontSize: 12, borderRadius: 4, border: '1px solid #ccc', boxSizing: 'border-box' }} 
                   placeholder="Any notes..."
                 />
               </div>
@@ -1873,8 +1934,8 @@ export default function Billing() {
                 flexDirection: 'column',
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                gap: 12,
-                padding: 16,
+                gap: 6,
+                padding: 8,
                 background: isPaymentReady ? '#e8f5e9' : '#fff3e0',
                 borderRadius: 12,
                 border: isPaymentReady ? '2px solid #4caf50' : '2px dashed #ff9800',
@@ -1883,20 +1944,20 @@ export default function Billing() {
                 {/* Tick indicator when ready */}
                 {isPaymentReady ? (
                   <div style={{ 
-                    fontSize: 48, 
+                    fontSize: 32, 
                     color: '#4caf50',
                     animation: 'pulse 1s infinite',
                   }}>
                     ✓
                   </div>
                 ) : (
-                  <div style={{ fontSize: 32, color: '#ff9800' }}>
+                  <div style={{ fontSize: 20, color: '#ff9800' }}>
                     ⌨️
                   </div>
                 )}
 
                 {/* Instruction Text */}
-                <div style={{ textAlign: 'center', fontSize: 14, color: isPaymentReady ? '#2e7d32' : '#e65100', fontWeight: 'bold' }}>
+                <div style={{ textAlign: 'center', fontSize: 12, color: isPaymentReady ? '#2e7d32' : '#e65100', fontWeight: 'bold' }}>
                   {isPaymentReady 
                     ? '✅ READY! Press Enter to confirm & print' 
                     : 'Press keyboard (+) key, then Enter to confirm'}
@@ -2002,7 +2063,7 @@ export default function Billing() {
                 width: '100%',
                 maxWidth: 260,
                 margin: '0 auto',
-                padding: '8px 3px',
+                padding: '0px 3px',
                 fontFamily: 'monospace',
                 fontSize: '9px',
                 lineHeight: 1.2,
@@ -2012,18 +2073,8 @@ export default function Billing() {
               }}
             >
               {/* Store Logo */}
-              {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 1 }}>
-                  <img
-                    src={storeSettings.logo}
-                    alt="Logo"
-                    style={{ maxWidth: 180, maxHeight: 90, objectFit: 'contain' }}
-                  />
-                </div>
-              )}
-
-              {/* Store Header */}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', marginBottom: 0, lineHeight: 1.1 }}>
+              {/* Store Name Header */}
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: 1, lineHeight: 1.1 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
               <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
@@ -2124,7 +2175,7 @@ export default function Billing() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
-                  <span style={{ textAlign: 'right' }}>{((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -2233,7 +2284,7 @@ export default function Billing() {
             left: -10000,
             width: '280px',
             maxWidth: '280px',
-            padding: '8px 3px',
+            padding: '0px 3px',
             fontFamily: 'monospace',
             fontSize: '9px',
             lineHeight: 1.2,
@@ -2245,23 +2296,12 @@ export default function Billing() {
             wordWrap: 'break-word',
             visibility: 'visible',
             display: 'block',
-            margin: 0,
+            margin: '0px',
             border: 'none',
           }}
         >
-          {/* Store Logo */}
-          {storeSettings?.logo && (
-            <div style={{ textAlign: 'center', marginBottom: 1 }}>
-              <img
-                src={storeSettings.logo}
-                alt="Logo"
-                style={{ maxWidth: 180, maxHeight: 90, objectFit: 'contain' }}
-              />
-            </div>
-          )}
-
-          {/* Store Header */}
-          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', marginBottom: 0, lineHeight: 1.1 }}>
+          {/* Store Name Header */}
+          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: 1, lineHeight: 1.1 }}>
             {storeSettings?.storeName || 'PHARMACY'}
           </div>
           <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
@@ -2367,7 +2407,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Balance</span>
-              <span style={{ textAlign: 'right' }}>{((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
             </div>
           </div>
 

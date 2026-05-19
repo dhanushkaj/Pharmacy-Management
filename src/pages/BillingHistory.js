@@ -518,19 +518,8 @@ export default function BillingHistory() {
                 background: '#fff',
               }}
             >
-              {/* Store Logo */}
-              {storeSettings?.logo && (
-                <div style={{ textAlign: 'center', marginBottom: 1 }}>
-                  <img
-                    src={storeSettings.logo}
-                    alt="Logo"
-                    style={{ maxWidth: 180, maxHeight: 90, objectFit: 'contain' }}
-                  />
-                </div>
-              )}
-
-              {/* Store Header */}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', marginBottom: 0, lineHeight: 1.1 }}>
+              {/* Store Name Header */}
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: 1, lineHeight: 1.1 }}>
                 {storeSettings?.storeName || 'PHARMACY'}
               </div>
               <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
@@ -615,7 +604,7 @@ export default function BillingHistory() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
-                  <span style={{ textAlign: 'right' }}>{((selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))) - (selectedBilling.amountReceived || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{Math.abs((selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))) - (selectedBilling.amountReceived || 0)).toFixed(2)}</span>
                 </div>
               </div>
 

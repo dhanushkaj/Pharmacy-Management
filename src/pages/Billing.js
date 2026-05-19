@@ -2073,9 +2073,25 @@ export default function Billing() {
               }}
             >
               {/* Store Logo */}
-              {/* Store Name Header */}
-              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: 1, lineHeight: 1.1 }}>
-                {storeSettings?.storeName || 'PHARMACY'}
+              {/* Store Name Header - Logo Left, Name Right */}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
+                {/* Logo */}
+                {storeSettings?.logo && (
+                  <img
+                    src={storeSettings.logo}
+                    alt="Logo"
+                    style={{ width: '50px', height: '50px', objectFit: 'contain', flexShrink: 0 }}
+                  />
+                )}
+                {!storeSettings?.logo && (
+                  <div style={{ width: '50px', height: '50px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+                )}
+                {/* Store Name - Right aligned, wrapped text */}
+                <div style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
+                    {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
+                  </div>
+                </div>
               </div>
               <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
                 {storeSettings?.address || 'Store Address'}
@@ -2300,9 +2316,25 @@ export default function Billing() {
             border: 'none',
           }}
         >
-          {/* Store Name Header */}
-          <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: 1, lineHeight: 1.1 }}>
-            {storeSettings?.storeName || 'PHARMACY'}
+          {/* Store Name Header - Logo Left, Name Right */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
+            {/* Logo */}
+            {storeSettings?.logo && (
+              <img
+                src={storeSettings.logo}
+                alt="Logo"
+                style={{ width: '50px', height: '50px', objectFit: 'contain', flexShrink: 0 }}
+              />
+            )}
+            {!storeSettings?.logo && (
+              <div style={{ width: '50px', height: '50px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+            )}
+            {/* Store Name - Right aligned, wrapped text */}
+            <div style={{ textAlign: 'center', minWidth: 0 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
+                {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
+              </div>
+            </div>
           </div>
           <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
             {storeSettings?.address || 'Store Address'}

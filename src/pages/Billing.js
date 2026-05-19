@@ -2182,10 +2182,10 @@ export default function Billing() {
               <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
               {/* Footer */}
-              <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
+              <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
                 <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
-                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
-                <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 1, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
+                <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
               </div>
             </div>
 
@@ -2414,10 +2414,10 @@ export default function Billing() {
           <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
           {/* Footer */}
-          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 1, lineHeight: 1.2, fontWeight: '600' }}>
+          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
             <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
-            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 1 }}>Thank You Come Again!</div>
-            <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 1, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
+            <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
           </div>
         </div>
       )}

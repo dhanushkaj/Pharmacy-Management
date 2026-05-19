@@ -2080,11 +2080,11 @@ export default function Billing() {
                   <img
                     src={storeSettings.logo}
                     alt="Logo"
-                    style={{ width: '50px', height: '50px', objectFit: 'contain', flexShrink: 0 }}
+                    style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
                   />
                 )}
                 {!storeSettings?.logo && (
-                  <div style={{ width: '50px', height: '50px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+                  <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
                 )}
                 {/* Store Name - Right aligned, wrapped text */}
                 <div style={{ textAlign: 'center', minWidth: 0 }}>
@@ -2323,11 +2323,11 @@ export default function Billing() {
               <img
                 src={storeSettings.logo}
                 alt="Logo"
-                style={{ width: '50px', height: '50px', objectFit: 'contain', flexShrink: 0 }}
+                style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
               />
             )}
             {!storeSettings?.logo && (
-              <div style={{ width: '50px', height: '50px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+              <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
             )}
             {/* Store Name - Right aligned, wrapped text */}
             <div style={{ textAlign: 'center', minWidth: 0 }}>

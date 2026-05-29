@@ -211,6 +211,12 @@ html, body {
     border: none !important;
   }
   
+  /* Hide modal thermal bill preview during print - only print the hidden div */
+  div[style*="maxWidth: 260"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
   /* Hide buttons and UI elements */
   button,
   .no-print {

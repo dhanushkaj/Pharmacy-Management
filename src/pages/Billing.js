@@ -52,9 +52,6 @@ export default function Billing() {
   const [historyItemIndex, setHistoryItemIndex] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
 
-  // Direct print guard - prevents double-printing
-  const printFiredRef = useRef(false);
-
   // Billing return (Ctrl+R)
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnItem, setReturnItem] = useState(null);
@@ -655,8 +652,8 @@ export default function Billing() {
         ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
         : calculatedDiscount;
       
-      // Parse amount received - ensure 2 decimal precision
-      const parsedAmountReceived = amountReceived !== '' ? parseFloat(parseFloat(amountReceived).toFixed(2)) : 0;
+      // Parse amount received
+      const parsedAmountReceived = amountReceived !== '' ? parseFloat(amountReceived) : 0;
 
       // Separate return items from normal items
       const normalItems = cartItems.filter(item => !item.isReturn);
@@ -711,10 +708,6 @@ export default function Billing() {
       }
 
       if (response) {
-        // Ensure amountReceived is properly rounded to 2 decimals
-        if (response.amountReceived) {
-          response.amountReceived = Math.round(response.amountReceived * 100) / 100;
-        }
         // Attach return info to billing response for display
         response.returnItems = returnResults;
         response.returnRefundTotal = returnRefundTotal;
@@ -734,11 +727,7 @@ export default function Billing() {
         if (directPrintMode) {
           setIsDirectPrintMode(true);
         } else {
-          // Normal mode: auto-reset form and close payment modal after 1.5 seconds
-          setTimeout(() => {
-            resetForm();
-            setShowPaymentModal(false);
-          }, 1500);
+          setShowBillPreview(true);
         }
       } else if (returnResults.length > 0) {
         // Only returns, no normal sale items — still show a receipt
@@ -774,11 +763,7 @@ export default function Billing() {
         if (directPrintMode) {
           setIsDirectPrintMode(true);
         } else {
-          // Normal mode: auto-reset form and close payment modal after 1.5 seconds
-          setTimeout(() => {
-            resetForm();
-            setShowPaymentModal(false);
-          }, 1500);
+          setShowBillPreview(true);
         }
       } else {
         setError('No items to process.');
@@ -793,15 +778,8 @@ export default function Billing() {
   };
 
   const handlePrintAndClose = () => {
-    // Don't print if we're already in direct print mode
-    if (isDirectPrintMode) {
-      console.log('Already in direct print mode, skipping handlePrintAndClose');
-      return;
-    }
-    
     // Auto-print with slight delay for modal to render
     setTimeout(() => {
-      console.log('Modal print: Calling window.print()');
       window.print();
       
       // Auto-close print dialog after 1.5 seconds
@@ -832,24 +810,38 @@ export default function Billing() {
 
   // Effect: Handle direct print when thermal print div becomes available
   useEffect(() => {
-    if (isDirectPrintMode && createdBilling && !printFiredRef.current) {
-      printFiredRef.current = true; // Lock immediately to prevent double-fire
-
-      const mainTimer = setTimeout(() => {
-        console.log('Direct print mode: Calling window.print()');
-        window.print();
-
-        const resetTimer = setTimeout(() => {
-          console.log('Direct print mode: Resetting form and exiting direct print');
-          printFiredRef.current = false; // Unlock for next bill
-          resetForm();
+    if (isDirectPrintMode && createdBilling) {
+      // Wait for DOM to render the thermal print div
+      const timer = setTimeout(() => {
+        const printElement = document.getElementById('billing-thermal-print');
+        if (printElement) {
+          console.log('Printing thermal bill...');
+          window.print();
+          
+          // Auto-close print dialog after 1.5 seconds
+          setTimeout(() => {
+            // Simulate Escape key to close print dialog
+            const event = new KeyboardEvent('keydown', {
+              key: 'Escape',
+              keyCode: 27,
+              code: 'Escape',
+              bubbles: true,
+            });
+            document.dispatchEvent(event);
+          }, 1500);
+          
+          // Reset after print completes
+          setTimeout(() => {
+            resetForm();
+            setIsDirectPrintMode(false);
+          }, 2500);
+        } else {
+          console.error('Thermal print element not found');
           setIsDirectPrintMode(false);
-          setShowPaymentModal(false);
-        }, 2000);
-        return () => clearTimeout(resetTimer);
-      }, 300); // Give DOM time to render the bill content
-
-      return () => clearTimeout(mainTimer);
+        }
+      }, 150); // Delay for DOM rendering
+      
+      return () => clearTimeout(timer);
     }
   }, [isDirectPrintMode, createdBilling]);
 
@@ -864,9 +856,6 @@ export default function Billing() {
     setAmountReceived('');
     setCustomerSearch('');
     setProductSearch('');
-    // Don't set setIsDirectPrintMode(false) here - handled by useEffect to prevent double-printing
-    setShowPaymentModal(false);
-    setShowBillPreview(false);
     setCreatedBilling(null);
     setIsPaymentReady(false);
   };
@@ -998,7 +987,7 @@ export default function Billing() {
           activeElement.tagName === 'TEXTAREA' || 
           activeElement.tagName === 'SELECT'
         );
-        if (!isTyping && !showPaymentModal && !showCustomerHistory && !showReturnModal) {
+        if (!isTyping && !showPaymentModal && !showBillPreview && !showCustomerHistory && !showReturnModal) {
           e.preventDefault();
           handleOpenPaymentModal();
           return;
@@ -1138,111 +1127,8 @@ export default function Billing() {
 
   // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
 
-  // DIRECT PRINT MODE: Render ONLY the thermal bill (removes all other UI from DOM)
-  if (isDirectPrintMode && createdBilling) {
-    return (
-      <div
-        id="thermal-bill"
-        style={{
-          width: '58mm',
-          maxWidth: '58mm',
-          margin: '0',
-          padding: '8px',
-          fontFamily: 'monospace',
-          fontSize: '9px',
-          lineHeight: 1.2,
-          background: '#fff',
-          color: '#000',
-        }}
-      >
-        {/* Store Header */}
-        <div style={{ textAlign: 'center', marginBottom: 4 }}>
-          {storeSettings?.logo && (
-            <img
-              src={storeSettings.logo}
-              alt="Logo"
-              style={{ width: '50px', height: '50px', objectFit: 'contain' }}
-            />
-          )}
-          <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
-            {storeSettings?.storeName || 'PHARMACY'}
-          </div>
-          <div style={{ fontSize: '8px' }}>{storeSettings?.address || ''}</div>
-          {storeSettings?.phone && <div style={{ fontSize: '8px' }}>Ph: {storeSettings.phone}</div>}
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
-        {/* Bill Info */}
-        <div style={{ fontSize: '8px', marginBottom: 4 }}>
-          <div>Bill: {createdBilling.billingNumber}</div>
-          <div>Date: {new Date(createdBilling.billingDate).toLocaleDateString()}</div>
-          <div>Customer: {createdBilling.customerName}</div>
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
-        {/* Items */}
-        {createdBilling.items.map((item, idx) => (
-          <div key={idx} style={{ marginBottom: 2 }}>
-            <div style={{ fontWeight: 'bold', fontSize: '9px' }}>{item.productName.substring(0, 20)}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-              <span>{item.quantity} x {item.unitPrice.toFixed(2)}</span>
-              <span>{item.subtotal.toFixed(2)}</span>
-            </div>
-          </div>
-        ))}
-
-        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
-        {/* Totals */}
-        <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Subtotal:</span>
-            <span>{createdBilling.subtotal.toFixed(2)}</span>
-          </div>
-          {createdBilling.totalDiscount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Discount:</span>
-              <span>-{createdBilling.totalDiscount.toFixed(2)}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', borderTop: '1px solid #000', paddingTop: 2, marginTop: 2 }}>
-            <span>TOTAL:</span>
-            <span>{createdBilling.grandTotal.toFixed(2)}</span>
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
-        {/* Payment */}
-        <div style={{ fontSize: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Paid:</span>
-            <span>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Balance:</span>
-            <span>{Math.abs(createdBilling.grandTotal - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
-        {/* Footer */}
-        <div style={{ textAlign: 'center', fontSize: '8px', marginTop: 4 }}>
-          <div>Thank You!</div>
-          {storeSettings?.phone && <div>Contact: {storeSettings.phone}</div>}
-        </div>
-      </div>
-    );
-  }
-
-  // NORMAL MODE: Render full billing UI
   return (
     <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
-      {/* Print CSS is in App.css - targets #thermal-bill */}
-
       <h2 style={{ fontSize: 20, marginBottom: 12 }}>Billing / Sales</h2>
 
       {error && <div style={{ color: 'red', marginBottom: 10, padding: 8, background: '#fee', border: '1px solid red', fontSize: 13 }}>{error}</div>}
@@ -2124,9 +2010,449 @@ export default function Billing() {
         </div>
       )}
 
-      {/* REMOVED: Thermal Print Div - This was causing blank paper rolling. 
-          Direct print now uses the same modal template as BillingHistory.js */}
+      {/* Bill Preview Modal after successful billing creation */}
+      {(showBillPreview || createdBilling) && createdBilling && !isDirectPrintMode && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              maxWidth: 450,
+              maxHeight: '95vh',
+              overflow: 'auto',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Success Header */}
+            <div
+              className="no-print"
+              style={{
+                padding: 20,
+                background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+                color: '#fff',
+                textAlign: 'center',
+                borderTopLeftRadius: 12,
+                borderTopRightRadius: 12,
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 8 }}>✓</div>
+              <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 4 }}>
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Processed Successfully!' : 'Billing Created Successfully!'}
+              </div>
+              <div style={{ fontSize: 14, opacity: 0.9 }}>
+                {createdBilling.billingNumber === 'RETURN' ? 'Return Receipt' : `Bill #${createdBilling.billingNumber}`}
+              </div>
+            </div>
 
+            {/* Thermal Bill Content shown in Modal - 60mm Format */}
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 260,
+                margin: '0 auto',
+                padding: '0px 3px',
+                fontFamily: 'monospace',
+                fontSize: '9px',
+                lineHeight: 1.2,
+                background: '#fff',
+                color: '#000',
+                fontWeight: '600',
+              }}
+            >
+              {/* Store Logo */}
+              {/* Store Name Header - Logo Left, Name Right */}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
+                {/* Logo */}
+                {storeSettings?.logo && (
+                  <img
+                    src={storeSettings.logo}
+                    alt="Logo"
+                    style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
+                  />
+                )}
+                {!storeSettings?.logo && (
+                  <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+                )}
+                {/* Store Name - Right aligned, wrapped text */}
+                <div style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
+                    {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
+                  </div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+                {storeSettings?.address || 'Store Address'}
+              </div>
+              {storeSettings?.phone && (
+                <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 1, lineHeight: 1.1, fontWeight: '700' }}>
+                  Ph: {storeSettings.phone}
+                </div>
+              )}
+
+              <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
+
+              {/* Bill Details */}
+              <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Bill No:</span>
+                  <span>{createdBilling.billingNumber}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Date:</span>
+                  <span>{new Date(createdBilling.billingDate).toLocaleDateString()}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Cashier:</span>
+                  <span>{createdBilling.cashierName || 'N/A'}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+                  <span>Customer:</span>
+                  <span>{createdBilling.customerName}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+              {/* Items List */}
+              <div style={{ marginBottom: 0 }}>
+                {createdBilling.items.map((item, idx) => (
+                  <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
+                      {item.productName.substring(0, 22)}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                      <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
+                      <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice.toFixed(2)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{item.subtotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Return items */}
+                {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                  <div style={{ marginTop: 1, paddingTop: 1, borderTop: '1px dashed #000' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 0 }}>↩ RETURNS:</div>
+                    {createdBilling.returnCartItems.map((ri, idx) => (
+                      <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 1, fontWeight: '600' }}>
+                        <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: 0 }}>
+                          {ri.productName.substring(0, 22)}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>Q:{ri.quantity}</span>
+                          <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{ri.unitPrice.toFixed(2)}</span>
+                          <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>-{ri.refundAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+              {/* Totals */}
+              <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Subtotal</span>
+                  <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
+                </div>
+                {((productDiscountTotal + customerDiscountTotal) > 0) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
+                    <span>Discount ({((productDiscountTotal + customerDiscountTotal) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                    <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
+                  <span>TOTAL</span>
+                  <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+              {/* Payment Summary */}
+              <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Amount Paid</span>
+                  <span style={{ textAlign: 'right' }}>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Balance</span>
+                  <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+              {/* Footer */}
+              <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+                <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
+                <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div
+              className="no-print"
+              style={{
+                padding: 20,
+                borderTop: '1px solid #ddd',
+                display: 'flex',
+                gap: 12,
+                justifyContent: 'center',
+                background: '#f9f9f9',
+                borderBottomLeftRadius: 12,
+                borderBottomRightRadius: 12,
+              }}
+            >
+              <button
+                onClick={handlePrintAndClose}
+                style={{
+                  padding: '12px 32px',
+                  background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 16,
+                  boxShadow: '0 2px 8px rgba(76,175,80,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 20 }}>🖨️</span>
+                Print & Close
+              </button>
+              <button
+                onClick={handleCloseWithoutPrint}
+                style={{
+                  padding: '12px 32px',
+                  background: '#fff',
+                  color: '#666',
+                  border: '2px solid #ddd',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 16,
+                }}
+              >
+                Close Without Print
+              </button>
+              {hasRole && hasRole('admin') && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) {
+                      try {
+                        await api(`/api/billings/${createdBilling.billingId}`, {
+                          method: 'DELETE',
+                          token,
+                        });
+                        alert('Billing deleted successfully.');
+                        setShowBillPreview(false);
+                        setCreatedBilling(null);
+                        resetForm();
+                      } catch (err) {
+                        alert('Failed to delete billing: ' + (err.message || 'Error'));
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '12px 32px',
+                    background: '#f44336',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Delete Billing
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Thermal Print Div for Direct Print Mode - Hidden from view but printable */}
+      {isDirectPrintMode && createdBilling && (
+        <div
+          id="billing-thermal-print"
+          style={{
+            position: 'fixed',
+            top: -10000,
+            left: -10000,
+            width: '280px',
+            maxWidth: '280px',
+            padding: '0px 3px',
+            fontFamily: 'monospace',
+            fontSize: '9px',
+            lineHeight: 1.2,
+            background: '#fff',
+            color: '#000',
+            fontWeight: '600',
+            boxSizing: 'border-box',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            visibility: 'visible',
+            display: 'block',
+            margin: '0px',
+            border: 'none',
+          }}
+        >
+          {/* Store Name Header - Logo Left, Name Right */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
+            {/* Logo */}
+            {storeSettings?.logo && (
+              <img
+                src={storeSettings.logo}
+                alt="Logo"
+                style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
+              />
+            )}
+            {!storeSettings?.logo && (
+              <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+            )}
+            {/* Store Name - Right aligned, wrapped text */}
+            <div style={{ textAlign: 'center', minWidth: 0 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
+                {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+            {storeSettings?.address || 'Store Address'}
+          </div>
+          {storeSettings?.phone && (
+            <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 0, lineHeight: 1.1, fontWeight: '700' }}>
+              Ph: {storeSettings.phone}
+            </div>
+          )}
+          {storeSettings?.email && (
+            <div style={{ textAlign: 'center', fontSize: '8px', marginBottom: 1, lineHeight: 1.1, fontWeight: '600' }}>
+              {storeSettings.email}
+            </div>
+          )}
+
+          <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
+
+          {/* Bill Details */}
+          <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Bill No:</span>
+              <span>{createdBilling.billingNumber}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Date:</span>
+              <span>{new Date(createdBilling.billingDate).toLocaleDateString()}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Cashier:</span>
+              <span>{createdBilling.cashierName || 'N/A'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Customer:</span>
+              <span>{createdBilling.customerName}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Items List */}
+          <div style={{ marginBottom: 0 }}>
+            {createdBilling.items.map((item, idx) => (
+              <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
+                <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
+                  {item.productName.substring(0, 22)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                  <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
+                  <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice.toFixed(2)}</span>
+                  <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{item.subtotal.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Return items */}
+            {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+              <div style={{ marginTop: 1, paddingTop: 1, borderTop: '1px dashed #000' }}>
+                <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 0 }}>↩ RETURNS:</div>
+                {createdBilling.returnCartItems.map((ri, idx) => (
+                  <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 1, fontWeight: '600' }}>
+                    <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: 0 }}>
+                      {ri.productName.substring(0, 22)}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                      <span style={{ whiteSpace: 'nowrap' }}>Q:{ri.quantity}</span>
+                      <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{ri.unitPrice.toFixed(2)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>-{ri.refundAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Totals */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Subtotal</span>
+              <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
+            </div>
+            {((productDiscountTotal + customerDiscountTotal) > 0) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
+                <span>Discount ({((productDiscountTotal + customerDiscountTotal) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
+              <span>TOTAL</span>
+              <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Payment Summary */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Amount Paid</span>
+              <span style={{ textAlign: 'right' }}>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Balance</span>
+              <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Footer */}
+          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+            <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
+            <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
+          </div>
+        </div>
+      )}
       {showCustomerHistory && (
         <div
           style={{

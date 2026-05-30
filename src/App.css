@@ -147,96 +147,87 @@ html, body {
 
 /* Print styles - show only thermal bill content */
 @media print {
-  /* Page settings for thermal printer */
-  @page {
-    size: 58mm auto;
-    margin: 0mm;
+  /* Hide everything by default */
+  * {
+    visibility: hidden;
   }
   
-  /* Reset html/body */
-  html, body {
-    width: 58mm !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
+  /* Show only thermal bill and all its content */
+  #thermal-bill,
+  #thermal-bill *,
+  #billing-thermal-print,
+  #billing-thermal-print * {
+    visibility: visible !important;
+  }
+  
+  /* Thermal bill container */
+  #thermal-bill,
+  #billing-thermal-print {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 80mm !important;
+    max-width: 280px !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: visible !important;
-    background: #fff !important;
-  }
-  
-  /* HIDE EVERYTHING using display:none (removes from layout entirely) */
-  body > * {
-    display: none !important;
-  }
-  
-  /* But show the thermal bill container and make it the only thing visible */
-  #thermal-bill {
-    display: block !important;
-    position: static !important;
-    width: 58mm !important;
-    max-width: 58mm !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 2mm !important;
     background: #fff !important;
     color: #000 !important;
-    font-family: monospace !important;
-    font-size: 9px !important;
-    line-height: 1.2 !important;
   }
   
-  /* Make all children of thermal-bill visible */
-  #thermal-bill * {
-    display: revert !important;
-    visibility: visible !important;
-    color: #000 !important;
+  /* Content styling */
+  #thermal-bill div,
+  #thermal-bill span,
+  #thermal-bill table,
+  #billing-thermal-print div,
+  #billing-thermal-print span,
+  #billing-thermal-print table {
     background: transparent !important;
-  }
-  
-  /* Restore specific display types */
-  #thermal-bill div {
-    display: block !important;
-  }
-  
-  #thermal-bill span {
-    display: inline !important;
-  }
-  
-  #thermal-bill img {
-    display: inline-block !important;
+    color: #000 !important;
   }
   
   /* Tables */
-  #thermal-bill table {
-    display: table !important;
+  #thermal-bill table,
+  #billing-thermal-print table {
     width: 100% !important;
     border-collapse: collapse !important;
   }
   
-  #thermal-bill tr {
-    display: table-row !important;
+  #thermal-bill tr,
+  #thermal-bill thead,
+  #thermal-bill tbody,
+  #billing-thermal-print tr,
+  #billing-thermal-print thead,
+  #billing-thermal-print tbody {
+    display: table !important;
+    width: 100% !important;
   }
   
   #thermal-bill td,
-  #thermal-bill th {
+  #thermal-bill th,
+  #billing-thermal-print td,
+  #billing-thermal-print th {
     display: table-cell !important;
     padding: 0 !important;
+    border: none !important;
   }
   
-  /* Grid layouts - restore grid display */
-  #thermal-bill [style*="grid"] {
-    display: grid !important;
-  }
-  
-  /* Flex layouts - restore flex display */  
-  #thermal-bill [style*="flex"] {
-    display: flex !important;
-  }
-  
-  /* Hide buttons and no-print elements inside thermal bill */
-  #thermal-bill button,
-  #thermal-bill .no-print {
+  /* Hide modal thermal bill preview during print - only print the hidden div */
+  div[style*="maxWidth: 260"] {
     display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Hide buttons and UI elements */
+  button,
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Page settings */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+    padding: 0;
   }
 }

@@ -2026,35 +2026,23 @@ export default function Billing() {
       {/* Thermal Print Modal - shows bill content for printing */}
       {isDirectPrintMode && createdBilling && (
         <div
-          className="no-print"
+          id="thermal-bill"
           style={{
+            background: '#fff',
+            padding: '10px',
+            width: '58mm',
             position: 'fixed',
             top: 0,
             left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
             zIndex: 3000,
           }}
         >
-          <div
-            id="thermal-bill"
-            style={{
-              background: '#fff',
-              padding: '10px',
-              width: '58mm',
-            }}
-          >
-            {/* TEST: Simple hardcoded content */}
-            <div style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-              <p>TEST PRINT</p>
-              <p>Bill: {createdBilling.billingNumber}</p>
-              <p>Total: Rs. {createdBilling.grandTotal}</p>
-              <p>--- END ---</p>
-            </div>
+          {/* TEST: Simple hardcoded content */}
+          <div style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+            <p>TEST PRINT</p>
+            <p>Bill: {createdBilling.billingNumber}</p>
+            <p>Total: Rs. {createdBilling.grandTotal}</p>
+            <p>--- END ---</p>
           </div>
         </div>
       )}

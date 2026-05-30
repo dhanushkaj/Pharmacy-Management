@@ -1138,6 +1138,107 @@ export default function Billing() {
 
   // Update discount amount when items are added or removed from cart. If no items remain, clear the discount amount.
 
+  // DIRECT PRINT MODE: Render ONLY the thermal bill (removes all other UI from DOM)
+  if (isDirectPrintMode && createdBilling) {
+    return (
+      <div
+        id="thermal-bill"
+        style={{
+          width: '58mm',
+          maxWidth: '58mm',
+          margin: '0',
+          padding: '8px',
+          fontFamily: 'monospace',
+          fontSize: '9px',
+          lineHeight: 1.2,
+          background: '#fff',
+          color: '#000',
+        }}
+      >
+        {/* Store Header */}
+        <div style={{ textAlign: 'center', marginBottom: 4 }}>
+          {storeSettings?.logo && (
+            <img
+              src={storeSettings.logo}
+              alt="Logo"
+              style={{ width: '50px', height: '50px', objectFit: 'contain' }}
+            />
+          )}
+          <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+            {storeSettings?.storeName || 'PHARMACY'}
+          </div>
+          <div style={{ fontSize: '8px' }}>{storeSettings?.address || ''}</div>
+          {storeSettings?.phone && <div style={{ fontSize: '8px' }}>Ph: {storeSettings.phone}</div>}
+        </div>
+
+        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+        {/* Bill Info */}
+        <div style={{ fontSize: '8px', marginBottom: 4 }}>
+          <div>Bill: {createdBilling.billingNumber}</div>
+          <div>Date: {new Date(createdBilling.billingDate).toLocaleDateString()}</div>
+          <div>Customer: {createdBilling.customerName}</div>
+        </div>
+
+        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+        {/* Items */}
+        {createdBilling.items.map((item, idx) => (
+          <div key={idx} style={{ marginBottom: 2 }}>
+            <div style={{ fontWeight: 'bold', fontSize: '9px' }}>{item.productName.substring(0, 20)}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
+              <span>{item.quantity} x {item.unitPrice.toFixed(2)}</span>
+              <span>{item.subtotal.toFixed(2)}</span>
+            </div>
+          </div>
+        ))}
+
+        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+        {/* Totals */}
+        <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Subtotal:</span>
+            <span>{createdBilling.subtotal.toFixed(2)}</span>
+          </div>
+          {createdBilling.totalDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Discount:</span>
+              <span>-{createdBilling.totalDiscount.toFixed(2)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', borderTop: '1px solid #000', paddingTop: 2, marginTop: 2 }}>
+            <span>TOTAL:</span>
+            <span>{createdBilling.grandTotal.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+        {/* Payment */}
+        <div style={{ fontSize: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Paid:</span>
+            <span>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Balance:</span>
+            <span>{Math.abs(createdBilling.grandTotal - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+        {/* Footer */}
+        <div style={{ textAlign: 'center', fontSize: '8px', marginTop: 4 }}>
+          <div>Thank You!</div>
+          {storeSettings?.phone && <div>Contact: {storeSettings.phone}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  // NORMAL MODE: Render full billing UI
   return (
     <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
       {/* Print CSS is in App.css - targets #thermal-bill */}
@@ -2019,30 +2120,6 @@ export default function Billing() {
                 Press F1 to return to billing screen
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Thermal Print Modal - shows bill content for printing */}
-      {isDirectPrintMode && createdBilling && (
-        <div
-          id="thermal-bill"
-          style={{
-            background: '#fff',
-            padding: '10px',
-            width: '58mm',
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            zIndex: 3000,
-          }}
-        >
-          {/* TEST: Simple hardcoded content */}
-          <div style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-            <p>TEST PRINT</p>
-            <p>Bill: {createdBilling.billingNumber}</p>
-            <p>Total: Rs. {createdBilling.grandTotal}</p>
-            <p>--- END ---</p>
           </div>
         </div>
       )}

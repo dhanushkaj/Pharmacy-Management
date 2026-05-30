@@ -224,9 +224,18 @@ html, body {
   /* Hide buttons and UI elements but keep table structure visible */
   button,
   .no-print,
-  .ant-btn {
+  .ant-btn,
+  .payment-modal-actions,
+  [class*="close"],
+  [class*="button"] {
     display: none !important;
     visibility: hidden !important;
+  }
+  
+  /* Show only the bill content */
+  div[style*="maxWidth: 260"] {
+    display: block !important;
+    max-width: 260px !important;
   }
   
   /* Page settings */

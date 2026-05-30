@@ -816,25 +816,30 @@ export default function Billing() {
         const printElement = document.getElementById('billing-thermal-print');
         if (printElement) {
           console.log('Printing thermal bill...');
-          window.print();
           
-          // Auto-close print dialog after 1.5 seconds
-          setTimeout(() => {
-            // Simulate Escape key to close print dialog
-            const event = new KeyboardEvent('keydown', {
-              key: 'Escape',
-              keyCode: 27,
-              code: 'Escape',
-              bubbles: true,
-            });
-            document.dispatchEvent(event);
-          }, 1500);
+          // Hide modal thermal preview before printing
+          const modalElements = document.querySelectorAll('div[style*="maxWidth: 260"]');
+          const originalDisplay = [];
+          modalElements.forEach((el, idx) => {
+            originalDisplay[idx] = el.style.display;
+            el.style.display = 'none';
+          });
           
-          // Reset after print completes
+          // Wait a moment then print
           setTimeout(() => {
-            resetForm();
-            setIsDirectPrintMode(false);
-          }, 2500);
+            window.print();
+            
+            // Restore modal visibility after printing
+            setTimeout(() => {
+              modalElements.forEach((el, idx) => {
+                el.style.display = originalDisplay[idx] || 'block';
+              });
+              
+              // Reset after print completes
+              resetForm();
+              setIsDirectPrintMode(false);
+            }, 1500);
+          }, 100);
         } else {
           console.error('Thermal print element not found');
           setIsDirectPrintMode(false);

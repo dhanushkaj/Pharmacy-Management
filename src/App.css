@@ -212,14 +212,19 @@ html, body {
   }
   
   /* Hide modal thermal bill preview during print - only print the hidden div */
-  div[style*="maxWidth: 260"] {
+  div[style*="maxWidth: 260"],
+  .ant-modal,
+  .ant-modal-mask {
     display: none !important;
     visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
   
-  /* Hide buttons and UI elements */
+  /* Hide buttons and UI elements but keep table structure visible */
   button,
-  .no-print {
+  .no-print,
+  .ant-btn {
     display: none !important;
     visibility: hidden !important;
   }

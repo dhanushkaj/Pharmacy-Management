@@ -52,6 +52,9 @@ export default function Billing() {
   const [historyItemIndex, setHistoryItemIndex] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
 
+  // Direct print guard - prevents double-printing
+  const printFiredRef = useRef(false);
+
   // Billing return (Ctrl+R)
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnItem, setReturnItem] = useState(null);
@@ -829,8 +832,8 @@ export default function Billing() {
 
   // Effect: Handle direct print when thermal print div becomes available
   useEffect(() => {
-    if (isDirectPrintMode && createdBilling) {
-      const timers = [];
+    if (isDirectPrintMode && createdBilling && !printFiredRef.current) {
+      printFiredRef.current = true; // Lock immediately to prevent double-fire
 
       const mainTimer = setTimeout(() => {
         console.log('Direct print mode: Calling window.print()');
@@ -838,18 +841,15 @@ export default function Billing() {
 
         const resetTimer = setTimeout(() => {
           console.log('Direct print mode: Resetting form and exiting direct print');
+          printFiredRef.current = false; // Unlock for next bill
           resetForm();
           setIsDirectPrintMode(false);
           setShowPaymentModal(false);
         }, 2000);
-        timers.push(resetTimer);
+        return () => clearTimeout(resetTimer);
       }, 300); // Give DOM time to render the bill content
 
-      timers.push(mainTimer);
-      return () => {
-        console.log('Direct print effect cleanup: Clearing timers');
-        timers.forEach(clearTimeout);
-      };
+      return () => clearTimeout(mainTimer);
     }
   }, [isDirectPrintMode, createdBilling]);
 
@@ -864,11 +864,9 @@ export default function Billing() {
     setAmountReceived('');
     setCustomerSearch('');
     setProductSearch('');
-    // IMPORTANT: Set these FIRST before clearing billing to avoid race conditions
-    setIsDirectPrintMode(false);
+    // Don't set setIsDirectPrintMode(false) here - handled by useEffect to prevent double-printing
     setShowPaymentModal(false);
     setShowBillPreview(false);
-    // Then clear the billing after
     setCreatedBilling(null);
     setIsPaymentReady(false);
   };
@@ -1142,6 +1140,27 @@ export default function Billing() {
 
   return (
     <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
+      {/* Print CSS - Hide everything except thermal print area during printing */}
+      <style>{`
+        @media print {
+          body * { 
+            visibility: hidden; 
+          }
+          .thermal-print-area, .thermal-print-area * { 
+            visibility: visible; 
+          }
+          .thermal-print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 58mm !important;
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
+      `}</style>
+
       <h2 style={{ fontSize: 20, marginBottom: 12 }}>Billing / Sales</h2>
 
       {error && <div style={{ color: 'red', marginBottom: 10, padding: 8, background: '#fee', border: '1px solid red', fontSize: 13 }}>{error}</div>}
@@ -2023,21 +2042,19 @@ export default function Billing() {
         </div>
       )}
 
-      {/* Bill Preview Modal REMOVED - Auto-prints for direct print mode, auto-resets form for normal mode */}
+      {/* Thermal Print Area - Only rendered when direct printing */}
       {isDirectPrintMode && createdBilling && (
         <div
+          className="thermal-print-area"
           style={{
             position: 'fixed',
+            left: '-9999px',
             top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'transparent',
-            display: 'none',  /* Hidden - only for printing, not for display */
-            zIndex: -1,
+            width: '58mm',
+            background: '#fff',
           }}
         >
-          {/* Thermal Bill Content shown in Modal - 60mm Format */}
+          {/* Thermal Bill Content - 60mm Format */}
           <div
             style={{
               width: '100%',

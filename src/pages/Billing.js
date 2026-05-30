@@ -836,9 +836,8 @@ export default function Billing() {
       printFiredRef.current = true; // Lock immediately to prevent double-fire
 
       const mainTimer = setTimeout(() => {
-        console.log('Direct print mode: PRINT DISABLED FOR TESTING');
-        // TEMPORARILY DISABLED FOR TESTING - uncomment to enable printing
-        // window.print();
+        console.log('Direct print mode: Calling window.print()');
+        window.print();
 
         const resetTimer = setTimeout(() => {
           console.log('Direct print mode: Resetting form and exiting direct print');
@@ -1141,26 +1140,7 @@ export default function Billing() {
 
   return (
     <div style={{ padding: 16, fontFamily: 'Arial, sans-serif', boxSizing: 'border-box', maxWidth: '100%', overflow: 'hidden' }}>
-      {/* Print CSS - Hide everything except thermal print area during printing */}
-      <style>{`
-        @media print {
-          body * { 
-            visibility: hidden; 
-          }
-          .thermal-print-area, .thermal-print-area * { 
-            visibility: visible; 
-          }
-          .thermal-print-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 58mm !important;
-            background: #fff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
+      {/* Print CSS is in App.css - targets #thermal-bill */}
 
       <h2 style={{ fontSize: 20, marginBottom: 12 }}>Billing / Sales</h2>
 
@@ -2043,9 +2023,10 @@ export default function Billing() {
         </div>
       )}
 
-      {/* Thermal Print Area - VISIBLE modal like BillingHistory (not hidden off-screen) */}
+      {/* Thermal Print Modal - shows bill content for printing */}
       {isDirectPrintMode && createdBilling && (
         <div
+          className="no-print"
           style={{
             position: 'fixed',
             top: 0,

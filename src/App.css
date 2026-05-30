@@ -211,19 +211,11 @@ html, body {
     border: none !important;
   }
   
-  /* Hide modal thermal bill preview during print - only print the hidden div */
-  div[style*="maxWidth: 260"],
-  .ant-modal,
-  .ant-modal-mask {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-  
-  /* Hide buttons and UI elements but keep table structure visible */
-  button,
+  /* Hide everything that shouldn't print */
   .no-print,
+  .ant-modal,
+  .ant-modal-mask,
+  button,
   .ant-btn,
   .payment-modal-actions,
   [class*="close"],
@@ -232,13 +224,7 @@ html, body {
     visibility: hidden !important;
   }
   
-  /* Show only the bill content */
-  div[style*="maxWidth: 260"] {
-    display: block !important;
-    max-width: 260px !important;
-  }
-  
-  /* Page settings */
+  /* Page settings for thermal printer */
   @page {
     size: 80mm auto;
     margin: 0;

@@ -147,6 +147,22 @@ html, body {
 
 /* Print styles - show only thermal bill content */
 @media print {
+  /* Page settings for thermal printer - MUST be first */
+  @page {
+    size: 58mm auto;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Reset html/body to prevent extra pages */
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
   /* Hide everything by default */
   * {
     visibility: hidden;
@@ -166,12 +182,16 @@ html, body {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 80mm !important;
-    max-width: 280px !important;
+    width: 58mm !important;
+    max-width: 220px !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
     color: #000 !important;
+    height: auto !important;
+    overflow: visible !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
   }
   
   /* Content styling */
@@ -222,12 +242,5 @@ html, body {
   [class*="button"] {
     display: none !important;
     visibility: hidden !important;
-  }
-  
-  /* Page settings for thermal printer */
-  @page {
-    size: 80mm auto;
-    margin: 0;
-    padding: 0;
   }
 }

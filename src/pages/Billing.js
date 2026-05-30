@@ -2043,26 +2043,41 @@ export default function Billing() {
         </div>
       )}
 
-      {/* Thermal Print Area - Only rendered when direct printing */}
+      {/* Thermal Print Area - VISIBLE modal like BillingHistory (not hidden off-screen) */}
       {isDirectPrintMode && createdBilling && (
         <div
-          className="thermal-print-area"
           style={{
             position: 'fixed',
-            left: '-9999px',
             top: 0,
-            width: '58mm',
-            background: '#fff',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 3000,
           }}
         >
-          {/* Thermal Bill Content - 60mm Format */}
           <div
+            id="thermal-bill"
             style={{
-              width: '100%',
-              maxWidth: 260,
-              margin: '0 auto',
-              padding: '0px 3px',
-              fontFamily: 'monospace',
+              background: '#fff',
+              borderRadius: 8,
+              maxWidth: 300,
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Thermal Bill Content - 60mm Format */}
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 260,
+                margin: '0 auto',
+                padding: '12px 4px',
+                fontFamily: 'monospace',
               fontSize: '9px',
               lineHeight: 1.2,
               background: '#fff',
@@ -2201,6 +2216,7 @@ export default function Billing() {
               <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
               <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
             </div>
+          </div>
           </div>
         </div>
       )}

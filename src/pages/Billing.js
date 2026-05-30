@@ -836,8 +836,9 @@ export default function Billing() {
       printFiredRef.current = true; // Lock immediately to prevent double-fire
 
       const mainTimer = setTimeout(() => {
-        console.log('Direct print mode: Calling window.print()');
-        window.print();
+        console.log('Direct print mode: PRINT DISABLED FOR TESTING');
+        // TEMPORARILY DISABLED FOR TESTING - uncomment to enable printing
+        // window.print();
 
         const resetTimer = setTimeout(() => {
           console.log('Direct print mode: Resetting form and exiting direct print');

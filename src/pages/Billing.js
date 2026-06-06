@@ -778,28 +778,13 @@ export default function Billing() {
   };
 
   const handlePrintAndClose = () => {
-    // Auto-print with slight delay for modal to render
-    setTimeout(() => {
-      window.print();
-      
-      // Auto-close print dialog after 1.5 seconds
-      setTimeout(() => {
-        const event = new KeyboardEvent('keydown', {
-          key: 'Escape',
-          keyCode: 27,
-          code: 'Escape',
-          bubbles: true,
-        });
-        document.dispatchEvent(event);
-      }, 1500);
-    }, 300);
-    
-    // Close modal after print completes
-    setTimeout(() => {
+    window.onafterprint = () => {
+      window.onafterprint = null;
       resetForm();
       setShowBillPreview(false);
       setShowPaymentModal(false);
-    }, 1000);
+    };
+    window.print();
   };
 
   const handleCloseWithoutPrint = () => {
@@ -816,25 +801,18 @@ export default function Billing() {
         const printElement = document.getElementById('billing-thermal-print');
         if (printElement) {
           console.log('Printing thermal bill...');
-          window.print();
           
-          // Auto-close print dialog after 1.5 seconds
-          setTimeout(() => {
-            // Simulate Escape key to close print dialog
-            const event = new KeyboardEvent('keydown', {
-              key: 'Escape',
-              keyCode: 27,
-              code: 'Escape',
-              bubbles: true,
-            });
-            document.dispatchEvent(event);
-          }, 1500);
-          
-          // Reset after print completes
-          setTimeout(() => {
+          // Set up onafterprint handler to reset form when print dialog closes
+          window.onafterprint = () => {
+            window.onafterprint = null;
             resetForm();
+            setShowBillPreview(false);
+            setShowPaymentModal(false);
             setIsDirectPrintMode(false);
-          }, 2500);
+          };
+          
+          // Trigger print
+          window.print();
         } else {
           console.error('Thermal print element not found');
           setIsDirectPrintMode(false);
@@ -2295,25 +2273,16 @@ export default function Billing() {
         <div
           id="billing-thermal-print"
           style={{
-            position: 'fixed',
-            top: -10000,
-            left: -10000,
-            width: '280px',
-            maxWidth: '280px',
-            padding: '0px 3px',
-            fontFamily: 'monospace',
+            visibility: 'hidden',
+            height: 0,
+            overflow: 'hidden',
+            width: '72mm',
+            fontFamily: "'Courier New', monospace",
             fontSize: '9px',
-            lineHeight: 1.2,
+            lineHeight: 1.3,
             background: '#fff',
             color: '#000',
-            fontWeight: '600',
             boxSizing: 'border-box',
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word',
-            visibility: 'visible',
-            display: 'block',
-            margin: '0px',
-            border: 'none',
           }}
         >
           {/* Store Name Header - Logo Left, Name Right */}

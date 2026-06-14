@@ -1322,51 +1322,57 @@ const ProductManagement = () => {
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.packSize || "-"}
                 </td>
-                <td style={{ padding: 6, border: "1px solid #ddd", whiteSpace: "nowrap" }}>
-                  <button
-                    onClick={() => onEdit(p)}
-                    style={{
-                      background: "#ffe066",
-                      color: "#333",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(p.productId)}
-                    disabled={!isAdmin}
-                    title={!isAdmin ? "Only admins can delete" : undefined}
-                    style={{
-                      marginLeft: 4,
-                      background: "#ff6b6b",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    Del
-                  </button>
-                  <button
-                    onClick={() => openInventoryModal(p.productId, p)}
-                    style={{
-                      marginLeft: 4,
-                      background: "#63b3ed",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                    title="View inventory buckets (price/stock)"
-                  >
-                    Inv
-                  </button>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                    <button
+                      onClick={() => onEdit(p)}
+                      style={{
+                        background: "#ffe066",
+                        color: "#333",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                        flex: "0 1 auto",
+                        minWidth: "45px",
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onDelete(p.productId)}
+                      disabled={!isAdmin}
+                      title={!isAdmin ? "Only admins can delete" : undefined}
+                      style={{
+                        background: "#ff6b6b",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                        flex: "0 1 auto",
+                        minWidth: "35px",
+                      }}
+                    >
+                      Del
+                    </button>
+                    <button
+                      onClick={() => openInventoryModal(p.productId, p)}
+                      style={{
+                        background: "#63b3ed",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                        flex: "0 1 auto",
+                        minWidth: "35px",
+                      }}
+                      title="View inventory buckets (price/stock)"
+                    >
+                      Inv
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

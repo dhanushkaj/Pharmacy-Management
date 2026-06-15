@@ -147,37 +147,34 @@ html, body {
 
 /* Print styles - show only thermal bill content */
 @media print {
-  body > * {
-    visibility: hidden !important;
+  /* Collapse html and body completely */
+  html, body {
+    width: 0 !important;
     height: 0 !important;
     overflow: hidden !important;
-    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  #root, .app-shell, .main-content, .content-area {
+  /* Hide the entire page */
+  body {
     visibility: hidden !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    position: static !important;
   }
 
-  /* Restore parent chain height so child can expand */
-  #root,
-  #root > * {
-    height: auto !important;
-    overflow: visible !important;
-  }
-
-  #billing-thermal-print {
+  /* Restore ONLY the thermal print divs (both main Billing and BillingHistory) */
+  #billing-thermal-print,
+  #thermal-bill {
     visibility: visible !important;
     display: block !important;
-    height: auto !important;
-    overflow: visible !important;
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 72mm !important;
     max-width: 72mm !important;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 !important;
-    padding: 2mm 2mm 4mm 2mm !important;
+    padding: 2mm 2mm 6mm 2mm !important;
     background: #fff !important;
     color: #000 !important;
     font-family: 'Courier New', monospace !important;
@@ -186,22 +183,38 @@ html, body {
     box-sizing: border-box !important;
   }
 
-  #billing-thermal-print * {
+  /* Restore all children */
+  #billing-thermal-print *,
+  #thermal-bill * {
     visibility: visible !important;
     color: #000 !important;
     background: transparent !important;
   }
 
-  /* Let elements revert to their natural display, then React inline style takes over */
-  #billing-thermal-print div,
-  #billing-thermal-print span {
-    display: revert !important;
+  /* Explicitly restore flex containers */
+  #billing-thermal-print div[style*="flex"],
+  #thermal-bill div[style*="flex"] {
+    display: flex !important;
   }
 
-  #billing-thermal-print img {
+  /* Explicitly restore grid containers */
+  #billing-thermal-print div[style*="grid"],
+  #thermal-bill div[style*="grid"] {
+    display: grid !important;
+  }
+
+  /* Images */
+  #billing-thermal-print img,
+  #thermal-bill img {
     display: inline-block !important;
     max-width: 60px !important;
     max-height: 60px !important;
+  }
+
+  /* Spans stay inline */
+  #billing-thermal-print span,
+  #thermal-bill span {
+    display: inline !important;
   }
 
   @page {

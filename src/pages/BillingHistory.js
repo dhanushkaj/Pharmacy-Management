@@ -628,7 +628,7 @@ export default function BillingHistory() {
 
               {/* Footer */}
               <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
-                <div>Items Sold: {selectedBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div>Items Sold: {selectedBilling.items.length}</div>
                 <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
                 <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
               </div>

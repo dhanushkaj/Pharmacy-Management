@@ -42,6 +42,9 @@ export default function Billing() {
   // Track manual discount input
   const [isDiscountManual, setIsDiscountManual] = useState(false);
 
+  // Refs for focus management
+  const customerDiscountPercentRef = useRef(null);
+
   // Customer billing history (Ctrl+H)
   const [showCustomerHistory, setShowCustomerHistory] = useState(false);
   const [customerBills, setCustomerBills] = useState([]);
@@ -92,6 +95,7 @@ export default function Billing() {
 
   // Fetch Sales Target Dashboard Data
   const fetchSalesTargetData = async () => {
+    setSalesTargetLoading(true);
     try {
       const res = await fetch('/api/sales-targets/dashboard', {
         headers: {
@@ -441,6 +445,13 @@ export default function Billing() {
     }
   }, [showPriceOptions]);
 
+  // Focus the discount input when payment modal opens
+  useEffect(() => {
+    if (showPaymentModal && customerDiscountPercentRef.current) {
+      customerDiscountPercentRef.current.focus();
+    }
+  }, [showPaymentModal]);
+
   const addProductToCart = (product, quantity = 1, unitPrice = null) => {
     console.log('Adding to cart:', product, 'Quantity:', quantity, 'Unit Price:', unitPrice);
     
@@ -652,8 +663,10 @@ export default function Billing() {
         ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
         : calculatedDiscount;
       
-      // Parse amount received
-      const parsedAmountReceived = amountReceived !== '' ? parseFloat(amountReceived) : 0;
+      // Parse amount received - for non-CASH, use grandTotal automatically
+      const parsedAmountReceived = paymentMethod === 'CASH' 
+        ? (amountReceived !== '' ? parseFloat(amountReceived) : 0)
+        : grandTotal;
 
       // Separate return items from normal items
       const normalItems = cartItems.filter(item => !item.isReturn);
@@ -722,6 +735,9 @@ export default function Billing() {
           discountPercentage: ri.productDiscount || 0,
         }));
         setCreatedBilling(response);
+        
+        // Refresh sales target data after successful billing
+        fetchSalesTargetData();
         
         // Direct print mode: set flag and let useEffect handle printing
         if (directPrintMode) {
@@ -941,6 +957,17 @@ export default function Billing() {
         // + key (plus): set ready state - only on Shift+Plus combination
         if ((e.key === '+' || e.key === '=') && e.shiftKey) {
           e.preventDefault();
+          
+          // Validate based on payment method
+          if (paymentMethod === 'CASH') {
+            // For CASH: Amount Received is mandatory and must be a valid positive number
+            if (!amountReceived || amountReceived === '' || isNaN(parseFloat(amountReceived))) {
+              alert('For CASH payments, please enter the amount received!');
+              return;
+            }
+          }
+          // For other payment methods, amount is auto-set to grandTotal
+          
           setIsPaymentReady(true);
           return;
         }
@@ -1080,7 +1107,7 @@ export default function Billing() {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex, showPaymentModal, showBillPreview, isPaymentReady, loading, cartItems]);
+  }, [selectedCustomer, token, showCustomerHistory, showReturnModal, selectedHistoryBill, selectedHistoryItem, customerBills, historyBillIndex, historyItemIndex, showPaymentModal, showBillPreview, isPaymentReady, loading, cartItems, amountReceived, paymentMethod]);
 
   // Also, when cartItems change, update discountAmount if it was set by customer discount
 
@@ -1737,6 +1764,7 @@ export default function Billing() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
                   <span>Customer Discount (%):</span>
                   <input
+                    ref={customerDiscountPercentRef}
                     type="number"
                     min="0"
                     max={paymentMethod === 'CARD' ? 2 : 100}
@@ -1858,22 +1886,28 @@ export default function Billing() {
 
               {/* Amount Received */}
               <div style={{ marginBottom: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Amount Received (Rs.):</label>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>
+                  Amount Received (Rs.): {paymentMethod === 'CASH' && <span style={{ color: 'red' }}>*</span>}
+                </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={amountReceived}
+                  value={paymentMethod === 'CASH' ? amountReceived : grandTotal}
                   onChange={(e) => {
-                    setAmountReceived(e.target.value);
-                    setIsPaymentReady(false); // Reset ready state
+                    if (paymentMethod === 'CASH') {
+                      setAmountReceived(e.target.value);
+                      setIsPaymentReady(false);
+                    }
                   }}
-                  placeholder="Enter amount given by customer"
-                  style={{ width: '100%', padding: 12, fontSize: 18, boxSizing: 'border-box', borderRadius: 6, border: '1px solid #ccc' }}
+                  disabled={paymentMethod !== 'CASH'}
+                  placeholder={paymentMethod === 'CASH' ? 'Enter amount given by customer' : 'Auto-set to grand total'}
+                  required={paymentMethod === 'CASH'}
+                  style={{ width: '100%', padding: 12, fontSize: 18, boxSizing: 'border-box', borderRadius: 6, border: paymentMethod === 'CASH' ? '2px solid #ff9800' : '1px solid #ccc', background: paymentMethod !== 'CASH' ? '#f5f5f5' : '#fff' }}
                 />
                 
                 {/* Balance Display */}
-                {amountReceived !== '' && parseFloat(amountReceived) > 0 && (
+                {((paymentMethod === 'CASH' && amountReceived !== '' && parseFloat(amountReceived) > 0) || paymentMethod !== 'CASH') && (
                   <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -1881,12 +1915,12 @@ export default function Billing() {
                     fontWeight: 'bold',
                     padding: 12,
                     marginTop: 12,
-                    background: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2',
+                    background: paymentMethod === 'CASH' ? (parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#c8e6c9' : '#ffcdd2') : '#c8e6c9',
                     borderRadius: 6,
-                    color: parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828'
+                    color: paymentMethod === 'CASH' ? (parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? '#2e7d32' : '#c62828') : '#2e7d32'
                   }}>
-                    <span>{parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:'}</span>
-                    <span>Rs. {Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2)}</span>
+                    <span>{paymentMethod === 'CASH' ? (parseFloat(amountReceived) >= (returnCartItems.length > 0 ? netPayable : grandTotal) ? 'Balance to Return:' : 'Amount Due:') : 'Balance to Return:'}</span>
+                    <span>Rs. {paymentMethod === 'CASH' ? Math.abs(parseFloat(amountReceived) - (returnCartItems.length > 0 ? netPayable : grandTotal)).toFixed(2) : '0.00'}</span>
                   </div>
                 )}
               </div>
@@ -2177,7 +2211,7 @@ export default function Billing() {
 
               {/* Footer */}
               <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
-                <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                <div>Items Sold: {createdBilling.items.length}</div>
                 <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
                 <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
               </div>
@@ -2416,7 +2450,7 @@ export default function Billing() {
 
           {/* Footer */}
           <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
-            <div>Items Sold: {createdBilling.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+            <div>Items Sold: {createdBilling.items.length}</div>
             <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
             <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
           </div>

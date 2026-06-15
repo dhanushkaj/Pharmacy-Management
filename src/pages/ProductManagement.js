@@ -1,8 +1,9 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
+import { api } from "../utill/api";
 import { AuthContext } from "../components/AuthContext";
 import * as XLSX from "xlsx";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "";
+const API_BASE = ""; // Empty string - api() wrapper handles base URL
 const pageSize = 25;
 
 const BULK_COLUMNS = [
@@ -385,11 +386,7 @@ const emptyForm = {
 };
 
 const ProductManagement = () => {
-  const { token: ctxToken, roles: ctxRoles } = useContext(AuthContext);
-  const token = useMemo(
-    () => ctxToken || localStorage.getItem("token") || "",
-    [ctxToken]
-  );
+  const { roles: ctxRoles } = useContext(AuthContext);
   const rolesArr = useMemo(() => getRolesArray(ctxRoles), [ctxRoles]);
   const isAdmin = useMemo(
     () => rolesArr.some((r) => String(r).toLowerCase() === "admin"),
@@ -411,11 +408,6 @@ const ProductManagement = () => {
     generic: "",
   });
   const [page, setPage] = useState(1);
-
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token]
-  );
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReport, setBulkReport] = useState({
     ok: 0,
@@ -454,8 +446,8 @@ const ProductManagement = () => {
     async function loadRefs() {
       try {
         const [catRes, supRes] = await Promise.all([
-          fetch(`${API_BASE}/api/categories`, { headers: { ...authHeaders } }),
-          fetch(`${API_BASE}/api/suppliers`, { headers: { ...authHeaders } }),
+          fetch(`${API_BASE}/api/categories`),
+          fetch(`${API_BASE}/api/suppliers`),
         ]);
         const [catData, supData] = await Promise.all([
           catRes.json(),
@@ -477,16 +469,14 @@ const ProductManagement = () => {
     return () => {
       aborted = true;
     };
-  }, [authHeaders]);
+  }, []);
 
   useEffect(() => {
     let aborted = false;
     async function loadProducts() {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/products`, {
-          headers: { ...authHeaders },
-        });
+        const res = await fetch(`${API_BASE}/api/products`);
         const data = await res.json();
         if (!res.ok)
           throw new Error(data?.message || "Failed to load products");
@@ -501,7 +491,7 @@ const ProductManagement = () => {
     return () => {
       aborted = true;
     };
-  }, [authHeaders]);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, files, type } = e.target;
@@ -523,7 +513,7 @@ const ProductManagement = () => {
     const url = id ? `/api/products/${id}` : `/api/products`;
     const res = await fetch(url, {
       method: id ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const text = await res.text();
@@ -544,9 +534,7 @@ const ProductManagement = () => {
   }
 
   async function reloadProducts() {
-    const res = await fetch(`${API_BASE}/api/products`, {
-      headers: { ...authHeaders },
-    });
+    const res = await fetch(`${API_BASE}/api/products`);
     const data = await res.json();
     if (!res.ok) throw new Error(data?.message || "Failed to load products");
     setList(Array.isArray(data) ? data : []);
@@ -619,7 +607,6 @@ const ProductManagement = () => {
     try {
       const res = await fetch(`${API_BASE}/api/products/${id}`, {
         method: "DELETE",
-        headers: { ...authHeaders },
       });
       const text = await res.text();
       if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
@@ -638,10 +625,7 @@ const ProductManagement = () => {
     setInventoryItems([]);
     try {
       const res = await fetch(
-        `${API_BASE}/api/products/${productId}/inventory`,
-        {
-          headers: { ...authHeaders },
-        }
+        `${API_BASE}/api/products/${productId}/inventory`
       );
       const txt = await res.text();
       if (!res.ok) throw new Error(tryParseError(txt, res.statusText));
@@ -680,7 +664,7 @@ const ProductManagement = () => {
         `${API_BASE}/api/products/${productId}/inventory`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
       );
@@ -721,7 +705,7 @@ const ProductManagement = () => {
         `${API_BASE}/api/products/${productId}/inventory/${inventoryId}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
       );
@@ -757,7 +741,6 @@ const ProductManagement = () => {
         `${API_BASE}/api/products/${productId}/inventory/${inventoryId}`,
         {
           method: "DELETE",
-          headers: { ...authHeaders },
         }
       );
       const txt = await res.text();
@@ -862,7 +845,8 @@ const ProductManagement = () => {
       try {
         const res = await fetch(bulkUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payloads),
         });
 
@@ -1339,51 +1323,57 @@ const ProductManagement = () => {
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.packSize || "-"}
                 </td>
-                <td style={{ padding: 6, border: "1px solid #ddd", whiteSpace: "nowrap" }}>
-                  <button
-                    onClick={() => onEdit(p)}
-                    style={{
-                      background: "#ffe066",
-                      color: "#333",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(p.productId)}
-                    disabled={!isAdmin}
-                    title={!isAdmin ? "Only admins can delete" : undefined}
-                    style={{
-                      marginLeft: 4,
-                      background: "#ff6b6b",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    Del
-                  </button>
-                  <button
-                    onClick={() => openInventoryModal(p.productId, p)}
-                    style={{
-                      marginLeft: 4,
-                      background: "#63b3ed",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                    }}
-                    title="View inventory buckets (price/stock)"
-                  >
-                    Inv
-                  </button>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                    <button
+                      onClick={() => onEdit(p)}
+                      style={{
+                        flex: "0 1 auto",
+                        minWidth: "45px",
+                        background: "#ffe066",
+                        color: "#333",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onDelete(p.productId)}
+                      disabled={!isAdmin}
+                      title={!isAdmin ? "Only admins can delete" : undefined}
+                      style={{
+                        flex: "0 1 auto",
+                        minWidth: "35px",
+                        background: "#ff6b6b",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Del
+                    </button>
+                    <button
+                      onClick={() => openInventoryModal(p.productId, p)}
+                      title="View inventory buckets (price/stock)"
+                      style={{
+                        flex: "0 1 auto",
+                        minWidth: "35px",
+                        background: "#63b3ed",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Inv
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

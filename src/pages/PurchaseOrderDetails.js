@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
-
-const API_BASE = process.env.REACT_APP_API_BASE || '';
+import { api } from '../utill/api';
 
 async function safeJson(res) {
   const text = await res.text();

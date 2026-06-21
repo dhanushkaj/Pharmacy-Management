@@ -14,7 +14,7 @@ export default function Billing() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerDropdownIndex, setCustomerDropdownIndex] = useState(0);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '' });
+  const [newCustomer, setNewCustomer] = useState({ title: '', name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' });
 
   // Product Section
   const [productSearch, setProductSearch] = useState('');
@@ -257,13 +257,21 @@ export default function Billing() {
     try {
       const created = await api('/api/customers', {
         method: 'POST',
-        body: newCustomer,
+        body: {
+          title: newCustomer.title?.trim() || null,
+          name: newCustomer.name.trim(),
+          phone: newCustomer.phone.trim(),
+          email: newCustomer.email?.trim() || null,
+          address: newCustomer.address?.trim() || null,
+          discountPercentage: parseFloat(newCustomer.discountPercentage) || 0,
+          birthday: newCustomer.birthday || null,
+        },
         token,
       });
       setSelectedCustomer(created);
       setDiscountPercentage(created.discountPercentage || 0);
       setShowNewCustomerModal(false);
-      setNewCustomer({ name: '', phone: '' });
+      setNewCustomer({ title: '', name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' });
       fetchCustomers(); // refresh list
     } catch (err) {
       alert('Failed to add customer: ' + (err.message || 'Error'));
@@ -1579,6 +1587,23 @@ export default function Billing() {
             <h3>Add New Customer</h3>
             <form onSubmit={handleAddNewCustomer}>
               <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 4 }}>Title</label>
+                <select
+                  value={newCustomer.title}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, title: e.target.value })}
+                  style={{ width: '100%', padding: 8 }}
+                >
+                  <option value="">Select...</option>
+                  <option value="Mr.">Mr.</option>
+                  <option value="Mrs.">Mrs.</option>
+                  <option value="Ms.">Ms.</option>
+                  <option value="Dr.">Dr.</option>
+                  <option value="Prof.">Prof.</option>
+                  <option value="Rev.">Rev.</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', marginBottom: 4 }}>Name *</label>
                 <input
                   type="text"
@@ -1595,6 +1620,24 @@ export default function Billing() {
                   required
                   value={newCustomer.phone}
                   onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  style={{ width: '100%', padding: 8 }}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 4 }}>Email</label>
+                <input
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                  style={{ width: '100%', padding: 8 }}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 4 }}>Address</label>
+                <input
+                  type="text"
+                  value={newCustomer.address}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
                   style={{ width: '100%', padding: 8 }}
                 />
               </div>

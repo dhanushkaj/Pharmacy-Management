@@ -3,7 +3,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import { api } from '../utill/api';
 import { AuthContext } from '../components/AuthContext';
 
-const emptyForm = { customerId: null, name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' };
+const emptyForm = { customerId: null, title: '', name: '', phone: '', email: '', address: '', discountPercentage: '0', birthday: '' };
 
 const CustomerManagement = () => {
   const { isAuthenticated } = useContext(AuthContext);
@@ -65,6 +65,7 @@ const CustomerManagement = () => {
     setSaving(true);
     try {
       const payload = {
+        title: form.title?.trim() || null,
         name: form.name.trim(),
         phone: form.phone?.trim() || null,
         email: form.email?.trim() || null,
@@ -96,6 +97,7 @@ const CustomerManagement = () => {
   const onEdit = (c) => {
     setForm({
       customerId: c.customerId,
+      title: c.title || '',
       name: c.name || '',
       phone: c.phone || '',
       email: c.email || '',
@@ -150,6 +152,24 @@ const CustomerManagement = () => {
           borderRadius: 8,
         }}
       >
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150 }}>
+          <label>Title</label>
+          <select
+            name="title"
+            value={form.title}
+            onChange={handleChange}
+            style={{ padding: 8 }}
+          >
+            <option value="">Select...</option>
+            <option value="Mr.">Mr.</option>
+            <option value="Mrs.">Mrs.</option>
+            <option value="Ms.">Ms.</option>
+            <option value="Dr.">Dr.</option>
+            <option value="Prof.">Prof.</option>
+            <option value="Rev.">Rev.</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 200 }}>
           <label>Name</label>
           <input
@@ -267,6 +287,7 @@ const CustomerManagement = () => {
         <thead>
           <tr style={{ background: '#f0f0f0' }}>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>ID</th>
+            <th style={{ padding: 10, border: '1px solid #ccc' }}>Title</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Name</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Phone</th>
             <th style={{ padding: 10, border: '1px solid #ccc' }}>Email</th>
@@ -280,6 +301,7 @@ const CustomerManagement = () => {
           {filtered.map((c) => (
             <tr key={c.customerId}>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.customerId}</td>
+              <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.title || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.name}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.phone || '-'}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.email || '-'}</td>

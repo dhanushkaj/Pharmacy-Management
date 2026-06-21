@@ -65,6 +65,12 @@ export default function Billing() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isPaymentReady, setIsPaymentReady] = useState(false);
 
+  // Quick Price Modal
+  const [showQuickPriceModal, setShowQuickPriceModal] = useState(false);
+  const [quickPriceCartIdx, setQuickPriceCartIdx] = useState(null);
+  const [quickPriceInput, setQuickPriceInput] = useState('');
+  const [quickPriceValidation, setQuickPriceValidation] = useState('');
+
   // Sales Target Dashboard (Mini Widget)
   const [salesTargetData, setSalesTargetData] = useState(null);
   const [salesTargetLoading, setSalesTargetLoading] = useState(true);
@@ -652,6 +658,81 @@ export default function Billing() {
     }
   };
 
+  // Quick Price Add Handlers
+  const openQuickPriceModal = (cartIdx) => {
+    setQuickPriceCartIdx(cartIdx);
+    setQuickPriceInput('');
+    setQuickPriceValidation('');
+    setShowQuickPriceModal(true);
+  };
+
+  const closeQuickPriceModal = () => {
+    setShowQuickPriceModal(false);
+    setQuickPriceCartIdx(null);
+    setQuickPriceInput('');
+    setQuickPriceValidation('');
+  };
+
+  const handleQuickPriceSubmit = async () => {
+    if (!quickPriceInput.trim()) {
+      setQuickPriceValidation('Price cannot be empty');
+      return;
+    }
+
+    const newPrice = parseFloat(quickPriceInput);
+    if (isNaN(newPrice) || newPrice <= 0) {
+      setQuickPriceValidation('Price must be a valid positive number');
+      return;
+    }
+
+    const cartItem = cartItems[quickPriceCartIdx];
+    if (!cartItem) {
+      setQuickPriceValidation('Cart item not found');
+      return;
+    }
+
+    const productId = cartItem.product.productId;
+
+    // Check if price already exists in the product's inventory levels
+    const priceExists = cartItem.product.inventoryLevels?.some(inv => 
+      parseFloat(inv.price) === newPrice
+    );
+
+    if (priceExists) {
+      setQuickPriceValidation(`Price Rs. ${newPrice.toFixed(2)} already exists for this product`);
+      return;
+    }
+
+    // Show confirmation BEFORE making the API call
+    if (!window.confirm(`Add new price Rs. ${newPrice.toFixed(2)} to cart for ${cartItem.product.name}?`)) {
+      return;
+    }
+
+    try {
+      // Call backend to add the new price
+      const response = await api(`/api/products/${productId}/inventory/quick-price-add`, {
+        method: 'POST',
+        body: {
+          price: newPrice
+        },
+        token
+      });
+
+      if (response) {
+        // Update cart item with new price
+        const updated = [...cartItems];
+        updated[quickPriceCartIdx].unitPrice = newPrice;
+        setCartItems(updated);
+
+        // Show success and close modal
+        alert(`✓ Price Rs. ${newPrice.toFixed(2)} added successfully!`);
+        closeQuickPriceModal();
+      }
+    } catch (err) {
+      setQuickPriceValidation(`Error: ${err.message}`);
+    }
+  };
+
   // Direct submit and print (after clicking Shift+plus and Enter)
   const handleDirectSubmitAndPrint = async () => {
     if (!isPaymentReady) {
@@ -1198,6 +1279,24 @@ export default function Billing() {
                             />
                             <span style={{ fontSize: 11, color: '#999' }}>%</span>
                           </>
+                        )}
+                        {!item.isReturn && (
+                          <button
+                            onClick={() => openQuickPriceModal(idx)}
+                            title="Add or change price for this item"
+                            style={{
+                              padding: '2px 6px',
+                              background: '#2196f3',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 3,
+                              cursor: 'pointer',
+                              fontSize: 10,
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            Quick Price
+                          </button>
                         )}
                       </div>
                     </div>
@@ -2707,6 +2806,120 @@ export default function Billing() {
                 style={{ padding: '8px 20px', background: returnProcessing ? '#ccc' : '#e65100', color: '#fff', border: 'none', borderRadius: 4, cursor: returnProcessing ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
               >
                 {returnProcessing ? 'Processing...' : `Confirm Return (${returnQty} units)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Price Modal */}
+      {showQuickPriceModal && quickPriceCartIdx !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={closeQuickPriceModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 350,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            }}
+          >
+            <h3 style={{ marginBottom: 16, color: '#333' }}>
+              💰 Quick Price Add
+            </h3>
+            <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+              Add a new selling price for: <strong>{cartItems[quickPriceCartIdx]?.product?.name}</strong>
+            </p>
+
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: 13 }}>
+              Selling Price (Rs.):
+            </label>
+            <input
+              type="text"
+              placeholder="e.g., 150.50"
+              value={quickPriceInput}
+              onChange={(e) => {
+                // Allow only digits and decimals
+                const val = e.target.value.replace(/[^0-9.]/g, '');
+                setQuickPriceInput(val);
+                setQuickPriceValidation('');
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleQuickPriceSubmit();
+                }
+              }}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: 10,
+                fontSize: 16,
+                borderRadius: 4,
+                border: '1px solid #2196f3',
+                boxSizing: 'border-box',
+                marginBottom: 12,
+              }}
+            />
+
+            {quickPriceValidation && (
+              <div style={{
+                padding: 10,
+                background: '#ffebee',
+                border: '1px solid #ef5350',
+                borderRadius: 4,
+                color: '#c62828',
+                fontSize: 12,
+                marginBottom: 12,
+                fontWeight: 'bold'
+              }}>
+                ⚠️ {quickPriceValidation}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={closeQuickPriceModal}
+                style={{
+                  padding: '10px 20px',
+                  background: '#eee',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 13
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleQuickPriceSubmit}
+                style={{
+                  padding: '10px 20px',
+                  background: '#2196f3',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: 13
+                }}
+              >
+                Add Price
               </button>
             </div>
           </div>

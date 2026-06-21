@@ -15,6 +15,7 @@ export default function ProductSearchDropdown({ categoryId, onSelect, placeholde
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapperRef = useRef(null);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export default function ProductSearchDropdown({ categoryId, onSelect, placeholde
       const res = await api(`/api/products/search?q=${encodeURIComponent(q)}${catParam}`, { token });
       setResults(res || []);
       setOpen(true);
+      setHighlightedIndex(-1);
     } catch (e) {
       console.error('Product search error', e.message);
       setResults([]);
@@ -50,9 +52,42 @@ export default function ProductSearchDropdown({ categoryId, onSelect, placeholde
   }, [query, categoryId, debounced]);
 
   const handleSelect = (product) => {
+    console.log('Product selected in dropdown:', product);
+    console.log('Has productId:', !!product.productId, 'Value:', product.productId);
     setQuery(product.productCode + ' — ' + product.name);
     setOpen(false);
+    setHighlightedIndex(-1);
     if (onSelect) onSelect(product);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open || results.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex(prev => 
+          prev < results.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0 && results[highlightedIndex]) {
+          handleSelect(results[highlightedIndex]);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setOpen(false);
+        setHighlightedIndex(-1);
+        break;
+      default:
+        break;
+    }
   };
 
   return (
@@ -62,13 +97,24 @@ export default function ProductSearchDropdown({ categoryId, onSelect, placeholde
         value={query}
         onChange={e => setQuery(e.target.value)}
         onFocus={() => { if (results.length) setOpen(true); }}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         style={{ padding: 8, width: '100%' }}
       />
       {open && results.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid #ddd', maxHeight: 260, overflow: 'auto' }}>
-          {results.map(r => (
-            <div key={r.productId} onClick={() => handleSelect(r)} style={{ padding: 10, borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}>
+          {results.map((r, idx) => (
+            <div 
+              key={r.productId} 
+              onClick={() => handleSelect(r)} 
+              onMouseEnter={() => setHighlightedIndex(idx)}
+              style={{ 
+                padding: 10, 
+                borderBottom: '1px solid #f0f0f0', 
+                cursor: 'pointer',
+                background: highlightedIndex === idx ? '#e3f2fd' : '#fff'
+              }}
+            >
               <div style={{ fontWeight: 600 }}>{r.productCode} — {r.name}</div>
               <div style={{ fontSize: 12, color: '#666' }}>Stock: {r.totalStock ?? '-'}</div>
             </div>

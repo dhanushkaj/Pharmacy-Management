@@ -29,6 +29,7 @@ export default function Billing() {
   const [cartItems, setCartItems] = useState([]);
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [originalCustomerDiscount, setOriginalCustomerDiscount] = useState(0); // Store original customer discount
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
   const [amountReceived, setAmountReceived] = useState('');
@@ -230,10 +231,14 @@ export default function Billing() {
 
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
-    // If CARD payment, cap to 2%
+    // Store the original customer discount
     const custDisc = customer.discountPercentage || 0;
+    setOriginalCustomerDiscount(custDisc);
+    
+    // If CARD payment, cap to 2%; otherwise use full customer discount
     const effectiveDisc = paymentMethod === 'CARD' ? Math.min(custDisc, 2) : custDisc;
     setDiscountPercentage(effectiveDisc);
+    
     // Set discountAmount to use only Customer Discount Base for first time
     if (cartItems.length > 0) {
       // Only use customer discount base (items without product discount, excluding returns)
@@ -243,7 +248,7 @@ export default function Billing() {
         }
         return sum;
       }, 0);
-      const customerDiscountTotal = customerDiscountBase * (customer.discountPercentage / 100);
+      const customerDiscountTotal = customerDiscountBase * (effectiveDisc / 100);
       setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
       setIsDiscountManual(false);
     } else {
@@ -1460,12 +1465,15 @@ export default function Billing() {
                             {p.name || 'N/A'}
                           </div>
                           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                            {p.category?.name || 'N/A'} | Code: {p.productCode || 'N/A'}
+                            {p.category?.name || 'N/A'}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
-                          <div style={{ fontSize: 12, color: '#666' }}>
-                            Click to add
+                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 120 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#d32f2f' }}>
+                            Rs. {p.lastPrice || '-'}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#2e7d32', marginTop: 2 }}>
+                            Stock: {p.totalStock || 0}
                           </div>
                         </div>
                       </div>
@@ -2004,12 +2012,34 @@ export default function Billing() {
                   onChange={(e) => {
                     const method = e.target.value;
                     setPaymentMethod(method);
-                    // If CARD, cap customer discount to 2%
-                    if (method === 'CARD' && discountPercentage > 2) {
-                      setDiscountPercentage(2);
-                      const newDiscountAmount = customerDiscountBase * 2 / 100;
-                      setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                      setIsDiscountManual(false);
+                    
+                    if (selectedCustomer) {
+                      if (method === 'CARD') {
+                        // When CARD is selected, cap discount to 2%
+                        const cappedDiscount = Math.min(originalCustomerDiscount, 2);
+                        setDiscountPercentage(cappedDiscount);
+                        // Recalculate discount amount with capped percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      } else {
+                        // When switching away from CARD, restore original customer discount
+                        setDiscountPercentage(originalCustomerDiscount);
+                        // Recalculate discount amount with original percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      }
                     }
                     setIsPaymentReady(false); // Reset ready state
                   }} 

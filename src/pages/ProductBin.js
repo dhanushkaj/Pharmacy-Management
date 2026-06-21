@@ -248,12 +248,16 @@ const ProductBin = () => {
   const fetchMovements = async (product, pageNum = 0) => {
     setLoading(true);
     try {
-      const movementsPage = await api(`/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`, { token });
+      const url = `/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`;
+      console.log('Fetching movements from:', url);
+      const movementsPage = await api(url, { token });
+      console.log('Movements response:', movementsPage);
       setTransactions(movementsPage.content || []);
       setTotalPages(movementsPage.totalPages || 1);
       setPage(movementsPage.number || 0);
     } catch (e) {
-      console.error('Failed to fetch movements', e.message);
+      console.error('Failed to fetch movements:', e);
+      alert('Error loading movements: ' + e.message);
       setTransactions([]);
       setTotalPages(1);
     }
@@ -261,18 +265,29 @@ const ProductBin = () => {
   };
 
   const onProductSelect = async (product) => {
+    console.log('Product selected from dropdown:', product);
+    console.log('Product ID:', product?.productId);
+    
+    if (!product || !product.productId) {
+      alert('Error: Product ID not found. Please select a valid product.');
+      return;
+    }
+
     setSelectedProduct(product);
     setProductDetails(null);
     fetchMovements(product, 0);
     try {
+      console.log(`Fetching details for product ID: ${product.productId}`);
       const [details, sum] = await Promise.all([
         api(`/api/products/${product.productId}`, { token }),
         api(`/api/products/${product.productId}/inventory-summary`, { token }),
       ]);
+      console.log('Product details:', details);
+      console.log('Inventory summary:', sum);
       setProductDetails(details || product);
       setInventorySummary(sum || []);
     } catch (e) {
-      console.error('Failed to fetch product details / inventory summary', e.message);
+      console.error('Failed to fetch product details / inventory summary', e);
       setProductDetails(product);
       setInventorySummary([]);
     }
@@ -420,7 +435,10 @@ const ProductBin = () => {
                           else if (t.referenceType === 'INVENTORY_RETURN') docLabel = `Return #${t.referenceId}`;
                           else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
                           else if (t.referenceType === 'PRODUCT_UPDATE' || t.referenceType === 'MANUAL_INVENTORY') docLabel = 'Manual Inventory Change';
+                          else if (t.referenceType === 'QUICK_PRICE_ADD') docLabel = `Quick Price Add - Rs. ${t.price || '-'}`;
                           else docLabel = `${t.referenceType} #${t.referenceId}`;
+                        } else if (t.referenceType === 'QUICK_PRICE_ADD') {
+                          docLabel = `Quick Price Add - Rs. ${t.price || '-'}`;
                         }
                         return (
                           <tr key={t.id} style={t.fromBin === 'INVENTORY' && t.toBin === 'INVENTORY' ? { background: '#fffbe6' } : {}}>

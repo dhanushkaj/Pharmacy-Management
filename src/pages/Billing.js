@@ -1507,6 +1507,14 @@ export default function Billing() {
                         const c = filteredCustomers[customerDropdownIndex];
                         if (c) handleSelectCustomer(c);
                       }
+                    } else if (e.key === 'Enter' && customerSearch.trim()) {
+                      // No customers found - auto-open add modal with phone number pre-filled
+                      e.preventDefault();
+                      setNewCustomer(prev => ({
+                        ...prev,
+                        phone: customerSearch.trim()
+                      }));
+                      setShowNewCustomerModal(true);
                     }
                     if (e.key === 'Escape') {
                       setCustomerSearch('');

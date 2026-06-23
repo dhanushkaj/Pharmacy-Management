@@ -55,6 +55,7 @@ const Sidebar = () => {
           <li><NavLink to="/purchase-order" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Purchase Order</NavLink></li>
           {hasAdmin && <li><NavLink to="/grn" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Approve GRN</NavLink></li>} 
           <li><NavLink to="/inventory-returns" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Inventory Returns</NavLink></li>
+          <li><NavLink to="/inventory-audit" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>📊 Physical Audit</NavLink></li>
           <li><NavLink to="/billing" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Billing</NavLink></li>
           <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Customers</NavLink></li>
           <li><NavLink to="/sales-targets" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>🎯 Sales Targets</NavLink></li>

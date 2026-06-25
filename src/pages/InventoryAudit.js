@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Table, Modal, Select, Upload, Spin, message, Popconfirm, Tabs, Empty } from 'antd';
-import { UploadOutlined, DeleteOutlined, RollbackOutlined, EyeOutlined } from '@ant-design/icons';
+import { UploadOutlined, DeleteOutlined, RollbackOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import { api } from '../utill/api';
 import './InventoryAudit.css';
@@ -39,11 +39,19 @@ const InventoryAudit = () => {
     try {
       setLoading(true);
       const data = await api('/api/inventory-audits/history?limit=50');
-      const auditList = Array.isArray(data) ? data : [];
-      setAudits(auditList);
+      if (data?.success && Array.isArray(data.audits)) {
+        setAudits(data.audits);
+        console.log('Loaded audits:', data.audits.length);
+      } else if (Array.isArray(data)) {
+        // Fallback if response is direct array
+        setAudits(data);
+      } else {
+        setAudits([]);
+      }
     } catch (error) {
       console.error('Failed to load audit history', error);
       message.error('Failed to load audit history: ' + error.message);
+      setAudits([]);
     } finally {
       setLoading(false);
     }
@@ -141,6 +149,35 @@ const InventoryAudit = () => {
       return;
     }
 
+    // Show confirmation dialog
+    Modal.confirm({
+      title: 'Confirm File Upload',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p><strong>Are you sure you want to upload this file?</strong></p>
+          <p>This will:</p>
+          <ul style={{ marginLeft: '20px', marginBottom: '12px' }}>
+            <li>Process {fileData.length} products from the Excel file</li>
+            <li>Calculate inventory variances</li>
+            <li>Automatically adjust inventory quantities</li>
+            <li>Create permanent stock movement records</li>
+          </ul>
+          <p style={{ color: '#f5222d', fontWeight: '600' }}>
+            ⚠️ This action cannot be undone without rolling back the entire audit!
+          </p>
+        </div>
+      ),
+      okText: 'Yes, Upload',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        await performUpload();
+      }
+    });
+  };
+
+  const performUpload = async () => {
     try {
       setUploading(true);
       const response = await api(`/api/inventory-audits/${currentAudit.auditId}/upload`, {
@@ -151,8 +188,9 @@ const InventoryAudit = () => {
       if (response?.success) {
         const result = response.result;
         message.success(
+          `✅ Upload Successful!\n` +
           `Processed: ${result.totalAdjustments} adjustments ` +
-          `(+${result.positiveAdjustments}, -${result.negativeAdjustments})`
+          `(+${result.positiveAdjustments} added, -${result.negativeAdjustments} removed)`
         );
         
         // Refresh audit and history
@@ -454,11 +492,19 @@ const InventoryAudit = () => {
                         if (selected) setCurrentAudit(selected);
                       }}
                       options={audits.map(audit => ({
-                        label: `Audit #${audit.auditId} - ${audit.categoryName} (${new Date(audit.exportedAt).toLocaleDateString()})`,
+                        label: `Audit #${audit.auditId} - ${audit.categoryName} (${new Date(audit.exportedAt).toLocaleDateString()}) ${audit.status === 'COMPLETED' ? '✓' : ''}`,
                         value: audit.auditId
                       }))}
                       style={{ width: '100%' }}
+                      optionLabelProp="label"
+                      maxTagCount="responsive"
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
                     />
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                      Total audits: {audits.length}
+                    </div>
                   </div>
 
                   {currentAudit && (
@@ -477,14 +523,34 @@ const InventoryAudit = () => {
                   )}
 
                   <div className="form-group">
-                    <label>Upload Excel File:</label>
+                    <label style={{ marginBottom: '12px', display: 'block', fontWeight: '600', color: '#1890ff' }}>
+                      📄 Upload Excel File:
+                    </label>
+                    <p style={{ 
+                      margin: '8px 0', 
+                      color: '#666', 
+                      fontSize: '12px',
+                      fontStyle: 'italic'
+                    }}>
+                      Click to select or drag and drop Excel file (.xlsx, .xls)
+                    </p>
                     <Upload
                       maxCount={1}
                       accept=".xlsx,.xls"
                       beforeUpload={handleFileUpload}
                       className="upload-area"
+                      style={{ marginTop: '8px' }}
                     >
-                      <Button icon={<UploadOutlined />}>Select Excel File</Button>
+                      <Button 
+                        icon={<UploadOutlined />}
+                        style={{
+                          height: '40px',
+                          fontSize: '14px',
+                          padding: '8px 16px'
+                        }}
+                      >
+                        Select Excel File
+                      </Button>
                     </Upload>
                   </div>
 

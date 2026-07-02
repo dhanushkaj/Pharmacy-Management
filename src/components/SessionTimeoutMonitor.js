@@ -13,27 +13,23 @@ import './SessionTimeoutMonitor.css';
 const SessionTimeoutMonitor = ({ onLogout }) => {
   const [showWarning, setShowWarning] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(60);
-  const [tokenExpiration, setTokenExpiration] = useState(null);
-  const [warningTime, setWarningTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Interval references for cleanup
-  const checkIntervalRef = useCallback((intervalId) => {
-    if (intervalId) clearInterval(intervalId);
-  }, []);
 
   // Refresh token on YES
   const handleStayLoggedIn = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const response = await api.post('/auth/refresh');
-      if (response.data?.success) {
+      console.log('🔄 Attempting to refresh token...');
+      const response = await api('/api/auth/refresh', { method: 'POST' });
+      console.log('📡 Refresh response:', response);
+      if (response?.success) {
         setShowWarning(false);
-        // Token has been refreshed, restart monitoring
+        setTimeRemaining(60); // Reset countdown
+        console.log('✅ Token refreshed successfully');
         return true;
       }
     } catch (error) {
-      console.error('Failed to refresh token:', error);
+      console.error('❌ Failed to refresh token:', error);
     } finally {
       setIsRefreshing(false);
     }
@@ -44,9 +40,11 @@ const SessionTimeoutMonitor = ({ onLogout }) => {
   const handleLogout = useCallback(async () => {
     setShowWarning(false);
     try {
-      await api.post('/auth/logout');
+      console.log('🚪 Logging out...');
+      await api('/api/auth/logout', { method: 'POST' });
+      console.log('✅ Logout successful');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
     }
     onLogout?.();
   }, [onLogout]);
@@ -61,44 +59,51 @@ const SessionTimeoutMonitor = ({ onLogout }) => {
   useEffect(() => {
     const checkTokenExpiration = async () => {
       try {
-        const response = await api.get('/auth/token-info');
-        if (response.data?.success) {
-          const { timeRemaining, warningTimeMs, expirationTime } = response.data;
-          setTokenExpiration(expirationTime);
-          setWarningTime(warningTimeMs);
+        console.log('🔍 Checking token expiration...');
+        const response = await api('/api/auth/token-info', { method: 'GET' });
+        console.log('📡 Token info response:', response);
+        
+        if (response?.success) {
+          const { timeRemaining: msRemaining, warningTimeMs, expirationDurationMs, currentTime, expirationTime } = response;
+          
+          console.log(`⏱️  Token check - Remaining: ${msRemaining}ms (${(msRemaining/1000).toFixed(1)}s), Warning threshold: ${warningTimeMs}ms`);
+          console.log(`📊 Token duration: ${expirationDurationMs}ms, Current: ${currentTime}, Expires: ${expirationTime}`);
 
-          // If warning time threshold reached and modal not already showing
-          if (timeRemaining <= warningTimeMs && !showWarning) {
-            setTimeRemaining(Math.ceil(timeRemaining / 1000)); // Convert to seconds
+          // If within warning window and not already showing warning
+          if (msRemaining > 0 && msRemaining <= warningTimeMs && !showWarning) {
+            const secondsRemaining = Math.ceil(msRemaining / 1000);
+            console.log(`🚨 SESSION TIMEOUT WARNING TRIGGERED! Showing popup with ${secondsRemaining} seconds remaining`);
+            setTimeRemaining(secondsRemaining);
             setShowWarning(true);
-            
-            // Auto-logout after 2 minutes of inactivity (if modal still open)
-            const autoLogoutTimer = setTimeout(() => {
-              if (showWarning) {
-                handleLogout();
-              }
-            }, 2 * 60 * 1000);
-
-            return () => clearTimeout(autoLogoutTimer);
+          } else if (msRemaining <= 0) {
+            console.warn('⚠️ Token already expired, logging out');
+            handleLogout();
           }
+        } else {
+          console.error('❌ Token info response invalid:', response);
         }
       } catch (error) {
+        console.error('❌ Error checking token:', error);
         // Token likely expired or invalid
-        if (error.response?.status === 401) {
-          console.warn('Token validation failed, logging out');
-          onLogout?.();
+        if (error.message?.includes('401') || error.message?.includes('Session expired')) {
+          console.warn('🔐 Token validation failed (401), logging out');
+          handleLogout();
         }
       }
     };
 
-    // Check token every 10 seconds
-    const intervalId = setInterval(checkTokenExpiration, 10000);
+    console.log('✅ SessionTimeoutMonitor mounted, starting token checks every 5 seconds');
+    // Check token every 5 seconds for better coverage
+    const intervalId = setInterval(checkTokenExpiration, 5000);
     
-    // Initial check
+    // Initial check immediately
     checkTokenExpiration();
 
-    return () => clearInterval(intervalId);
-  }, [showWarning, onLogout]);
+    return () => {
+      console.log('🛑 SessionTimeoutMonitor unmounting, clearing interval');
+      clearInterval(intervalId);
+    };
+  }, []); // Empty dependency - only run once on mount
 
   // Update countdown when warning modal is shown
   useEffect(() => {
@@ -109,6 +114,8 @@ const SessionTimeoutMonitor = ({ onLogout }) => {
         const newTime = prev - 1;
         if (newTime <= 0) {
           clearInterval(countdownInterval);
+          console.log('Session countdown reached zero, auto-logging out');
+          setShowWarning(false);
           handleLogout();
           return 0;
         }

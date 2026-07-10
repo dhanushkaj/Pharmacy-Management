@@ -1,8 +1,9 @@
 import AlertConfig from './pages/reports/AlertConfig';
-import React from 'react';
-import { useLocation, Routes, Route } from 'react-router-dom';
+import React, { useCallback } from 'react';
+import { useLocation, Routes, Route, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+import SessionTimeoutMonitor from './components/SessionTimeoutMonitor';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -40,11 +41,16 @@ import AdminUserManagement from './pages/AdminUserManagement';
 
 const AppContent = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/logout';
 
+  const handleSessionLogout = useCallback(() => {
+    navigate('/logout');
+  }, [navigate]);
 
   return (
     <div className="app-shell">
+      {!isAuthPage && <SessionTimeoutMonitor onLogout={handleSessionLogout} />}
       {!isAuthPage && <Sidebar />}
       <div className="main-content">
         {!isAuthPage && <Header />}

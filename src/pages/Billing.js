@@ -45,6 +45,7 @@ export default function Billing() {
 
   // Refs for focus management
   const customerDiscountPercentRef = useRef(null);
+  const productSearchRef = useRef(null);
 
   // Customer billing history (Ctrl+H)
   const [showCustomerHistory, setShowCustomerHistory] = useState(false);
@@ -455,6 +456,12 @@ export default function Billing() {
     setSelectedProduct(null);
     setProductSearch('');
     setSelectedPriceOptionIndex(0);
+    // Focus back to product search input
+    setTimeout(() => {
+      if (productSearchRef.current) {
+        productSearchRef.current.focus();
+      }
+    }, 0);
   };
 
   // Focus the price modal when it opens (must be at top level, not inside a function)
@@ -676,6 +683,12 @@ export default function Billing() {
     setQuickPriceCartIdx(null);
     setQuickPriceInput('');
     setQuickPriceValidation('');
+    // Focus back to product search input
+    setTimeout(() => {
+      if (productSearchRef.current) {
+        productSearchRef.current.focus();
+      }
+    }, 0);
   };
 
   const handleQuickPriceSubmit = async () => {
@@ -1423,6 +1436,7 @@ export default function Billing() {
           <div style={{ border: '1px solid #ccc', padding: 12, borderRadius: 8, background: '#fafafa' }}>
             <h3 style={{ fontSize: 16, marginTop: 0, marginBottom: 12 }}>Product Search & Add</h3>
             <input
+              ref={productSearchRef}
               type="text"
               placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
               value={productSearch}
@@ -1936,7 +1950,7 @@ export default function Billing() {
                       }
                       setDiscountPercentage(newPercentage);
                       const newDiscountAmount = customerDiscountBase * newPercentage / 100;
-                      setDiscountAmount(newDiscountAmount);
+                      setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
                       setIsDiscountManual(false);
                       setIsPaymentReady(false); // Reset ready state
                     }}
@@ -1957,6 +1971,13 @@ export default function Billing() {
                       onChange={e => {
                         const val = e.target.value === '' ? '' : Number(parseFloat(e.target.value).toFixed(2));
                         setDiscountAmount(val);
+                        // When amount changes manually, update percentage accordingly
+                        if (val !== '' && customerDiscountBase > 0) {
+                          const newPercentage = (val / customerDiscountBase) * 100;
+                          setDiscountPercentage(Number(newPercentage.toFixed(2)));
+                        } else {
+                          setDiscountPercentage(0);
+                        }
                         setIsDiscountManual(true);
                         setIsPaymentReady(false); // Reset ready state
                       }}
@@ -1964,7 +1985,7 @@ export default function Billing() {
                     />
                     <button
                       type="button"
-                      onClick={() => { setDiscountAmount(''); setIsDiscountManual(false); setIsPaymentReady(false); }}
+                      onClick={() => { setDiscountAmount(''); setDiscountPercentage(0); setIsDiscountManual(false); setIsPaymentReady(false); }}
                       style={{ padding: '4px 8px', background: '#eee', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
                       title="Clear Discount Amount"
                     >
@@ -2361,15 +2382,15 @@ export default function Billing() {
                   <span>Subtotal</span>
                   <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {((productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)) > 0) && (
+                {((createdBilling.discountAmount || 0) > 0) && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                    <span>Discount ({((productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
-                    <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)).toFixed(2)}</span>
+                    <span>Discount ({((createdBilling.discountAmount || 0) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                    <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
-                  <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0))).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (createdBilling.discountAmount || 0)).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -2383,7 +2404,7 @@ export default function Billing() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
-                  <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0))) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (createdBilling.discountAmount || 0)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -2600,15 +2621,15 @@ export default function Billing() {
               <span>Subtotal</span>
               <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
             </div>
-            {((productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)) > 0) && (
+            {((createdBilling.discountAmount || 0) > 0) && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                <span>Discount ({((productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
-                <span style={{ textAlign: 'right' }}>-{(productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0)).toFixed(2)}</span>
+                <span>Discount ({((createdBilling.discountAmount || 0) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
               <span>TOTAL</span>
-              <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0))).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (createdBilling.discountAmount || 0)).toFixed(2)}</span>
             </div>
           </div>
 
@@ -2622,7 +2643,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Balance</span>
-              <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (productDiscountTotal + customerDiscountTotal + (createdBilling.discountAmount || 0))) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (createdBilling.discountAmount || 0)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
             </div>
           </div>
 

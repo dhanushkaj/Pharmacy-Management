@@ -761,6 +761,12 @@ export default function Billing() {
   };
 
   const submitBilling = async (directPrintMode = false) => {
+    // Prevent duplicate submissions
+    if (loading) {
+      console.warn('Billing submission already in progress');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     try {
@@ -777,7 +783,7 @@ export default function Billing() {
 
       // Separate return items from normal items
       const normalItems = cartItems.filter(item => !item.isReturn);
-      const returnItems = cartItems.filter(item => item.isReturn);
+      let returnItems = cartItems.filter(item => item.isReturn);
 
       // Only submit billing if there are normal (non-return) items
       let response = null;
@@ -808,40 +814,114 @@ export default function Billing() {
         }
       }
 
-      // Now process return items on backend (inventory restore + bin movement)
+      // Now process ALL return items together on backend (batch call)
       const returnResults = [];
-      for (const retItem of returnItems) {
+      console.log('Return items before deduplication:', returnItems.length, returnItems);
+      
+      // Deduplicate return items by billingItemId to prevent duplicate submissions
+      const seenBillingItemIds = new Set();
+      const uniqueReturnItems = returnItems.filter(item => {
+        const isDuplicate = seenBillingItemIds.has(item.billingItemId);
+        if (isDuplicate) {
+          console.warn('🚫 DUPLICATE return item REMOVED - billingItemId:', item.billingItemId, 'product:', item.product.name);
+          return false;
+        }
+        seenBillingItemIds.add(item.billingItemId);
+        console.log('✓ Return item KEPT - billingItemId:', item.billingItemId, 'product:', item.product.name);
+        return true;
+      });
+      
+      console.log('Return items after deduplication:', uniqueReturnItems.length, uniqueReturnItems);
+      
+      if (uniqueReturnItems.length === 0) {
+        console.log('No return items to process');
+      } else {
         try {
-          const retResponse = await api('/api/billings/return', {
+          // Build batch return request with all deduplicated items
+          const batchReturnRequest = {
+            returnItems: uniqueReturnItems.map(item => ({
+              billingItemId: item.billingItemId,
+              returnQty: item.returnQty,
+            })),
+            newBillingId: response?.billingId,  // Link all returns to NEW billing if provided
+          };
+          
+          console.log('Sending batch return request with', batchReturnRequest.returnItems.length, 'items');
+          console.log('Batch return request:', batchReturnRequest);
+          
+          const batchReturnResponse = await api('/api/billings/batch-return', {
             method: 'POST',
-            body: {
-              billingItemId: retItem.billingItemId,
-              returnQty: retItem.returnQty,
-            },
+            body: batchReturnRequest,
             token,
           });
-          returnResults.push(retResponse);
+          
+          console.log('Batch return response:', batchReturnResponse);
+          if (batchReturnResponse && batchReturnResponse.returnedItems) {
+            returnResults.push(...batchReturnResponse.returnedItems);
+          }
         } catch (retErr) {
-          console.error('Return processing failed for item:', retItem, retErr);
-          setError((prev) => (prev ? prev + '\n' : '') + `Return failed for ${retItem.product.name}: ${retErr.message}`);
+          console.error('Batch return processing failed:', retErr);
+          console.error('Return API error details:', retErr);
+          setError((prev) => (prev ? prev + '\n' : '') + `Batch return failed: ${retErr.message}`);
         }
       }
 
       if (response) {
-        // Attach return info to billing response for display
-        response.returnItems = returnResults;
-        response.returnRefundTotal = returnRefundTotal;
-        response.netPayable = netPayable;
-        response.returnCartItems = returnItems.map(ri => ({
-          productName: ri.product.name,
-          productCode: ri.product.productCode,
-          quantity: Math.abs(ri.quantity),
-          unitPrice: ri.unitPrice,
-          refundAmount: Math.abs(ri.subtotal),
-          originalBill: ri.originalBill,
-          discountPercentage: ri.productDiscount || 0,
+        // Deduplicate returnResults by billingItemId to prevent duplicate display
+        const seenReturnIds = new Set();
+        const deduplicatedReturnResults = returnResults.filter(rr => {
+          if (seenReturnIds.has(rr.billingItemId)) {
+            console.warn('Duplicate return result detected and removed:', rr);
+            return false;
+          }
+          seenReturnIds.add(rr.billingItemId);
+          return true;
+        });
+        
+        // Map return items using the backend-calculated refund amounts from returnResults
+        const mappedReturnCartItems = deduplicatedReturnResults.map(rr => ({
+          productName: rr.productName,
+          productCode: rr.productCode,
+          quantity: rr.returnedQty,
+          unitPrice: rr.unitPrice,
+          refundAmount: rr.refundAmount, // Use backend-calculated value with discount applied
+          originalBill: response.billingNumber,
+          discountPercentage: rr.discountPercentage || 0,
         }));
-        setCreatedBilling(response);
+        
+        // Recalculate return refund total from mapped items
+        const calculatedReturnRefund = Number(
+          mappedReturnCartItems.reduce((sum, item) => sum + item.refundAmount, 0).toFixed(2)
+        );
+        
+        // Attach return info to billing response for display
+        const billingData = {
+          billingId: response.billingId,
+          billingNumber: response.billingNumber,
+          customerId: response.customerId,
+          customerName: response.customerName,
+          customerPhone: response.customerPhone,
+          customerAddress: response.customerAddress,
+          billingDate: response.billingDate,
+          subtotal: response.subtotal,
+          discountPercentage: response.discountPercentage,
+          discountAmount: response.discountAmount,
+          grandTotal: response.grandTotal,
+          paymentMethod: response.paymentMethod,
+          notes: response.notes,
+          isPrinted: response.isPrinted,
+          amountReceived: response.amountReceived,
+          balanceAmount: response.balanceAmount,
+          items: response.items,
+          createdAt: response.createdAt,
+          createdBy: response.createdBy,
+          returnRecords: response.returnRecords,
+          returnItems: deduplicatedReturnResults,
+          returnRefundTotal: calculatedReturnRefund,
+          netPayable: Number(netPayable) || 0,
+          returnCartItems: mappedReturnCartItems,
+        };
+        setCreatedBilling(billingData);
         
         // Refresh sales target data after successful billing
         fetchSalesTargetData();
@@ -854,6 +934,32 @@ export default function Billing() {
         }
       } else if (returnResults.length > 0) {
         // Only returns, no normal sale items — still show a receipt
+        // Deduplicate returnResults by billingItemId
+        const seenReturnIds = new Set();
+        const deduplicatedReturnResults = returnResults.filter(rr => {
+          if (seenReturnIds.has(rr.billingItemId)) {
+            console.warn('Duplicate return result detected and removed:', rr);
+            return false;
+          }
+          seenReturnIds.add(rr.billingItemId);
+          return true;
+        });
+        
+        // Use backend-calculated refund amounts from returnResults
+        const mappedReturnItems = deduplicatedReturnResults.map(rr => ({
+          productName: rr.productName,
+          productCode: rr.productCode,
+          quantity: rr.returnedQty,
+          unitPrice: rr.unitPrice,
+          refundAmount: rr.refundAmount, // Use backend-calculated value with discount applied
+          originalBill: rr.billingNumber,
+          discountPercentage: rr.discountPercentage || 0,
+        }));
+        
+        const calculatedReturnRefund = Number(
+          mappedReturnItems.reduce((sum, item) => sum + item.refundAmount, 0).toFixed(2)
+        );
+        
         const returnOnlyBilling = {
           billingNumber: 'RETURN',
           billingDate: new Date().toISOString(),
@@ -868,17 +974,9 @@ export default function Billing() {
           balanceAmount: 0,
           notes: notes || '',
           returnItems: returnResults,
-          returnRefundTotal: returnRefundTotal,
-          netPayable: -returnRefundTotal,
-          returnCartItems: returnItems.map(ri => ({
-            productName: ri.product.name,
-            productCode: ri.product.productCode,
-            quantity: Math.abs(ri.quantity),
-            unitPrice: ri.unitPrice,
-            refundAmount: Math.abs(ri.subtotal),
-            originalBill: ri.originalBill,
-            discountPercentage: ri.productDiscount || 0,
-          })),
+          returnRefundTotal: calculatedReturnRefund,
+          netPayable: -calculatedReturnRefund,
+          returnCartItems: mappedReturnItems,
         };
         setCreatedBilling(returnOnlyBilling);
         
@@ -2388,9 +2486,18 @@ export default function Billing() {
                     <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
+                {/* Show total return refund (not individual items) */}
+                {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0, fontSize: '8px' }}>
+                    <span>Return Refund</span>
+                    <span style={{ textAlign: 'right' }}>-{(createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0)).toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
-                  <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (createdBilling.discountAmount || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>
+                    {(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
@@ -2400,11 +2507,13 @@ export default function Billing() {
               <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Amount Paid</span>
-                  <span style={{ textAlign: 'right' }}>{(createdBilling.amountReceived || 0).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{Number(createdBilling.amountReceived || 0).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
-                  <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (createdBilling.discountAmount || 0)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>
+                    {Math.abs(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
@@ -2629,7 +2738,7 @@ export default function Billing() {
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
               <span>TOTAL</span>
-              <span style={{ textAlign: 'right' }}>{(createdBilling.subtotal - (createdBilling.discountAmount || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}</span>
             </div>
           </div>
 
@@ -2643,7 +2752,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Balance</span>
-              <span style={{ textAlign: 'right' }}>{Math.abs((createdBilling.subtotal - (createdBilling.discountAmount || 0)) - (createdBilling.amountReceived || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{Math.abs(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}</span>
             </div>
           </div>
 

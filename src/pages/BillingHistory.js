@@ -116,9 +116,27 @@ export default function BillingHistory() {
     setPage(0);
   };
 
-  const handleViewBill = (billing) => {
-    setSelectedBilling({ ...billing, isReprint: true });
-    setShowBillModal(true);
+  const handleViewBill = async (billing) => {
+    try {
+      // Fetch complete bill details including returnRecords
+      console.log('Fetching bill ID:', billing.billingId);
+      const fullBilling = await api(`/api/billings/${billing.billingId}`, { token });
+      console.log('Full billing data received:', fullBilling);
+      console.log('Return records from API:', fullBilling.returnRecords);
+      
+      // Ensure returnRecords is an array
+      if (!fullBilling.returnRecords) {
+        fullBilling.returnRecords = [];
+      }
+      
+      setSelectedBilling({ ...fullBilling, isReprint: true });
+      setShowBillModal(true);
+    } catch (err) {
+      console.error('Failed to fetch bill details:', err);
+      // Fallback to the billing from list if fetch fails
+      setSelectedBilling({ ...billing, isReprint: true });
+      setShowBillModal(true);
+    }
   };
 
   const handlePrint = () => {
@@ -590,6 +608,25 @@ export default function BillingHistory() {
                 ))}
               </div>
 
+              {/* Return items */}
+              {selectedBilling && selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 && (
+                <div style={{ marginTop: 1, paddingTop: 1, borderTop: '1px dashed #000' }}>
+                  <div style={{ fontSize: '8px', fontWeight: 'bold', marginBottom: 0 }}>↩ RETURNS:</div>
+                  {selectedBilling.returnRecords.map((ri, idx) => (
+                    <div key={`ret-${idx}`} style={{ fontSize: '9px', marginBottom: 1, fontWeight: '600' }}>
+                      <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: 0 }}>
+                        {ri.productName && ri.productName.substring(0, 22)}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>Q:{ri.quantity}</span>
+                        <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{ri.unitPrice && ri.unitPrice.toFixed(2)}</span>
+                        <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>-{ri.refundAmount && ri.refundAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
 
               {/* Totals */}
@@ -604,9 +641,20 @@ export default function BillingHistory() {
                     <span style={{ textAlign: 'right' }}>-{Number(selectedBilling.discountAmount).toFixed(2)}</span>
                   </div>
                 )}
+                {/* Show each return item deduction */}
+                {selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 && (
+                  selectedBilling.returnRecords.map((ri, idx) => (
+                    <div key={`ret-line-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0, fontSize: '8px' }}>
+                      <span>Return Refund</span>
+                      <span style={{ textAlign: 'right' }}>-{Number(ri.refundAmount || 0).toFixed(2)}</span>
+                    </div>
+                  ))
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
-                  <span style={{ textAlign: 'right' }}>{(selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>
+                    {(Number(selectedBilling.subtotal || 0) - Number(selectedBilling.discountAmount || 0) - (selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
@@ -616,11 +664,13 @@ export default function BillingHistory() {
               <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Amount Paid</span>
-                  <span style={{ textAlign: 'right' }}>{(selectedBilling.amountReceived || 0).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>{Number(selectedBilling.amountReceived || 0).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
-                  <span style={{ textAlign: 'right' }}>{Math.abs((selectedBilling.grandTotal || (selectedBilling.subtotal - Number(selectedBilling.discountAmount || 0))) - (selectedBilling.amountReceived || 0)).toFixed(2)}</span>
+                  <span style={{ textAlign: 'right' }}>
+                    {Math.abs(Number(selectedBilling.subtotal || 0) - Number(selectedBilling.discountAmount || 0) - (selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(selectedBilling.amountReceived || 0)).toFixed(2)}
+                  </span>
                 </div>
               </div>
 

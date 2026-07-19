@@ -1,0 +1,503 @@
+/* InventoryCount Container */
+.inventory-count-container {
+  padding: 20px;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.inventory-count-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.inventory-count-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 28px;
+}
+
+.inventory-count-header p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Category Selector */
+.category-selector {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.category-selector label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.category-selector select {
+  width: 100%;
+  max-width: 400px;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.category-selector select:hover:not(:disabled) {
+  border-color: #667eea;
+}
+
+.category-selector select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.category-selector select:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Stock Count Grid Container */
+.stock-count-grid-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.grid-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 20px;
+}
+
+.session-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.session-stats .stat {
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+}
+
+/* Messages */
+.error-message {
+  background-color: #fee;
+  border-left: 4px solid #f44336;
+  color: #c62828;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.success-message {
+  background-color: #efe;
+  border-left: 4px solid #4caf50;
+  color: #2e7d32;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Session Comment Section */
+.session-comment-section {
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.session-comment-section label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 14px;
+}
+
+.session-comment-section textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.session-comment-section textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.session-comment-section textarea:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.saving-indicator {
+  position: absolute;
+  right: 10px;
+  top: 35px;
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 500;
+}
+
+/* Grid Wrapper */
+.grid-wrapper {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+/* Stock Count Table */
+.stock-count-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.stock-count-table thead {
+  background-color: #f9f9f9;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.stock-count-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.stock-count-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stock-count-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.stock-count-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+/* Line Status */
+.line-row.not-counted {
+  opacity: 0.7;
+}
+
+.line-row.counted {
+  background-color: #f0fff4;
+}
+
+/* Column Styles */
+.product-code {
+  font-weight: 600;
+  color: #333;
+  min-width: 100px;
+}
+
+.product-name {
+  min-width: 200px;
+  color: #666;
+}
+
+.sell-price,
+.system-qty {
+  text-align: right;
+  min-width: 80px;
+}
+
+.editable-column {
+  background-color: #f0f7ff;
+}
+
+.physical-qty {
+  min-width: 100px;
+}
+
+.physical-qty input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 13px;
+  text-align: right;
+}
+
+.physical-qty input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.physical-qty input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+/* Variance Column */
+.variance-column {
+  background-color: #fff3e0;
+}
+
+.variance {
+  text-align: center;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.variance.neutral {
+  color: #666;
+}
+
+.variance.positive {
+  color: #2196f3;
+}
+
+.variance.negative {
+  color: #f44336;
+}
+
+/* Comment Column */
+.comment-column {
+  background-color: #f3e5f5;
+}
+
+.line-comment {
+  min-width: 150px;
+}
+
+.line-comment textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.line-comment textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.line-comment textarea:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.line-comment span {
+  display: block;
+  color: #666;
+  white-space: pre-wrap;
+}
+
+/* Status Badge */
+.status {
+  text-align: center;
+  min-width: 100px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.counted {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge.not-counted {
+  background-color: #fce4ec;
+  color: #c2185b;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #667eea;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #5568d3;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-secondary {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #eee;
+}
+
+.button-hint {
+  font-size: 13px;
+  color: #999;
+}
+
+/* Status Info */
+.status-info {
+  padding: 15px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  border-left: 4px solid #667eea;
+  margin-top: 20px;
+}
+
+.status-info p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.status-info.success {
+  background-color: #e8f5e9;
+  border-left-color: #4caf50;
+}
+
+.status-info.success p {
+  color: #2e7d32;
+}
+
+.status-info.error {
+  background-color: #fee;
+  border-left-color: #f44336;
+}
+
+.status-info.error p {
+  color: #c62828;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  text-align: center;
+  padding: 40px;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.loading-spinner::after {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+  border: 2px solid #667eea;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .inventory-count-container {
+    padding: 10px;
+  }
+
+  .grid-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+
+  .session-stats {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .stock-count-table {
+    font-size: 12px;
+  }
+
+  .stock-count-table th,
+  .stock-count-table td {
+    padding: 8px;
+  }
+
+  .line-comment textarea {
+    min-height: 30px;
+    font-size: 11px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}

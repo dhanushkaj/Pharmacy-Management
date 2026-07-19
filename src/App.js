@@ -30,8 +30,10 @@ import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
 import InventoryReturn from './pages/InventoryReturn';
+import InventoryCount from './pages/InventoryCountManagement/PhysicalCount';
+import InventoryCountApproval from './pages/InventoryCountManagement/ApprovalCenter';
+import InventoryCountHistory from './pages/InventoryCountManagement/HistoryViewer';
 import SalesTargetManagement from './pages/SalesTargetManagement';
-import InventoryAudit from './pages/InventoryAudit';
 
 // import PrintSetupGuide from './components/PrintSetupGuide';
 import './App.css';
@@ -77,7 +79,9 @@ const AppContent = () => {
             <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
-            <Route path="/inventory-audit" element={<PrivateRoute><InventoryAudit /></PrivateRoute>} />
+            <Route path="/inventory-count" element={<PrivateRoute><InventoryCount /></PrivateRoute>} />
+            <Route path="/inventory-count-approval" element={<PrivateRoute><InventoryCountApproval /></PrivateRoute>} />
+            <Route path="/inventory-count-history" element={<PrivateRoute><InventoryCountHistory /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><SettingsSecurity /></PrivateRoute>} />
             <Route path="/store-settings" element={<PrivateRoute><StoreSettings /></PrivateRoute>} />
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />

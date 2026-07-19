@@ -15,6 +15,8 @@ const HistoryViewer = () => {
   const [error, setError] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [searchCategory, setSearchCategory] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchAllSessions();
@@ -37,6 +39,30 @@ const HistoryViewer = () => {
     }
   };
 
+  const handleDeleteDraft = async (sessionId) => {
+    if (!window.confirm('Are you sure you want to delete this DRAFT? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      await axios.delete(`/api/inventory-count/sessions/${sessionId}`, config);
+      
+      // Remove deleted session from list
+      setSessions(sessions.filter(s => s.id !== sessionId));
+      setSelectedSession(null);
+      setError(null);
+    } catch (err) {
+      console.error('Error deleting draft:', err);
+      const errorMsg = err.response?.data?.message || err.response?.data || 'Failed to delete draft';
+      setError(typeof errorMsg === 'string' ? errorMsg : 'Failed to delete draft');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: 20, textAlign: 'center' }}>Loading inventory count history...</div>;
   }
@@ -50,9 +76,11 @@ const HistoryViewer = () => {
     );
   }
 
-  const filteredSessions = filterStatus === 'ALL' 
-    ? sessions 
-    : sessions.filter(s => s.status === filterStatus);
+  const filteredSessions = sessions.filter(s => {
+    const statusMatch = filterStatus === 'ALL' || s.status === filterStatus;
+    const categoryMatch = searchCategory === '' || s.categoryName.toLowerCase().includes(searchCategory.toLowerCase());
+    return statusMatch && categoryMatch;
+  });
 
   const statusCounts = {
     DRAFT: sessions.filter(s => s.status === 'DRAFT').length,
@@ -99,37 +127,13 @@ const HistoryViewer = () => {
   };
 
   const handleDraftRowClick = (session) => {
-    if (session.status === 'DRAFT') {
-      // Navigate to Physical Count with session data
-      navigate('/inventory-count', { state: { draftSession: session } });
-    } else {
-      // For non-DRAFT sessions, just select for viewing
-      setSelectedSession(session);
-    }
+    // Always show details panel for selection
+    setSelectedSession(session);
   };
 
-  const handleDeleteDraft = async (sessionId) => {
-    if (!window.confirm('Are you sure you want to DELETE this DRAFT? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      
-      await axios.delete(`/api/inventory-count/sessions/${sessionId}`, config);
-      
-      // Remove from list
-      setSessions(sessions.filter(s => s.id !== sessionId));
-      setSelectedSession(null);
-      
-      // Show success message
-      alert('DRAFT session deleted successfully');
-    } catch (err) {
-      console.error('Error deleting draft:', err);
-      const errorMsg = err.response?.data?.message || err.response?.data || 'Failed to delete draft';
-      alert(typeof errorMsg === 'string' ? errorMsg : 'Failed to delete draft');
-    }
+  const handleEditDraft = (session) => {
+    // Navigate to Physical Count for editing
+    navigate('/inventory-count', { state: { draftSession: session } });
   };
 
   return (
@@ -158,6 +162,39 @@ const HistoryViewer = () => {
           <div style={{ fontSize: 28, fontWeight: 'bold', color: '#c62828' }}>{statusCounts.REJECTED}</div>
           <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>Rejected</div>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="🔍 Search by category..."
+          value={searchCategory}
+          onChange={(e) => setSearchCategory(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 4,
+            border: '1px solid #ddd',
+            fontSize: 12,
+            flex: '1 1 200px',
+            minWidth: 150
+          }}
+        />
+        {searchCategory && (
+          <button
+            onClick={() => setSearchCategory('')}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 4,
+              border: 'none',
+              backgroundColor: '#f5f5f5',
+              color: '#666',
+              cursor: 'pointer',
+              fontSize: 12
+            }}
+          >
+            Clear Search
+          </button>
+        )}
       </div>
 
       <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -205,12 +242,11 @@ const HistoryViewer = () => {
                       onClick={() => handleDraftRowClick(session)}
                       style={{
                         borderBottom: '1px solid #eee',
-                        cursor: session.status === 'DRAFT' ? 'pointer' : 'default',
+                        cursor: 'pointer',
                         background: selectedSession?.id === session.id ? '#e3f2fd' : '#fff',
-                        transition: 'background 0.15s',
-                        opacity: session.status === 'DRAFT' ? 1 : 0.85
+                        transition: 'background 0.15s'
                       }}
-                      title={session.status === 'DRAFT' ? 'Click to edit this draft' : ''}
+                      title="Click to view details"
                     >
                       <td style={{ padding: 12 }}>
                         <div style={{ fontWeight: 'bold', color: '#1976d2' }}>{session.categoryName}</div>
@@ -354,13 +390,13 @@ const HistoryViewer = () => {
               )}
 
               {selectedSession.status === 'DRAFT' && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #ddd', display: 'flex', gap: 12, flexDirection: 'column' }}>
                   <button
-                    onClick={() => handleDeleteDraft(selectedSession.id)}
+                    onClick={() => handleEditDraft(selectedSession)}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
-                      backgroundColor: '#f44336',
+                      backgroundColor: '#2196f3',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 4,
@@ -369,13 +405,36 @@ const HistoryViewer = () => {
                       fontSize: 12,
                       transition: 'background 0.2s'
                     }}
-                    onMouseOver={(e) => e.target.style.backgroundColor = '#d32f2f'}
-                    onMouseOut={(e) => e.target.style.backgroundColor = '#f44336'}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#1976d2'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#2196f3'}
                   >
-                    🗑️ Delete This Draft
+                    ✏️ Edit This Draft
                   </button>
-                  <div style={{ fontSize: 10, color: '#999', marginTop: 8, textAlign: 'center' }}>
-                    Only DRAFT sessions can be deleted
+
+                  <button
+                    onClick={() => handleDeleteDraft(selectedSession.id)}
+                    disabled={deleting}
+                    style={{
+                      width: '100%',
+                      padding: '10px 16px',
+                      backgroundColor: deleting ? '#ccc' : '#f44336',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: deleting ? 'not-allowed' : 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: 12,
+                      transition: 'background 0.2s',
+                      opacity: deleting ? 0.7 : 1
+                    }}
+                    onMouseOver={(e) => !deleting && (e.target.style.backgroundColor = '#d32f2f')}
+                    onMouseOut={(e) => !deleting && (e.target.style.backgroundColor = '#f44336')}
+                  >
+                    {deleting ? '⏳ Deleting...' : '🗑️ Delete This Draft'}
+                  </button>
+
+                  <div style={{ fontSize: 10, color: '#999', textAlign: 'center' }}>
+                    DRAFT sessions can be edited or deleted
                   </div>
                 </div>
               )}

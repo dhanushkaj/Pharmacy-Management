@@ -30,6 +30,46 @@ function InventoryReturnDetailsModal({ ret, onClose }) {
   );
 }
 
+// Helper: Format bin type to user-friendly name
+function formatBinType(binType) {
+  if (!binType) return '-';
+  const binNames = {
+    'PHYSICAL_COUNT': 'Physical Count',
+    'GRN': 'GRN',
+    'INVENTORY': 'Inventory',
+    'SOLD': 'Sold',
+    'CUSTOMER_RETURN': 'Customer Return',
+    'SUPPLIER_RETURN': 'Supplier Return',
+    'EXPIRED': 'Expired',
+    'DAMAGED': 'Damaged'
+  };
+  return binNames[binType] || binType;
+}
+
+// Helper: Extract signed quantity from PHYSICAL_COUNT movement remarks
+function getSignedQuantity(movement) {
+  console.log('getSignedQuantity called with movement:', movement);
+  
+  // If from PHYSICAL_COUNT bin, extract signed variance from remarks
+  if (movement.fromBin === 'PHYSICAL_COUNT') {
+    // Try to extract from remarks: "Variance: +4 units" or "Variance: -4 units"
+    if (movement.remarks) {
+      console.log('Movement remarks:', movement.remarks);
+      const match = movement.remarks.match(/Variance:\s*([-+]?\d+)/);
+      if (match && match[1]) {
+        console.log('Extracted variance from remarks:', match[1]);
+        return match[1]; // Returns "+4" or "-4"
+      }
+    }
+    // Fallback: If no remarks or pattern doesn't match, assume it's added (physical counts > 0)
+    console.log('No variance in remarks, using quantity:', movement.quantity);
+    return movement.quantity > 0 ? `+${movement.quantity}` : `-${movement.quantity}`;
+  }
+  
+  // Default for other bin types: show as positive
+  return movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity;
+}
+
 // Helper: Manual Inventory Change modal
 function ManualInventoryChangeModal({ movement, onClose }) {
   if (!movement) return null;
@@ -38,8 +78,8 @@ function ManualInventoryChangeModal({ movement, onClose }) {
   // Defensive fallback for missing fields
   const product = movement.productName || movement.product || movement.productCode || '-';
   const batch = movement.batchNo || movement.batch || '-';
-  const fromBin = movement.fromBin || movement.from || '-';
-  const toBin = movement.toBin || movement.to || '-';
+  const fromBin = formatBinType(movement.fromBin || movement.from);
+  const toBin = formatBinType(movement.toBin || movement.to);
   const qty = typeof movement.quantity !== 'undefined' ? movement.quantity : (movement.qty || '-');
   const performedBy = movement.performedBy || movement.by || movement.user || '-';
   return (
@@ -56,7 +96,7 @@ function ManualInventoryChangeModal({ movement, onClose }) {
             <div><strong>Batch No:</strong> {batch}</div>
             <div><strong>From Bin:</strong> {fromBin}</div>
             <div><strong>To Bin:</strong> {toBin}</div>
-            <div><strong>Quantity:</strong> {qty}</div>
+            <div><strong>Quantity:</strong> <span style={{ fontWeight: movement.fromBin === 'PHYSICAL_COUNT' ? 'bold' : 'normal', color: movement.fromBin === 'PHYSICAL_COUNT' ? (getSignedQuantity(movement).startsWith('-') ? '#d32f2f' : '#388e3c') : 'inherit' }}>{getSignedQuantity(movement)}</span></div>
             <div><strong>Performed By:</strong> {performedBy}</div>
             {movement.notes && <div><strong>Notes:</strong> {movement.notes}</div>}
           </div>
@@ -443,9 +483,9 @@ const ProductBin = () => {
                         return (
                           <tr key={t.id} style={t.fromBin === 'INVENTORY' && t.toBin === 'INVENTORY' ? { background: '#fffbe6' } : {}}>
                             <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.id}</td>
-                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.fromBin}</td>
-                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.toBin}</td>
-                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{t.quantity}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{formatBinType(t.fromBin)}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc' }}>{formatBinType(t.toBin)}</td>
+                            <td style={{ padding: 10, border: '1px solid #ccc', fontWeight: t.fromBin === 'PHYSICAL_COUNT' ? 'bold' : 'normal', color: t.fromBin === 'PHYSICAL_COUNT' ? (getSignedQuantity(t).startsWith('-') ? '#d32f2f' : '#388e3c') : 'inherit' }}>{getSignedQuantity(t)}</td>
                             <td style={{ padding: 10, border: '1px solid #ccc' }}>
                               {t.referenceType && t.referenceId ? (
                                 <button style={{ color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
@@ -589,9 +629,9 @@ const ProductBin = () => {
                           {viewDoc.relatedMovements.map(m => (
                             <tr key={m.id}>
                               <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.id}</td>
-                              <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.fromBin}</td>
-                              <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.toBin}</td>
-                              <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.quantity}</td>
+                              <td style={{ padding: 8, border: '1px solid #ccc' }}>{formatBinType(m.fromBin)}</td>
+                              <td style={{ padding: 8, border: '1px solid #ccc' }}>{formatBinType(m.toBin)}</td>
+                              <td style={{ padding: 8, border: '1px solid #ccc', fontWeight: m.fromBin === 'PHYSICAL_COUNT' ? 'bold' : 'normal', color: m.fromBin === 'PHYSICAL_COUNT' ? (getSignedQuantity(m).startsWith('-') ? '#d32f2f' : '#388e3c') : 'inherit' }}>{getSignedQuantity(m)}</td>
                               <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.performedBy}</td>
                               <td style={{ padding: 8, border: '1px solid #ccc' }}>{m.createdAt}</td>
                             </tr>

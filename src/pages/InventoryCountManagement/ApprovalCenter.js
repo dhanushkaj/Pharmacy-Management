@@ -14,6 +14,7 @@ const ApprovalCenter = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [approving, setApproving] = useState(false);
+  const [editableLines, setEditableLines] = useState({});
 
   // Fetch submitted sessions on mount
   useEffect(() => {
@@ -91,6 +92,33 @@ const ApprovalCenter = () => {
     }
   };
 
+  const handleVarianceLineChange = (lineId, field, value) => {
+    setEditableLines(prev => ({
+      ...prev,
+      [lineId]: {
+        ...prev[lineId],
+        [field]: value
+      }
+    }));
+  };
+
+  const getLineValue = (line, field) => {
+    if (editableLines[line.id]) {
+      return editableLines[line.id][field] !== undefined ? editableLines[line.id][field] : line[field];
+    }
+    return line[field];
+  };
+
+  // Format variance with +/- sign
+  const formatVariance = (variance) => {
+    if (variance === 0) return '0';
+    return variance > 0 ? `+${variance}` : String(variance);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (loading) {
     return <div style={{ padding: 20, textAlign: 'center' }}>Loading submitted sessions...</div>;
   }
@@ -156,6 +184,20 @@ const ApprovalCenter = () => {
           {selectedSession && (
             <div style={{ flex: '1 1 400px', minWidth: 350, border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
               <h3>Session Details - {selectedSession.categoryName}</h3>
+
+              {/* Print Header - Only visible in print */}
+              <div className="print-header" style={{ display: 'none', marginBottom: 20, paddingBottom: 10, borderBottom: '2px solid #333' }}>
+                <h2 style={{ marginBottom: 5 }}>✅ Count Approval Summary - {selectedSession.categoryName}</h2>
+                <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
+                  <strong>Session ID:</strong> {selectedSession.id} | <strong>Version:</strong> {selectedSession.versionNumber} | <strong>Status:</strong> {selectedSession.status}
+                </div>
+                <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
+                  <strong>Items with Variance:</strong> {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length || 0} / {selectedSession.lines?.length || 0}
+                </div>
+                <div className="print-info" style={{ fontSize: 12, color: '#333' }}>
+                  <strong>Submitted:</strong> {new Date(selectedSession.submittedAt).toLocaleString()}
+                </div>
+              </div>
               
               {/* Stats */}
               <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
@@ -197,26 +239,65 @@ const ApprovalCenter = () => {
                 </div>
               )}
 
-              {/* Items with Variance */}
+              {/* Print Information */}
+              <div className="print-info" style={{ fontSize: 10, color: '#999', marginBottom: 16, paddingBottom: 12, borderBottom: '1px dashed #ddd' }}>
+                <div>Submitted: {new Date(selectedSession.submittedAt).toLocaleString()}</div>
+                <div>Printed: {new Date().toLocaleString()}</div>
+              </div>
+
+              {/* Items with Variance - EDITABLE TABLE */}
               {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ff9800', marginBottom: 8 }}>Items with Variance:</div>
-                  <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4 }}>
-                    {selectedSession.lines
-                      ?.filter(l => l.variance !== 0 && l.variance !== null)
-                      .map(line => (
-                        <div key={line.id} style={{ padding: 8, borderBottom: '1px solid #f0f0f0', fontSize: 12 }}>
-                          <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
-                          <div style={{ color: '#666', marginTop: 2 }}>
-                            System: {line.systemQtyAtCount} → Physical: {line.physicalQty} (Variance: {line.variance > 0 ? '+' : ''}{line.variance})
-                          </div>
-                          {line.lineComment && (
-                            <div style={{ color: '#2196f3', fontSize: 11, marginTop: 4 }}>
-                              Note: {line.lineComment}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ff9800', marginBottom: 8 }}>
+                    Items with Variance (Editable):
+                  </div>
+                  <div style={{ border: '1px solid #eee', borderRadius: 4, overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+                          <th style={{ padding: 8, textAlign: 'left' }}>Product</th>
+                          <th style={{ padding: 8, textAlign: 'center' }}>System Qty</th>
+                          <th style={{ padding: 8, textAlign: 'center' }}>Physical Qty</th>
+                          <th style={{ padding: 8, textAlign: 'center' }}>Variance</th>
+                          <th style={{ padding: 8, textAlign: 'left' }}>Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedSession.lines
+                          ?.filter(l => l.variance !== 0 && l.variance !== null)
+                          .map(line => (
+                            <tr key={line.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                              <td style={{ padding: 8 }}>
+                                <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
+                                <div style={{ fontSize: 10, color: '#666' }}>{line.productCode}</div>
+                              </td>
+                              <td style={{ padding: 8, textAlign: 'center' }}>
+                                {line.systemQtyAtCount}
+                              </td>
+                              <td style={{ padding: 8, textAlign: 'center' }}>
+                                <input
+                                  type="number"
+                                  value={getLineValue(line, 'physicalQty')}
+                                  onChange={(e) => handleVarianceLineChange(line.id, 'physicalQty', parseInt(e.target.value))}
+                                  style={{ width: 50, padding: 4, border: '1px solid #ddd', borderRadius: 2 }}
+                                />
+                              </td>
+                              <td style={{ padding: 8, textAlign: 'center', fontWeight: 'bold', color: '#ff9800' }}>
+                                {formatVariance((getLineValue(line, 'physicalQty') || 0) - line.systemQtyAtCount)}
+                              </td>
+                              <td style={{ padding: 8 }}>
+                                <input
+                                  type="text"
+                                  value={getLineValue(line, 'lineComment') || ''}
+                                  onChange={(e) => handleVarianceLineChange(line.id, 'lineComment', e.target.value)}
+                                  placeholder="Add note..."
+                                  style={{ width: '90%', padding: 4, border: '1px solid #ddd', borderRadius: 2, fontSize: 10 }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -270,6 +351,21 @@ const ApprovalCenter = () => {
                   }}
                 >
                   {approving ? 'Processing...' : '✗ Reject'}
+                </button>
+                <button
+                  onClick={handlePrint}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    backgroundColor: '#9c27b0',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  🖨️ Print (A4)
                 </button>
               </div>
             </div>

@@ -3,7 +3,7 @@ import { useTable, useFilters } from 'react-table';
 import axios from 'axios';
 import '../../css/StockCountGrid.css';
 
-const StockCountGrid = ({ session, onSessionUpdate }) => {
+const StockCountGrid = ({ session, onSessionUpdate, category }) => {
   const [lines, setLines] = useState(session.lines || []);
   const [overallComment, setOverallComment] = useState(session.overallComment || '');
   const [saving, setSaving] = useState(false);
@@ -109,12 +109,7 @@ const StockCountGrid = ({ session, onSessionUpdate }) => {
   };
 
   const handleSubmit = async () => {
-    const uncountedItems = lines.filter(l => !l.counted).length;
-    if (uncountedItems > 0) {
-      alert(`Cannot submit: ${uncountedItems} items still need to be counted`);
-      return;
-    }
-
+    // Allow submission even if not all items are counted - only items with variance need to be counted
     if (!window.confirm('Submit this inventory count for approval? You will not be able to edit it afterward.')) {
       return;
     }
@@ -140,12 +135,16 @@ const StockCountGrid = ({ session, onSessionUpdate }) => {
   const countedItems = lines.filter(l => l.counted).length;
   const totalItems = lines.length;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ marginTop: 20 }} className="stock-count-grid-wrapper">
       {error && <div className="error-message">{error}</div>}
       {successMessage && <div style={{ padding: '10px 16px', background: '#4caf50', color: '#fff', borderRadius: 4, marginBottom: 10 }}>{successMessage}</div>}
 
-      <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+      <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }} className="progress-bar-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span style={{ fontWeight: 'bold', fontSize: 14 }}>Progress: {countedItems}/{totalItems} items</span>
@@ -172,16 +171,32 @@ const StockCountGrid = ({ session, onSessionUpdate }) => {
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={countedItems !== totalItems || submitLoading}
+              onClick={handlePrint}
               style={{
                 padding: '8px 16px',
-                background: countedItems === totalItems ? '#4caf50' : '#ccc',
+                background: '#9c27b0',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 4,
-                cursor: countedItems === totalItems && !submitLoading ? 'pointer' : 'not-allowed',
-                fontWeight: 'bold'
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: 12
+              }}
+            >
+              🖨️ Print (A4)
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitLoading}
+              style={{
+                padding: '8px 16px',
+                background: '#4caf50',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: !submitLoading ? 'pointer' : 'not-allowed',
+                fontWeight: 'bold',
+                opacity: submitLoading ? 0.6 : 1
               }}
             >
               {submitLoading ? 'Submitting...' : '✓ Submit for Approval'}
@@ -190,7 +205,22 @@ const StockCountGrid = ({ session, onSessionUpdate }) => {
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="print-timestamp" style={{ textAlign: 'right', fontSize: 10, color: '#999', marginBottom: 12 }}>
+        Printed: {new Date().toLocaleString()}
+      </div>
+
+      {/* Print Header - Only visible in print */}
+      <div className="print-header" style={{ marginBottom: 20, paddingBottom: 10, borderBottom: '2px solid #333' }}>
+        <h2 style={{ marginBottom: 5 }}>📦 Physical Inventory Count - {category?.name || session?.category?.name || session?.categoryName || 'Category'}</h2>
+        <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
+          <strong>Session ID:</strong> {session.id} | <strong>Version:</strong> {session.versionNumber} | <strong>Status:</strong> {session.status}
+        </div>
+        <div className="print-info" style={{ fontSize: 12, color: '#333' }}>
+          <strong>Created by:</strong> {session.createdBy?.name || 'N/A'} | <strong>Date:</strong> {new Date(session.createdAt).toLocaleString()}
+        </div>
+      </div>
+
+      <div style={{ overflowX: 'auto' }} className="print-table-wrapper">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
@@ -236,7 +266,7 @@ const StockCountGrid = ({ session, onSessionUpdate }) => {
         </table>
       </div>
 
-      <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 4 }}>
+      <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 4 }} className="print-comment-section">
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: 12 }}>Overall Comment:</label>
         <textarea
           value={overallComment}

@@ -16,17 +16,7 @@
   background-color: #fafafa;
 }
 
-/* Print Styles */
+/* Print Styles - Now handled in InventoryCount.css for consistency */
 @media print {
-  .action-buttons,
-  .category-selector,
-  .session-comment-section textarea,
-  .stock-count-table input,
-  .stock-count-table textarea {
-    display: none;
-  }
-
-  .stock-count-table {
-    font-size: 10px;
-  }
+  /* All print styles consolidated in InventoryCount.css to avoid conflicts */
 }

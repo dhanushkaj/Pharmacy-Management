@@ -1199,6 +1199,15 @@ export default function Billing() {
               alert('For CASH payments, please enter the amount received!');
               return;
             }
+            
+            // Check if Amount Received is less than Grand Total (or Net Payable if returns exist)
+            const payableAmount = returnCartItems.length > 0 ? netPayable : grandTotal;
+            const receivedAmount = parseFloat(amountReceived);
+            
+            if (receivedAmount < payableAmount) {
+              alert(`❌ Insufficient Payment!\n\nAmount to be paid: Rs. ${payableAmount.toFixed(2)}\nAmount received: Rs. ${receivedAmount.toFixed(2)}\n\nPlease ensure the amount received covers the full payment.`);
+              return;
+            }
           }
           // For other payment methods, amount is auto-set to grandTotal
           

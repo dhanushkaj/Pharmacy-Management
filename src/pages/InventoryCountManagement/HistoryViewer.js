@@ -282,7 +282,7 @@ const HistoryViewer = () => {
                       {new Date(selectedSession.createdAt).toLocaleString()}
                     </div>
                     <div style={{ fontSize: 11, color: '#999' }}>
-                      By: {selectedSession.createdBy?.name || 'Unknown'}
+                      By: {selectedSession.createdByName || 'Unknown'}
                     </div>
                   </div>
 
@@ -293,7 +293,7 @@ const HistoryViewer = () => {
                         {new Date(selectedSession.submittedAt).toLocaleString()}
                       </div>
                       <div style={{ fontSize: 11, color: '#999' }}>
-                        By: {selectedSession.submittedBy?.name || 'Unknown'}
+                        By: {selectedSession.submittedByName || 'Unknown'}
                       </div>
                     </div>
                   )}
@@ -305,7 +305,7 @@ const HistoryViewer = () => {
                         {new Date(selectedSession.approvedAt).toLocaleString()}
                       </div>
                       <div style={{ fontSize: 11, color: '#999' }}>
-                        By: {selectedSession.approvedBy?.name || 'Unknown'}
+                        By: {selectedSession.approvedByName || 'Unknown'}
                       </div>
                     </div>
                   )}
@@ -317,11 +317,11 @@ const HistoryViewer = () => {
                         {new Date(selectedSession.rejectedAt).toLocaleString()}
                       </div>
                       <div style={{ fontSize: 11, color: '#999' }}>
-                        By: {selectedSession.rejectedBy?.name || 'Unknown'}
+                        By: {selectedSession.rejectedByName || 'Unknown'}
                       </div>
-                      {selectedSession.rejectionReason && (
+                      {selectedSession.rejectedReason && (
                         <div style={{ fontSize: 11, color: '#f44336', marginTop: 4, fontStyle: 'italic' }}>
-                          Reason: {selectedSession.rejectionReason}
+                          Reason: {selectedSession.rejectedReason}
                         </div>
                       )}
                     </div>

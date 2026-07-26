@@ -2060,6 +2060,58 @@ export default function Billing() {
 
             {/* Content */}
             <div style={{ padding: 20 }}>
+              {/* Payment Method */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Payment Method:</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => {
+                    const method = e.target.value;
+                    setPaymentMethod(method);
+                    
+                    if (selectedCustomer) {
+                      if (method === 'CARD') {
+                        // When CARD is selected, cap discount to 2%
+                        const cappedDiscount = Math.min(originalCustomerDiscount, 2);
+                        setDiscountPercentage(cappedDiscount);
+                        // Recalculate discount amount with capped percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      } else {
+                        // When switching away from CARD, restore original customer discount
+                        setDiscountPercentage(originalCustomerDiscount);
+                        // Recalculate discount amount with original percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      }
+                    }
+                    setIsPaymentReady(false); // Reset ready state
+                  }} 
+                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 6, border: '1px solid #ccc' }}
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="CARD">Card</option>
+                  <option value="MOBILE_PAYMENT">Mobile Payment</option>
+                  <option value="ONLINE_TRANSFER">Online Transfer</option>
+                  <option value="CREDIT">Credit</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="OTHER">Other</option>
+                  <option value="OLD_MANUAL">Old Manual</option>
+                </select>
+              </div>
+
               {/* Summary Section */}
               <div style={{ padding: 16, background: '#f5f5f5', borderRadius: 8, marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2170,58 +2222,6 @@ export default function Billing() {
                     </div>
                   </>
                 )}
-              </div>
-
-              {/* Payment Method */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Payment Method:</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => {
-                    const method = e.target.value;
-                    setPaymentMethod(method);
-                    
-                    if (selectedCustomer) {
-                      if (method === 'CARD') {
-                        // When CARD is selected, cap discount to 2%
-                        const cappedDiscount = Math.min(originalCustomerDiscount, 2);
-                        setDiscountPercentage(cappedDiscount);
-                        // Recalculate discount amount with capped percentage
-                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
-                            return sum + (item.unitPrice * item.quantity);
-                          }
-                          return sum;
-                        }, 0);
-                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
-                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                      } else {
-                        // When switching away from CARD, restore original customer discount
-                        setDiscountPercentage(originalCustomerDiscount);
-                        // Recalculate discount amount with original percentage
-                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
-                            return sum + (item.unitPrice * item.quantity);
-                          }
-                          return sum;
-                        }, 0);
-                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
-                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                      }
-                    }
-                    setIsPaymentReady(false); // Reset ready state
-                  }} 
-                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 6, border: '1px solid #ccc' }}
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="CARD">Card</option>
-                  <option value="MOBILE_PAYMENT">Mobile Payment</option>
-                  <option value="ONLINE_TRANSFER">Online Transfer</option>
-                  <option value="CREDIT">Credit</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="OTHER">Other</option>
-                  <option value="OLD_MANUAL">Old Manual</option>
-                </select>
               </div>
 
               {/* Amount Received */}

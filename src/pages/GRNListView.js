@@ -3,21 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../utill/api";
 import { AuthContext } from "../components/AuthContext";
 
-// Helper function to safely parse JSON
-const safeJson = async (res) => {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-};
-
 const GRNListView = () => {
   const navigate = useNavigate();
   const [grns, setGrns] = useState([]);
   const [filteredGrns, setFilteredGrns] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [paidFilter, setPaidFilter] = useState(""); // "", "paid", "unpaid"
+  const [supplierFilter, setSupplierFilter] = useState(""); // Supplier search
+  const [dateFromFilter, setDateFromFilter] = useState(""); // Date range
+  const [dateToFilter, setDateToFilter] = useState("");
   const [selectedGrn, setSelectedGrn] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,13 +48,32 @@ const GRNListView = () => {
         return grnCodeMatch || poCodeMatch || supplierMatch || productMatch || dateMatch || paidMatch;
       });
     }
+    
+    // Apply supplier filter
+    if (supplierFilter.trim() !== "") {
+      const supplierLower = supplierFilter.toLowerCase();
+      filtered = filtered.filter((grn) => 
+        grn.supplierName && grn.supplierName.toLowerCase().includes(supplierLower)
+      );
+    }
+    
+    // Apply date range filter
+    if (dateFromFilter || dateToFilter) {
+      filtered = filtered.filter((grn) => {
+        const createdDate = grn.createdAt ? new Date(grn.createdAt).toISOString().split('T')[0] : '';
+        if (dateFromFilter && createdDate < dateFromFilter) return false;
+        if (dateToFilter && createdDate > dateToFilter) return false;
+        return true;
+      });
+    }
+    
     if (paidFilter === "paid") {
       filtered = filtered.filter(grn => grn.paid);
     } else if (paidFilter === "unpaid") {
       filtered = filtered.filter(grn => !grn.paid);
     }
     setFilteredGrns(filtered);
-  }, [searchTerm, grns, paidFilter]);
+  }, [searchTerm, grns, paidFilter, supplierFilter, dateFromFilter, dateToFilter]);
 
   const loadGrns = async () => {
     setLoading(true);
@@ -85,13 +98,7 @@ const GRNListView = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/grns/${grnId}`, {
-        headers: { ...authHeaders },
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data?.message || "Failed to load GRN details");
-      }
+      const data = await api(`/api/grns/${grnId}`);
       setSelectedGrn(data);
       setShowDetailsModal(true);
     } catch (err) {
@@ -173,21 +180,47 @@ const GRNListView = () => {
       )}
 
       {/* Search Box */}
-      <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'center' }}>
+      <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           type="text"
-          placeholder="Search by GRN Code, PO Code, Supplier, Product, Date, Paid/Unpaid..."
+          placeholder="Search by GRN Code, PO Code, Product, Date, Paid/Unpaid..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={searchInput}
         />
-        <select value={paidFilter} onChange={e => setPaidFilter(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}>
+        
+        <input
+          type="text"
+          placeholder="Supplier name..."
+          value={supplierFilter}
+          onChange={(e) => setSupplierFilter(e.target.value)}
+          style={{ ...searchInput, minWidth: 150 }}
+        />
+        
+        <input
+          type="date"
+          value={dateFromFilter}
+          onChange={(e) => setDateFromFilter(e.target.value)}
+          title="From date"
+          style={{ padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}
+        />
+        
+        <input
+          type="date"
+          value={dateToFilter}
+          onChange={(e) => setDateToFilter(e.target.value)}
+          title="To date"
+          style={{ padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}
+        />
+        
+        <select value={paidFilter} onChange={e => setPaidFilter(e.target.value)} style={{ padding: 10, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da', minWidth: 100 }}>
           <option value="">All</option>
           <option value="paid">Paid</option>
           <option value="unpaid">Unpaid</option>
         </select>
-        {searchTerm && (
-          <span style={{ marginLeft: 12, color: "#666" }}>
+        
+        {(searchTerm || supplierFilter || dateFromFilter || dateToFilter || paidFilter) && (
+          <span style={{ marginLeft: 12, color: "#666", whiteSpace: 'nowrap' }}>
             Found {filteredGrns.length} result(s)
           </span>
         )}

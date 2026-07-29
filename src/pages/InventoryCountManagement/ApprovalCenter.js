@@ -170,7 +170,7 @@ const ApprovalCenter = () => {
                     Submitted: {new Date(session.submittedAt).toLocaleString()}
                   </div>
                   <div style={{ fontSize: 12, color: '#666' }}>
-                    By: {session.submittedBy?.name || 'Unknown'}
+                    By: {session.submittedByName || 'Unknown'}
                   </div>
                   <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
                     {session.lines?.filter(l => l.counted).length || 0} / {session.lines?.length || 0} items counted
@@ -223,7 +223,7 @@ const ApprovalCenter = () => {
                   <div>
                     <div style={{ fontSize: 12, color: '#666' }}>Submitted By</div>
                     <div style={{ fontSize: 14, fontWeight: 'bold' }}>
-                      {selectedSession.submittedBy?.name || 'Unknown'}
+                      {selectedSession.submittedByName || 'Unknown'}
                     </div>
                   </div>
                 </div>

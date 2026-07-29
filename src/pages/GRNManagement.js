@@ -33,6 +33,13 @@ const GRNManagement = () => {
   const [error, setError] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   
+  // PO search/filter
+  const [poSearchTerm, setPoSearchTerm] = useState("");
+  const [poSupplierFilter, setPoSupplierFilter] = useState("");
+  const [poDateFromFilter, setPoDateFromFilter] = useState("");
+  const [poDateToFilter, setPoDateToFilter] = useState("");
+  const [approvedGrnForPo, setApprovedGrnForPo] = useState(false);
+  
   const { token: ctxToken, roles: ctxRoles } = useContext(AuthContext);
   const token = useMemo(
     () => ctxToken || localStorage.getItem("token") || "",
@@ -133,7 +140,27 @@ const GRNManagement = () => {
     setSelectedPO(po);
     setCreatedGrnId(null);
     setApproved(false);
+    setApprovedGrnForPo(false);
+    
     if (po) {
+      // Check if GRN is already approved for this PO
+      try {
+        const grnData = await api(`/api/grns?page=0&size=1000`);
+        const grnList = grnData.content || [];
+        // Filter to find APPROVED GRN for THIS specific PO only
+        const approvedGrn = grnList.find(g => 
+          g.status === 'APPROVED' && 
+          (g.purchaseOrderId === po.id || Number(g.purchaseOrderId) === Number(po.id))
+        );
+        if (approvedGrn) {
+          setApprovedGrnForPo(true);
+          setError(`GRN already approved for this PO (${approvedGrn.grnCode}). You can only view the details.`);
+          return;
+        }
+      } catch (e) {
+        console.error("Error checking GRN status:", e);
+      }
+      
       // Fetch last selling price and last cost price for all products in PO
       const items = await Promise.all(
         po.items.map(async (it) => {
@@ -307,6 +334,11 @@ const GRNManagement = () => {
       setApproved(true);
       alert("GRN Approved and Inventory Updated!");
       console.log("Approved:", data);
+      
+      // Auto-close and redirect to GRN list after 1.5 seconds
+      setTimeout(() => {
+        window.location.href = '/grn-list';
+      }, 1500);
     } catch (err) {
       console.error("Approve error:", err);
       setError(err.message);
@@ -576,23 +608,109 @@ const GRNManagement = () => {
       {/* Select Purchase Order (only show if NOT loading existing GRN) */}
       {!loadedGrn && (
         <div style={{ marginBottom: 24 }}>
+          {/* PO Search Filters */}
+          <div style={{ marginBottom: 16, padding: 12, background: '#f8f9fa', borderRadius: 6 }}>
+            <h4 style={{ marginTop: 0 }}>Filter Purchase Orders</h4>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Search by Code or Supplier</label>
+                <input
+                  type="text"
+                  placeholder="PO-... or Supplier name"
+                  value={poSearchTerm}
+                  onChange={(e) => setPoSearchTerm(e.target.value)}
+                  style={{ padding: 8, width: '100%', marginTop: 4 }}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 150 }}>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Created From</label>
+                <input
+                  type="date"
+                  value={poDateFromFilter}
+                  onChange={(e) => setPoDateFromFilter(e.target.value)}
+                  style={{ padding: 8, width: '100%', marginTop: 4 }}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 150 }}>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Created To</label>
+                <input
+                  type="date"
+                  value={poDateToFilter}
+                  onChange={(e) => setPoDateToFilter(e.target.value)}
+                  style={{ padding: 8, width: '100%', marginTop: 4 }}
+                />
+              </div>
+            </div>
+          </div>
+
           <label style={{ fontWeight: 500, marginRight: 12 }}>
             Select Purchase Order:
           </label>
           <select
             value={selectedPO?.id || ""}
-          onChange={(e) => handleSelectPO(e.target.value)}
-          style={{ padding: 8, minWidth: 200 }}
-          disabled={loading}
-        >
-          <option value="">-- Select PO --</option>
-          {purchaseOrders.map((po) => (
-            <option key={po.id} value={po.id}>
-              {po.orderCode || `PO-${po.id}`} - {po.supplierName}
-            </option>
-          ))}
-        </select>
-      </div>
+            onChange={(e) => handleSelectPO(e.target.value)}
+            style={{ padding: 8, minWidth: 200 }}
+            disabled={loading || approvedGrnForPo}
+          >
+            <option value="">-- Select PO --</option>
+            {purchaseOrders
+              .filter((po) => {
+                const searchLower = poSearchTerm.toLowerCase();
+                if (poSearchTerm && !((po.orderCode || '').toLowerCase().includes(searchLower) || 
+                    (po.supplierName || '').toLowerCase().includes(searchLower))) {
+                  return false;
+                }
+                if (poDateFromFilter && (po.createdAt ? new Date(po.createdAt).toISOString().split('T')[0] : '') < poDateFromFilter) {
+                  return false;
+                }
+                if (poDateToFilter && (po.createdAt ? new Date(po.createdAt).toISOString().split('T')[0] : '') > poDateToFilter) {
+                  return false;
+                }
+                return true;
+              })
+              .map((po) => (
+                <option key={po.id} value={po.id}>
+                  {po.orderCode || `PO-${po.id}`} - {po.supplierName}
+                </option>
+              ))}
+          </select>
+          
+          {approvedGrnForPo && (
+            <div style={{
+              marginTop: 12,
+              padding: 12,
+              background: '#e3f2fd',
+              border: '1px solid #2196F3',
+              borderRadius: 4,
+              color: '#0d47a1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>⚠️ <strong>GRN Already Approved:</strong> A GRN is already approved for this purchase order. You can only view its details.</span>
+              <button
+                onClick={() => {
+                  setApprovedGrnForPo(false);
+                  setSelectedPO(null);
+                  setError("");
+                }}
+                style={{
+                  background: '#2196F3',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '6px 16px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  marginLeft: 12
+                }}
+              >
+                ← Back
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* PO Details (only show when creating new GRN) */}
@@ -746,15 +864,17 @@ const GRNManagement = () => {
             <button
               onClick={handleCreateGrn}
               style={btnPrimary}
-              disabled={loading || createdGrnId}
+              disabled={loading || createdGrnId || approvedGrnForPo}
             >
-              {createdGrnId
+              {approvedGrnForPo
+                ? "GRN Already Approved ✓"
+                : createdGrnId
                 ? "GRN Created ✓"
                 : loading
                 ? "Creating..."
                 : "Create GRN"}
             </button>
-            {createdGrnId && (
+            {createdGrnId && !approvedGrnForPo && (
               <p style={{ marginTop: 8, color: "#28a745", fontWeight: 500 }}>
                 GRN Created (ID: {createdGrnId}) - You can now approve or reject
                 it below.

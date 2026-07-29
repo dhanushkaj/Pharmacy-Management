@@ -73,6 +73,9 @@ export default function PurchaseOrdersList() {
   // filters
   const [orderCodeFilter, setOrderCodeFilter] = useState("");
   const [supplierIdFilter, setSupplierIdFilter] = useState(""); // '' = all
+  const [dateFromFilter, setDateFromFilter] = useState("");
+  const [dateToFilter, setDateToFilter] = useState("");
+  const [grnStatusMap, setGrnStatusMap] = useState({}); // Map of PO ID to GRN approved status
   const debouncedOrderCode = useDebounced(orderCodeFilter, 250);
 
   // sorting (by orderCode)
@@ -91,7 +94,7 @@ export default function PurchaseOrdersList() {
   }, [localStorage.getItem("roles")]);
 
   // column count changes if Actions is hidden
-  const colCount = isAdmin ? 6 : 5;
+  const colCount = isAdmin ? 7 : 6;
 
   // Load orders
   useEffect(() => {
@@ -107,6 +110,24 @@ export default function PurchaseOrdersList() {
           setOrders(orderList);
           setTotalPages(data.totalPages || 0);
           setTotalElements(data.totalElements || 0);
+          
+          // Fetch GRN status for each PO
+          const statusMap = {};
+          for (const po of orderList) {
+            try {
+              const grnData = await api(`/api/grns?page=0&size=100`);
+              const grnList = grnData.content || [];
+              // Check for APPROVED GRN that belongs to this specific PO
+              const approvedGrn = grnList.find(g => 
+                g.status === 'APPROVED' && 
+                (g.purchaseOrderId === po.id || Number(g.purchaseOrderId) === Number(po.id))
+              );
+              statusMap[po.id] = approvedGrn ? 'Yes' : 'No';
+            } catch (e) {
+              statusMap[po.id] = 'No';
+            }
+          }
+          if (!abort) setGrnStatusMap(statusMap);
         }
       } catch (e) {
         if (!abort) setErr(e.message || "Failed to load purchase orders");
@@ -148,6 +169,13 @@ export default function PurchaseOrdersList() {
           ? String(o.supplierId) === String(supplierIdFilter)
           : true
       )
+      .filter((o) => {
+        if (!dateFromFilter && !dateToFilter) return true;
+        const createdDate = o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '';
+        if (dateFromFilter && createdDate < dateFromFilter) return false;
+        if (dateToFilter && createdDate > dateToFilter) return false;
+        return true;
+      })
       .sort((a, b) => {
         const A = a.orderCode || "";
         const B = b.orderCode || "";
@@ -157,7 +185,7 @@ export default function PurchaseOrdersList() {
         });
         return sortAsc ? cmp : -cmp;
       });
-  }, [orders, debouncedOrderCode, supplierIdFilter, sortAsc]);
+  }, [orders, debouncedOrderCode, supplierIdFilter, dateFromFilter, dateToFilter, sortAsc]);
 
   async function handleDelete(id, code) {
     if (!window.confirm(`Delete purchase order ${code || id}?`)) return;
@@ -279,6 +307,26 @@ export default function PurchaseOrdersList() {
           </select>
         </div>
 
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 150, flex: 1 }}>
+          <label style={{ marginBottom: 6 }}>Created From</label>
+          <input
+            type="date"
+            value={dateFromFilter}
+            onChange={(e) => setDateFromFilter(e.target.value)}
+            style={{ padding: 8, width: "100%" }}
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 150, flex: 1 }}>
+          <label style={{ marginBottom: 6 }}>Created To</label>
+          <input
+            type="date"
+            value={dateToFilter}
+            onChange={(e) => setDateToFilter(e.target.value)}
+            style={{ padding: 8, width: "100%" }}
+          />
+        </div>
+
         <div style={{ minWidth: 180 }}>
           <button
             onClick={() => setSortAsc((s) => !s)}
@@ -321,6 +369,7 @@ export default function PurchaseOrdersList() {
             <th style={{ padding: 8, border: "1px solid #ddd" }}>Created</th>
             <th style={{ padding: 8, border: "1px solid #ddd" }}>Needed</th>
             <th style={{ padding: 8, border: "1px solid #ddd" }}>Items</th>
+            <th style={{ padding: 8, border: "1px solid #ddd", background: "#fff3cd" }}>Approved GRN</th>
             <th style={{ padding: 8, border: "1px solid #ddd" }}>Actions</th>
 
           </tr>
@@ -351,6 +400,15 @@ export default function PurchaseOrdersList() {
                 </td>
                 <td style={{ padding: 8, border: "1px solid #eee" }}>
                   {(po.items || []).length}
+                </td>
+                <td style={{ padding: 8, border: "1px solid #eee", background: "#fff9e6", fontWeight: 500 }}>
+                  {grnStatusMap[po.id] === 'Yes' ? (
+                    <span style={{ color: '#28a745', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      ✓ Yes
+                    </span>
+                  ) : (
+                    <span style={{ color: '#6c757d' }}>{grnStatusMap[po.id] || 'No'}</span>
+                  )}
                 </td>
 
                 

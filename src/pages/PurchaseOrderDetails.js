@@ -2,12 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import { api } from '../utill/api';
 
-async function safeJson(res) {
-  const text = await res.text();
-  if (!text) return {};
-  try { return JSON.parse(text); } catch { return { message: text }; }
-}
-
 // tiny debounce hook
 function useDebounced(value, delay = 250) {
   const [v, setV] = useState(value);
@@ -70,8 +64,6 @@ const PurchaseOrderDetails = () => {
   const token = localStorage.getItem('token') || '';
   const rolesStr = localStorage.getItem('roles') || '';
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
   // Only admins can see the Actions column
   const isAdmin = useMemo(() => {
     const all = [...readLocalRoles(rolesStr), ...readJwtRoles(token)].map(normalizeRole);
@@ -85,9 +77,7 @@ const PurchaseOrderDetails = () => {
     (async () => {
       setErr('');
       try {
-        const res = await fetch(`${API_BASE}/api/purchase-orders/${id}`, { headers: { ...authHeaders } });
-        const data = await safeJson(res);
-        if (!res.ok) throw new Error(data?.message || 'Failed to load purchase order');
+        const data = await api(`/api/purchase-orders/${id}`);
         if (!abort) setPo(data);
       } catch (e) {
         if (!abort) setErr(e.message || 'Failed to load purchase order');
@@ -115,13 +105,10 @@ const PurchaseOrderDetails = () => {
     setBusyRow(item.itemId);
     setErr('');
     try {
-      const res = await fetch(`${API_BASE}/api/purchase-orders/${id}/items/${item.itemId}`, {
+      const data = await api(`/api/purchase-orders/${id}/items/${item.itemId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ quantity: desired })
+        body: { quantity: desired }
       });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.message || 'Failed to update quantity');
 
       setPo(prev => ({
         ...prev,
@@ -144,12 +131,9 @@ const PurchaseOrderDetails = () => {
     setBusyRow(item.itemId);
     setErr('');
     try {
-      const res = await fetch(`${API_BASE}/api/purchase-orders/${id}/items/${item.itemId}`, {
-        method: 'DELETE',
-        headers: { ...authHeaders }
+      await api(`/api/purchase-orders/${id}/items/${item.itemId}`, {
+        method: 'DELETE'
       });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.message || 'Failed to delete item');
 
       setPo(prev => ({
         ...prev,

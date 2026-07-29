@@ -272,6 +272,10 @@ const ProductBin = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [inventorySummary, setInventorySummary] = useState([]);
+  
+  // Date range filters for movements
+  const [dateFromFilter, setDateFromFilter] = useState("");
+  const [dateToFilter, setDateToFilter] = useState("");
 
   useEffect(() => {
     // fetch categories
@@ -285,10 +289,24 @@ const ProductBin = () => {
     })();
   }, [token]);
 
+  // Re-fetch movements when date filters change
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchMovements(selectedProduct, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFromFilter, dateToFilter]);
+
   const fetchMovements = async (product, pageNum = 0) => {
     setLoading(true);
     try {
-      const url = `/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`;
+      let url = `/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`;
+      if (dateFromFilter) {
+        url += `&dateFrom=${dateFromFilter}`;
+      }
+      if (dateToFilter) {
+        url += `&dateTo=${dateToFilter}`;
+      }
       console.log('Fetching movements from:', url);
       const movementsPage = await api(url, { token });
       console.log('Movements response:', movementsPage);
@@ -446,6 +464,37 @@ const ProductBin = () => {
 
           <div style={{ marginTop: 20 }}>
             <h3>Recent Movements</h3>
+            
+            {/* Date Range Filter */}
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Date From</label>
+                <input
+                  type="date"
+                  value={dateFromFilter}
+                  onChange={(e) => setDateFromFilter(e.target.value)}
+                  style={{ padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Date To</label>
+                <input
+                  type="date"
+                  value={dateToFilter}
+                  onChange={(e) => setDateToFilter(e.target.value)}
+                  style={{ padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ced4da' }}
+                />
+              </div>
+              {(dateFromFilter || dateToFilter) && (
+                <button
+                  onClick={() => { setDateFromFilter(""); setDateToFilter(""); }}
+                  style={{ padding: '6px 16px', background: '#f5f5f5', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                >
+                  Clear Dates
+                </button>
+              )}
+            </div>
+            
             {loading ? (
               <div>Loading...</div>
             ) : (

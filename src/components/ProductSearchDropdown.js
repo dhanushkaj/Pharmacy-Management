@@ -102,7 +102,7 @@ export default function ProductSearchDropdown({ categoryId, onSelect, placeholde
         style={{ padding: 8, width: '100%' }}
       />
       {open && results.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid #ddd', maxHeight: 260, overflow: 'auto' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid #ddd', maxHeight: 260, overflowY: 'auto' }}>
           {results.map((r, idx) => (
             <div 
               key={r.productId} 

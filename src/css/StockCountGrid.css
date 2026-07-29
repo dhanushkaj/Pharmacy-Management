@@ -1,0 +1,22 @@
+/* This file contains additional styles for StockCountGrid component
+   Main styles are in InventoryCount.css for efficiency */
+
+.stock-count-table tbody tr.line-row {
+  border-top: 1px solid #e0e0e0;
+}
+
+.stock-count-table input[type="number"],
+.stock-count-table textarea {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Ensure input fields have proper focus states */
+.physical-qty input:focus,
+.line-comment textarea:focus {
+  background-color: #fafafa;
+}
+
+/* Print Styles - Now handled in InventoryCount.css for consistency */
+@media print {
+  /* All print styles consolidated in InventoryCount.css to avoid conflicts */
+}

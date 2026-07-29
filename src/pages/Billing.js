@@ -46,6 +46,7 @@ export default function Billing() {
   // Refs for focus management
   const customerDiscountPercentRef = useRef(null);
   const productSearchRef = useRef(null);
+  const productDropdownRef = useRef(null);
 
   // Customer billing history (Ctrl+H)
   const [showCustomerHistory, setShowCustomerHistory] = useState(false);
@@ -229,6 +230,34 @@ export default function Billing() {
     setFilteredProducts(filtered);
     setSelectedProductIndex(-1);
   }, [productSearch, allProducts]);
+
+  // Auto-scroll product dropdown when navigating with arrow keys
+  useEffect(() => {
+    if (productDropdownRef.current && selectedProductIndex >= 0) {
+      const dropdown = productDropdownRef.current;
+      const items = dropdown.querySelectorAll('div[data-product-index]');
+      
+      if (items.length > 0 && items[selectedProductIndex]) {
+        const item = items[selectedProductIndex];
+        const itemOffsetTop = item.offsetTop;
+        const itemHeight = item.offsetHeight;
+        const currentScrollTop = dropdown.scrollTop;
+        const dropdownHeight = dropdown.clientHeight;
+        
+        const itemBottomOffset = itemOffsetTop + itemHeight;
+        const viewportBottom = currentScrollTop + dropdownHeight;
+        
+        // If item is above current viewport, scroll up
+        if (itemOffsetTop < currentScrollTop) {
+          dropdown.scrollTop = Math.max(0, itemOffsetTop - 5);
+        } 
+        // If item is below current viewport, scroll down
+        else if (itemBottomOffset > viewportBottom) {
+          dropdown.scrollTop = itemBottomOffset - dropdownHeight + 5;
+        }
+      }
+    }
+  }, [selectedProductIndex]);
 
   const handleSelectCustomer = (customer) => {
     setSelectedCustomer(customer);
@@ -1170,6 +1199,15 @@ export default function Billing() {
               alert('For CASH payments, please enter the amount received!');
               return;
             }
+            
+            // Check if Amount Received is less than Grand Total (or Net Payable if returns exist)
+            const payableAmount = returnCartItems.length > 0 ? netPayable : grandTotal;
+            const receivedAmount = parseFloat(amountReceived);
+            
+            if (receivedAmount < payableAmount) {
+              alert(`❌ Insufficient Payment!\n\nAmount to be paid: Rs. ${payableAmount.toFixed(2)}\nAmount received: Rs. ${receivedAmount.toFixed(2)}\n\nPlease ensure the amount received covers the full payment.`);
+              return;
+            }
           }
           // For other payment methods, amount is auto-set to grandTotal
           
@@ -1555,32 +1593,35 @@ export default function Billing() {
               </span>
             </small>
             {filteredProducts.length > 0 && (
-              <div style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
+              <div ref={productDropdownRef} style={{ border: '1px solid #ccc', background: '#fff', maxHeight: 320, overflowY: 'auto', marginTop: 8, borderRadius: 4, position: 'relative', zIndex: 1000 }}>
                 {filteredProducts.filter(p => p != null).map((p, idx) => {
                   const isSelected = idx === selectedProductIndex;
                   
                   return (
                     <div
                       key={p.productId}
+                      data-product-index={idx}
                       onClick={() => handleSelectProductFromDropdown(p)}
                       style={{
                         padding: 12,
                         cursor: 'pointer',
                         borderBottom: '1px solid #eee',
-                        background: isSelected ? '#e3f2fd' : '#fff'
+                        background: isSelected ? '#e3f2fd' : '#fff',
+                        transition: 'background 0.15s',
+                        minHeight: 60
                       }}
                       onMouseEnter={() => setSelectedProductIndex(idx)}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1976d2' }}>
+                          <div style={{ fontSize: 14, fontWeight: 'bold', color: '#1976d2' }}>
                             {p.name || 'N/A'}
                           </div>
                           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                             {p.category?.name || 'N/A'}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 120 }}>
+                        <div style={{ textAlign: 'right', marginLeft: 16, minWidth: 100 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#d32f2f' }}>
                             Rs. {p.lastPrice || '-'}
                           </div>
@@ -2019,6 +2060,58 @@ export default function Billing() {
 
             {/* Content */}
             <div style={{ padding: 20 }}>
+              {/* Payment Method */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Payment Method:</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => {
+                    const method = e.target.value;
+                    setPaymentMethod(method);
+                    
+                    if (selectedCustomer) {
+                      if (method === 'CARD') {
+                        // When CARD is selected, cap discount to 2%
+                        const cappedDiscount = Math.min(originalCustomerDiscount, 2);
+                        setDiscountPercentage(cappedDiscount);
+                        // Recalculate discount amount with capped percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      } else {
+                        // When switching away from CARD, restore original customer discount
+                        setDiscountPercentage(originalCustomerDiscount);
+                        // Recalculate discount amount with original percentage
+                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
+                          if (!item.productDiscount || item.productDiscount === 0) {
+                            return sum + (item.unitPrice * item.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
+                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
+                      }
+                    }
+                    setIsPaymentReady(false); // Reset ready state
+                  }} 
+                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 6, border: '1px solid #ccc' }}
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="CARD">Card</option>
+                  <option value="MOBILE_PAYMENT">Mobile Payment</option>
+                  <option value="ONLINE_TRANSFER">Online Transfer</option>
+                  <option value="CREDIT">Credit</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="OTHER">Other</option>
+                  <option value="OLD_MANUAL">Old Manual</option>
+                </select>
+              </div>
+
               {/* Summary Section */}
               <div style={{ padding: 16, background: '#f5f5f5', borderRadius: 8, marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2129,58 +2222,6 @@ export default function Billing() {
                     </div>
                   </>
                 )}
-              </div>
-
-              {/* Payment Method */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 'bold', fontSize: 14 }}>Payment Method:</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => {
-                    const method = e.target.value;
-                    setPaymentMethod(method);
-                    
-                    if (selectedCustomer) {
-                      if (method === 'CARD') {
-                        // When CARD is selected, cap discount to 2%
-                        const cappedDiscount = Math.min(originalCustomerDiscount, 2);
-                        setDiscountPercentage(cappedDiscount);
-                        // Recalculate discount amount with capped percentage
-                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
-                            return sum + (item.unitPrice * item.quantity);
-                          }
-                          return sum;
-                        }, 0);
-                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
-                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                      } else {
-                        // When switching away from CARD, restore original customer discount
-                        setDiscountPercentage(originalCustomerDiscount);
-                        // Recalculate discount amount with original percentage
-                        const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
-                            return sum + (item.unitPrice * item.quantity);
-                          }
-                          return sum;
-                        }, 0);
-                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
-                        setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
-                      }
-                    }
-                    setIsPaymentReady(false); // Reset ready state
-                  }} 
-                  style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 6, border: '1px solid #ccc' }}
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="CARD">Card</option>
-                  <option value="MOBILE_PAYMENT">Mobile Payment</option>
-                  <option value="ONLINE_TRANSFER">Online Transfer</option>
-                  <option value="CREDIT">Credit</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="OTHER">Other</option>
-                  <option value="OLD_MANUAL">Old Manual</option>
-                </select>
               </div>
 
               {/* Amount Received */}

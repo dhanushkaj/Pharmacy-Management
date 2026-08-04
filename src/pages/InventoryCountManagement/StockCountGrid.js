@@ -136,6 +136,11 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
   const totalItems = lines.length;
 
   const handlePrint = () => {
+    document.body.setAttribute('data-print-context', 'inventory');
+    window.onafterprint = () => {
+      document.body.removeAttribute('data-print-context');
+      window.onafterprint = null;
+    };
     window.print();
   };
 

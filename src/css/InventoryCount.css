@@ -502,126 +502,110 @@
   }
 }
 
-/* Print Styles for A4 Format */
-/* SCOPED PRINT STYLES - Only apply to inventory count pages */
-@media print {
-  /* ONLY hide elements within inventory count containers to avoid affecting other pages like Billing */
-  .inventory-count-container * {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+/* ============================================================
+   PRINT — INVENTORY COUNT ONLY
+   No dependency on any attribute set by other pages/files — this
+   works purely off the .inventory-count-container class, which only
+   ever exists on the Inventory Count route. Billing.js, BillingHistory.js
+   and App.css are NOT modified or required for this to work.
 
+   App.css collapses <body> to 0x0 with overflow:hidden on every print
+   job (for its own thermal-receipt printing), then only un-hides
+   elements that are explicitly position:absolute. We apply that same
+   escape here — .inventory-count-container becomes position:absolute
+   so it renders regardless of what App.css does to <body>.
+
+   Single continuous <table> — the browser paginates it natively,
+   repeating <thead> (with its border) at the top of every physical
+   page automatically. No manual page-splitting, no fixed heights.
+   ============================================================ */
+@media print {
   .inventory-count-container {
+    /* Escape App.css's body{overflow:hidden;width:0;height:0} clipping —
+       same technique #billing-thermal-print already relies on */
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    visibility: visible !important;
+
     background: white !important;
-    padding: 5mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
     font-family: Arial, sans-serif !important;
     line-height: 1.4 !important;
     height: auto !important;
-    display: block !important;
-    visibility: visible !important;
     width: 100% !important;
     max-width: 100% !important;
+    display: block !important;
+    overflow: visible !important;
   }
 
-  /* Hide UI elements ONLY within inventory count */
+  .inventory-count-container * {
+    visibility: visible !important;
+  }
+
+  /* Hide on-screen-only controls */
   .inventory-count-container .inventory-count-header,
   .inventory-count-container .category-selector,
   .inventory-count-container .error-message,
+  .inventory-count-container .success-message,
   .inventory-count-container .progress-bar-section,
-  .inventory-count-container button,
-  .inventory-count-container select,
   .inventory-count-container .action-buttons,
-  .inventory-count-container .unsaved-indicator,
-  .inventory-count-container .success-message {
+  .inventory-count-container .print-timestamp,
+  .inventory-count-container button,
+  .inventory-count-container select {
     display: none !important;
   }
 
-  /* Hide sidebar and header GLOBALLY but only when printing inventory count */
+  /* Hide surrounding app chrome (sidebar/header/nav) so only the
+     absolutely-positioned container's content shows on the page */
   .sidebar,
   .Sidebar,
   header,
   .header,
-  Header,
   nav,
-  .nav,
-  Navigation,
-  .Navigation {
+  .nav {
     display: none !important;
   }
 
-  /* Show content */
-  .inventory-count-container {
-    padding: 0 !important;
-    margin: 0 !important;
-    position: static !important;
-    overflow: visible !important;
-  }
-
-  .stock-count-grid-wrapper {
+  .inventory-count-container .stock-count-grid-wrapper,
+  .inventory-count-container .stock-count-grid-container,
+  .inventory-count-container .print-table-wrapper {
     display: block !important;
     margin: 0 !important;
     padding: 0 !important;
-  }
-
-  .stock-count-grid-container {
-    background: white !important;
-    padding: 0 0 20mm 0 !important;
-    display: block !important;
-    margin: 0 !important;
     width: 100% !important;
-  }
-
-  .print-table-wrapper {
-    display: block !important;
     overflow: visible !important;
-    margin: 0 !important;
-    padding: 0 0 20mm 0 !important;
-    width: 100% !important;
   }
 
-  /* Print Header */
-  .print-header {
+  /* Print header — appears once at the very top of the document */
+  .inventory-count-container .print-header {
     display: block !important;
-    visibility: visible !important;
-    margin-bottom: 30px !important;
-    padding: 20px 0 !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 10px !important;
     border-bottom: 2px solid #333 !important;
     text-align: center !important;
+    page-break-after: avoid !important;
   }
 
-  .print-header h2 {
-    display: block !important;
-    margin: 0 0 15px 0 !important;
-    font-size: 18px !important;
+  .inventory-count-container .print-header h2 {
+    margin: 0 0 8px 0 !important;
+    font-size: 16px !important;
     font-weight: bold !important;
   }
 
-  .print-header .print-info {
-    display: block !important;
-    margin: 8px 0 !important;
-    font-size: 12px !important;
+  .inventory-count-container .print-header .print-info {
+    margin: 4px 0 !important;
+    font-size: 11px !important;
     color: #333 !important;
   }
 
-  /* Print Timestamp */
-  .print-timestamp {
-    display: block !important;
-    font-size: 11px !important;
-    text-align: center !important;
-    position: fixed !important;
-    bottom: 5mm !important;
-    left: 5mm !important;
-    right: 5mm !important;
-    background: white !important;
-    padding: 5px 0 !important;
-    border-top: 1px solid #ccc !important;
-  }
-
-  /* Table Styling - only within inventory count */
+  /* THE TABLE — a single continuous table; thead repeats on every
+     physical page automatically, borders included, for free */
   .inventory-count-container table {
     width: 100% !important;
     border-collapse: collapse !important;
-    margin-bottom: 10px !important;
+    margin: 0 0 10px 0 !important;
     table-layout: fixed !important;
   }
 
@@ -635,8 +619,8 @@
 
   .inventory-count-container tr {
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
     display: table-row !important;
-    height: auto !important;
   }
 
   .inventory-count-container th {
@@ -648,41 +632,26 @@
     font-size: 11px !important;
   }
 
-  /* Column widths */
-  .inventory-count-container th:nth-child(1),
-  .inventory-count-container td:nth-child(1) {
-    width: 35% !important;
-  }
-
-  .inventory-count-container th:nth-child(2),
-  .inventory-count-container td:nth-child(2) {
-    width: 15% !important;
-  }
-
-  .inventory-count-container th:nth-child(3),
-  .inventory-count-container td:nth-child(3) {
-    width: 15% !important;
-  }
-
-  .inventory-count-container th:nth-child(4),
-  .inventory-count-container td:nth-child(4) {
-    width: 15% !important;
-  }
-
-  .inventory-count-container th:nth-child(5),
-  .inventory-count-container td:nth-child(5) {
-    width: 20% !important;
-  }
-
-  /* Table cells */
   .inventory-count-container td {
     border: 1px solid #ddd !important;
     padding: 8px !important;
     font-size: 11px !important;
-    height: auto !important;
+    vertical-align: top !important;
   }
 
-  /* Input fields in table - show as text */
+  /* Column widths */
+  .inventory-count-container th:nth-child(1),
+  .inventory-count-container td:nth-child(1) { width: 35% !important; }
+  .inventory-count-container th:nth-child(2),
+  .inventory-count-container td:nth-child(2) { width: 15% !important; }
+  .inventory-count-container th:nth-child(3),
+  .inventory-count-container td:nth-child(3) { width: 15% !important; }
+  .inventory-count-container th:nth-child(4),
+  .inventory-count-container td:nth-child(4) { width: 15% !important; }
+  .inventory-count-container th:nth-child(5),
+  .inventory-count-container td:nth-child(5) { width: 20% !important; }
+
+  /* Inputs render as plain text */
   .inventory-count-container input[type="number"],
   .inventory-count-container input[type="text"] {
     display: inline !important;
@@ -692,28 +661,31 @@
     padding: 0 !important;
     font-family: Arial !important;
     color: #333 !important;
+    width: 100% !important;
   }
 
-  /* Hide placeholder text */
   .inventory-count-container input::placeholder,
   .inventory-count-container textarea::placeholder {
     color: transparent !important;
   }
 
-  /* Comment section */
-  .print-comment-section {
+  /* Overall comment — appears once, after the table */
+  .inventory-count-container .print-comment-section {
     display: block !important;
-    margin-top: 20px !important;
+    margin-top: 16px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    page-break-inside: avoid !important;
   }
 
-  .print-comment-section label {
+  .inventory-count-container .print-comment-section label {
     display: block !important;
     font-weight: bold !important;
     margin-bottom: 5px !important;
     font-size: 12px !important;
   }
 
-  .print-comment-section textarea {
+  .inventory-count-container .print-comment-section textarea {
     display: block !important;
     width: 100% !important;
     border: 1px solid #333 !important;
@@ -723,11 +695,13 @@
     color: #333 !important;
   }
 
-  /* Page settings */
+  /* Page geometry — @page margin centers the content automatically;
+     never set an explicit mm width on any element above.
+     NOTE: @page cannot be scoped, but App.css has no static @page
+     rule for billing (per earlier fix), so no conflict here. If
+     App.css ever adds one back, that will need to be resolved. */
   @page {
     size: A4;
-    margin: 5mm;
+    margin: 12mm;
   }
 }
-
-

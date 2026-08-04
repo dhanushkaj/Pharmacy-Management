@@ -232,41 +232,54 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
               <th style={{ padding: 12, textAlign: 'left' }}>Product</th>
               <th style={{ padding: 12, textAlign: 'center' }}>System Qty</th>
               <th style={{ padding: 12, textAlign: 'center' }}>Physical Qty</th>
-              <th style={{ padding: 12, textAlign: 'center' }}>Variance</th>
+              <th style={{ padding: 12, textAlign: 'center' }}>Quantity Variance</th>
+              <th style={{ padding: 12, textAlign: 'center' }}>Selling Price</th>
+              <th style={{ padding: 12, textAlign: 'center' }}>Selling Price Variance</th>
               <th style={{ padding: 12, textAlign: 'left' }}>Comment</th>
             </tr>
           </thead>
           <tbody>
-            {lines.map(line => (
-              <tr key={line.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: 12 }}>
-                  <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
-                  <div style={{ fontSize: 11, color: '#666' }}>SKU: {line.productSku}</div>
-                </td>
-                <td style={{ padding: 12, textAlign: 'center' }}>{line.systemQtyAtCount}</td>
-                <td style={{ padding: 12, textAlign: 'center' }}>
-                  <input
-                    type="number"
-                    value={line.physicalQty !== null && line.physicalQty !== undefined ? line.physicalQty : ''}
-                    onChange={(e) => handlePhysicalQtyChange(line.id, e.target.value)}
-                    placeholder="0"
-                    style={{ width: 60, padding: 6, border: '1px solid #ddd', borderRadius: 4 }}
-                  />
-                </td>
-                <td style={{ padding: 12, textAlign: 'center', fontWeight: 'bold', color: line.variance !== 0 && line.variance !== null ? '#ff9800' : '#666' }}>
-                  {line.variance !== null && line.variance !== undefined ? (line.variance > 0 ? '+' : '') + line.variance : '-'}
-                </td>
-                <td style={{ padding: 12 }}>
-                  <input
-                    type="text"
-                    value={line.lineComment || ''}
-                    onChange={(e) => handleLineCommentChange(line.id, e.target.value)}
-                    placeholder="Add note..."
-                    style={{ width: '100%', padding: 6, border: '1px solid #ddd', borderRadius: 4, fontSize: 11 }}
-                  />
-                </td>
-              </tr>
-            ))}
+            {lines.map(line => {
+              const sellingPrice = line.sellPrice || 0;
+              const qtyVariance = line.variance !== null && line.variance !== undefined ? line.variance : 0;
+              const priceVariance = qtyVariance * sellingPrice;
+              return (
+                <tr key={line.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: 12 }}>
+                    <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
+                    <div style={{ fontSize: 11, color: '#666' }}>SKU: {line.productSku}</div>
+                  </td>
+                  <td style={{ padding: 12, textAlign: 'center' }}>{line.systemQtyAtCount}</td>
+                  <td style={{ padding: 12, textAlign: 'center' }}>
+                    <input
+                      type="number"
+                      value={line.physicalQty !== null && line.physicalQty !== undefined ? line.physicalQty : ''}
+                      onChange={(e) => handlePhysicalQtyChange(line.id, e.target.value)}
+                      placeholder="0"
+                      style={{ width: 60, padding: 6, border: '1px solid #ddd', borderRadius: 4 }}
+                    />
+                  </td>
+                  <td style={{ padding: 12, textAlign: 'center', fontWeight: 'bold', color: qtyVariance !== 0 ? '#ff9800' : '#666' }}>
+                    {line.variance !== null && line.variance !== undefined ? (qtyVariance > 0 ? '+' : '') + qtyVariance : '-'}
+                  </td>
+                  <td style={{ padding: 12, textAlign: 'center' }}>
+                    Rs. {sellingPrice.toFixed(2)}
+                  </td>
+                  <td style={{ padding: 12, textAlign: 'center', fontWeight: 'bold', color: priceVariance !== 0 ? '#ff9800' : '#666' }}>
+                    {priceVariance !== 0 ? (priceVariance > 0 ? '+' : '') + 'Rs. ' + priceVariance.toFixed(2) : 'Rs. 0.00'}
+                  </td>
+                  <td style={{ padding: 12 }}>
+                    <input
+                      type="text"
+                      value={line.lineComment || ''}
+                      onChange={(e) => handleLineCommentChange(line.id, e.target.value)}
+                      placeholder="Add note..."
+                      style={{ width: '100%', padding: 6, border: '1px solid #ddd', borderRadius: 4, fontSize: 11 }}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -343,7 +343,7 @@ const HistoryViewer = () => {
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: '#666' }}>With Variance</div>
+                    <div style={{ color: '#666' }}>Qty Variance Items</div>
                     <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
                       {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length || 0}
                     </div>
@@ -352,6 +352,21 @@ const HistoryViewer = () => {
                     <div style={{ color: '#666' }}>Completion</div>
                     <div style={{ fontWeight: 'bold', color: '#2196f3' }}>
                       {Math.round(((selectedSession.lines?.filter(l => l.counted).length || 0) / (selectedSession.lines?.length || 1)) * 100)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#666' }}>Total Price Variance</div>
+                    <div style={{ fontWeight: 'bold', color: '#ff5722' }}>
+                      Rs. {(selectedSession.lines?.reduce((sum, l) => sum + ((l.variance || 0) * (l.sellPrice || 0)), 0) || 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#666' }}>Avg Selling Price</div>
+                    <div style={{ fontWeight: 'bold', color: '#9c27b0' }}>
+                      Rs. {selectedSession.lines?.length > 0 
+                        ? (selectedSession.lines.reduce((sum, l) => sum + (l.sellPrice || 0), 0) / selectedSession.lines.length).toFixed(2)
+                        : '0.00'
+                      }
                     </div>
                   </div>
                 </div>
@@ -369,22 +384,29 @@ const HistoryViewer = () => {
               {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length > 0 && (
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ff9800', marginBottom: 8 }}>Items with Variance:</div>
-                  <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4 }}>
+                  <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4 }}>
                     {selectedSession.lines
                       ?.filter(l => l.variance !== 0 && l.variance !== null)
-                      .map(line => (
-                        <div key={line.id} style={{ padding: 8, borderBottom: '1px solid #f0f0f0', fontSize: 11 }}>
-                          <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
-                          <div style={{ color: '#666', marginTop: 2 }}>
-                            System: {line.systemQtyAtCount} → Physical: {line.physicalQty} (Variance: {line.variance > 0 ? '+' : ''}{line.variance})
-                          </div>
-                          {line.lineComment && (
-                            <div style={{ color: '#2196f3', fontSize: 10, marginTop: 4 }}>
-                              Note: {line.lineComment}
+                      .map(line => {
+                        const sellingPrice = line.sellPrice || 0;
+                        const priceVariance = (line.variance || 0) * sellingPrice;
+                        return (
+                          <div key={line.id} style={{ padding: 8, borderBottom: '1px solid #f0f0f0', fontSize: 11 }}>
+                            <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
+                            <div style={{ color: '#666', marginTop: 2 }}>
+                              System: {line.systemQtyAtCount} → Physical: {line.physicalQty} (Qty Variance: {line.variance > 0 ? '+' : ''}{line.variance})
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            <div style={{ color: '#666', marginTop: 2 }}>
+                              Selling Price: Rs. {sellingPrice.toFixed(2)} | Price Variance: {priceVariance !== 0 ? (priceVariance > 0 ? '+' : '') + 'Rs. ' + priceVariance.toFixed(2) : 'Rs. 0.00'}
+                            </div>
+                            {line.lineComment && (
+                              <div style={{ color: '#2196f3', fontSize: 10, marginTop: 4 }}>
+                                Note: {line.lineComment}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}

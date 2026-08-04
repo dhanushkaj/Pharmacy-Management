@@ -600,6 +600,13 @@
     color: #333 !important;
   }
 
+  .inventory-count-container .print-info {
+    display: block !important;
+    margin: 4px 0 !important;
+    font-size: 10px !important;
+    color: #333 !important;
+  }
+
   /* THE TABLE — a single continuous table; thead repeats on every
      physical page automatically, borders included, for free */
   .inventory-count-container table {
@@ -626,30 +633,36 @@
   .inventory-count-container th {
     background-color: #e0e0e0 !important;
     border: 1px solid #333 !important;
-    padding: 8px !important;
+    padding: 6px 5px !important;
     text-align: left !important;
     font-weight: bold !important;
-    font-size: 11px !important;
+    font-size: 9.5px !important;
+    line-height: 1.2 !important;
   }
 
   .inventory-count-container td {
     border: 1px solid #ddd !important;
-    padding: 8px !important;
-    font-size: 11px !important;
+    padding: 6px 5px !important;
+    font-size: 9.5px !important;
     vertical-align: top !important;
+    word-wrap: break-word !important;
   }
 
-  /* Column widths */
+  /* Column widths — 7 columns */
   .inventory-count-container th:nth-child(1),
-  .inventory-count-container td:nth-child(1) { width: 35% !important; }
+  .inventory-count-container td:nth-child(1) { width: 24% !important; } /* Product */
   .inventory-count-container th:nth-child(2),
-  .inventory-count-container td:nth-child(2) { width: 15% !important; }
+  .inventory-count-container td:nth-child(2) { width: 10% !important; } /* System Qty */
   .inventory-count-container th:nth-child(3),
-  .inventory-count-container td:nth-child(3) { width: 15% !important; }
+  .inventory-count-container td:nth-child(3) { width: 10% !important; } /* Physical Qty */
   .inventory-count-container th:nth-child(4),
-  .inventory-count-container td:nth-child(4) { width: 15% !important; }
+  .inventory-count-container td:nth-child(4) { width: 12% !important; } /* Quantity Variance */
   .inventory-count-container th:nth-child(5),
-  .inventory-count-container td:nth-child(5) { width: 20% !important; }
+  .inventory-count-container td:nth-child(5) { width: 12% !important; } /* Selling Price */
+  .inventory-count-container th:nth-child(6),
+  .inventory-count-container td:nth-child(6) { width: 14% !important; } /* Selling Price Variance */
+  .inventory-count-container th:nth-child(7),
+  .inventory-count-container td:nth-child(7) { width: 18% !important; } /* Comment */
 
   /* Inputs render as plain text */
   .inventory-count-container input[type="number"],

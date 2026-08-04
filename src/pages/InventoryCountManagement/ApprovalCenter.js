@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { AuthContext } from '../../components/AuthContext';
 import '../../css/InventoryCount.css';
 
@@ -124,6 +125,91 @@ const ApprovalCenter = () => {
     window.print();
   };
 
+  const handleExcelExport = () => {
+    if (!selectedSession) return;
+
+    try {
+      // Prepare data for export - ONLY items with entered physical quantities
+      const exportData = selectedSession.lines
+        .filter(l => {
+          const physicalQty = getLineValue(l, 'physicalQty');
+          return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+        })
+        .map(line => {
+          const qtyVariance = (getLineValue(line, 'physicalQty') || 0) - line.systemQtyAtCount;
+          const sellingPrice = line.sellPrice || 0;
+          const priceVariance = qtyVariance * sellingPrice;
+          
+          return {
+            'Product Name': line.productName,
+            'Product SKU': line.productCode,
+            'System Qty': line.systemQtyAtCount,
+            'Physical Qty': getLineValue(line, 'physicalQty') || '',
+            'Quantity Variance': qtyVariance,
+            'Selling Price (Rs.)': sellingPrice.toFixed(2),
+            'Price Variance (Rs.)': priceVariance !== 0 ? priceVariance.toFixed(2) : '0.00',
+            'Note': getLineValue(line, 'lineComment') || ''
+          };
+        });
+
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Set column widths
+      const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
+      ws['!cols'] = colWidths.map(width => ({ wch: width }));
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Approval Data');
+
+      // Add summary metadata sheet
+      const entriesCount = selectedSession.lines?.filter(l => {
+        const physicalQty = getLineValue(l, 'physicalQty');
+        return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+      }).length || 0;
+
+      const totalPriceVariance = selectedSession.lines
+        ?.filter(l => {
+          const physicalQty = getLineValue(l, 'physicalQty');
+          return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+        })
+        .reduce((sum, l) => {
+          const qtyVariance = (getLineValue(l, 'physicalQty') || 0) - l.systemQtyAtCount;
+          return sum + (qtyVariance * (l.sellPrice || 0));
+        }, 0).toFixed(2) || '0.00';
+
+      const metaData = [
+        ['Physical Inventory Count - Approval'],
+        [''],
+        ['Session ID', selectedSession.id],
+        ['Category', selectedSession.categoryName],
+        ['Status', selectedSession.status],
+        ['Version', selectedSession.versionNumber],
+        ['Submitted By', selectedSession.submittedByName || 'N/A'],
+        ['Submitted Date', new Date(selectedSession.submittedAt).toLocaleString()],
+        ['Total Items', selectedSession.lines?.length || 0],
+        ['Items with Entered Values', entriesCount],
+        ['Total Price Variance (Rs.)', totalPriceVariance],
+        ['Average Selling Price (Rs.)', selectedSession.lines?.length > 0 ? (selectedSession.lines.reduce((sum, l) => sum + (l.sellPrice || 0), 0) / selectedSession.lines.length).toFixed(2) : '0.00'],
+        ['Export Date', new Date().toLocaleString()]
+      ];
+      
+      const wsMetadata = XLSX.utils.aoa_to_sheet(metaData);
+      wsMetadata['!cols'] = [{ wch: 30 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsMetadata, 'Summary');
+
+      // Generate filename
+      const filename = `Physical_Count_Approval_${selectedSession.categoryName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      // Write file
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      console.error('Error exporting to Excel:', err);
+      setError('Failed to export to Excel');
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: 20, textAlign: 'center' }}>Loading submitted sessions...</div>;
   }
@@ -195,7 +281,10 @@ const ApprovalCenter = () => {
                     <strong>Session ID:</strong> {selectedSession.id} | <strong>Version:</strong> {selectedSession.versionNumber} | <strong>Status:</strong> {selectedSession.status}
                   </div>
                   <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
-                    <strong>Items with Variance:</strong> {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length || 0} / {selectedSession.lines?.length || 0}
+                    <strong>Items with Entered Values:</strong> {selectedSession.lines?.filter(l => {
+                      const physicalQty = getLineValue(l, 'physicalQty');
+                      return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+                    }).length || 0} / {selectedSession.lines?.length || 0}
                   </div>
                   <div className="print-info" style={{ fontSize: 12, color: '#333' }}>
                     <strong>Submitted:</strong> {new Date(selectedSession.submittedAt).toLocaleString()}
@@ -223,7 +312,10 @@ const ApprovalCenter = () => {
                     <div>
                       <div style={{ fontSize: 12, color: '#666' }}>Qty Variance Items</div>
                       <div style={{ fontSize: 18, fontWeight: 'bold', color: '#ff9800' }}>
-                        {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length || 0}
+                        {selectedSession.lines?.filter(l => {
+                          const physicalQty = getLineValue(l, 'physicalQty');
+                          return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+                        }).length || 0}
                       </div>
                     </div>
                     <div>
@@ -270,11 +362,14 @@ const ApprovalCenter = () => {
                     <div>Printed: {new Date().toLocaleString()}</div>
                   </div>
 
-                  {/* Items with Variance - EDITABLE TABLE */}
-                  {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length > 0 && (
+                  {/* Items with Variance - EDITABLE TABLE - Show only if values entered */}
+                  {selectedSession.lines?.filter(l => {
+                    const physicalQty = getLineValue(l, 'physicalQty');
+                    return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+                  }).length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ff9800', marginBottom: 8 }}>
-                        Items with Variance (Editable):
+                        Items with Entered Values:
                       </div>
                       <div style={{ border: '1px solid #eee', borderRadius: 4, overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
@@ -291,7 +386,10 @@ const ApprovalCenter = () => {
                           </thead>
                           <tbody>
                             {selectedSession.lines
-                              ?.filter(l => l.variance !== 0 && l.variance !== null)
+                              ?.filter(l => {
+                                const physicalQty = getLineValue(l, 'physicalQty');
+                                return physicalQty !== null && physicalQty !== undefined && physicalQty !== '';
+                              })
                               .map(line => {
                                 const sellingPrice = line.sellPrice || 0;
                                 const qtyVariance = (getLineValue(line, 'physicalQty') || 0) - line.systemQtyAtCount;
@@ -404,6 +502,21 @@ const ApprovalCenter = () => {
                       }}
                     >
                       🖨️ Print (A4)
+                    </button>
+                    <button
+                      onClick={handleExcelExport}
+                      style={{
+                        flex: 1,
+                        padding: '10px 16px',
+                        backgroundColor: '#27ae60',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      📊 Export Excel
                     </button>
                   </div>
                 </div>

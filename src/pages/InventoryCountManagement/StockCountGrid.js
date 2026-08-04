@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTable, useFilters } from 'react-table';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import '../../css/StockCountGrid.css';
 
 const StockCountGrid = ({ session, onSessionUpdate, category }) => {
@@ -144,6 +145,69 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
     window.print();
   };
 
+  const handleExcelExport = () => {
+    try {
+      // Prepare data for export
+      const exportData = lines.map(line => {
+        const qtyVariance = line.variance !== null && line.variance !== undefined ? line.variance : 0;
+        const sellingPrice = line.sellPrice || 0;
+        const priceVariance = qtyVariance * sellingPrice;
+        
+        return {
+          'Product Name': line.productName,
+          'Product SKU': line.productSku,
+          'System Qty': line.systemQtyAtCount,
+          'Physical Qty': line.physicalQty !== null && line.physicalQty !== undefined ? line.physicalQty : '',
+          'Quantity Variance': qtyVariance,
+          'Selling Price (Rs.)': sellingPrice.toFixed(2),
+          'Price Variance (Rs.)': priceVariance !== 0 ? priceVariance.toFixed(2) : '0.00',
+          'Comment': line.lineComment || ''
+        };
+      });
+
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Set column widths
+      const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
+      ws['!cols'] = colWidths.map(width => ({ wch: width }));
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Physical Count');
+
+      // Add metadata sheet
+      const metaData = [
+        ['Physical Inventory Count - Draft'],
+        [''],
+        ['Session ID', session.id],
+        ['Category', category?.name || session?.category?.name || session?.categoryName || 'Category'],
+        ['Status', session.status],
+        ['Version', session.versionNumber],
+        ['Created By', session.createdBy?.name || 'N/A'],
+        ['Created Date', new Date(session.createdAt).toLocaleString()],
+        ['Total Items', totalItems],
+        ['Items Counted', countedItems],
+        ['Items with Variance', lines.filter(l => l.variance !== 0 && l.variance !== null).length],
+        ['Overall Comment', overallComment || 'N/A'],
+        ['Export Date', new Date().toLocaleString()]
+      ];
+      
+      const wsMetadata = XLSX.utils.aoa_to_sheet(metaData);
+      wsMetadata['!cols'] = [{ wch: 25 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsMetadata, 'Summary');
+
+      // Generate filename
+      const filename = `Physical_Count_${session.categoryName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      // Write file
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      console.error('Error exporting to Excel:', err);
+      setError('Failed to export to Excel');
+    }
+  };
+
   return (
     <div style={{ marginTop: 20 }} className="stock-count-grid-wrapper">
       {error && <div className="error-message">{error}</div>}
@@ -189,6 +253,21 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
               }}
             >
               🖨️ Print (A4)
+            </button>
+            <button
+              onClick={handleExcelExport}
+              style={{
+                padding: '8px 16px',
+                background: '#27ae60',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: 12
+              }}
+            >
+              📊 Export Excel
             </button>
             <button
               onClick={handleSubmit}

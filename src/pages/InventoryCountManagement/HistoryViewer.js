@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../components/AuthContext';
 import '../../css/InventoryCount.css';

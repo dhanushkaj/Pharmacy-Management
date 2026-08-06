@@ -109,3 +109,30 @@ export async function apiRefreshToken() {
     return false;
   }
 }
+
+// Switch user by session code
+export async function apiSwitchUserByCode(sessionCode) {
+  try {
+    const res = await fetch(`${BASE}/api/auth/switch-user`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionCode }),
+    });
+    
+    if (res.ok) {
+      return await res.json();
+    }
+    
+    const text = await res.text();
+    let errorData;
+    try { errorData = text ? JSON.parse(text) : null; } catch { errorData = text; }
+    throw new Error((errorData && errorData.message) || 'Failed to switch user');
+  } catch (error) {
+    console.error('Switch user failed:', error);
+    throw error;
+  }
+}
+

@@ -1,6 +1,6 @@
 // AuthContext.jsx
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
-import { apiLogout, apiValidateToken, apiRefreshToken } from '../utill/api';
+import { apiLogout, apiValidateToken, apiRefreshToken, apiSwitchUserByCode } from '../utill/api';
 
 export const AuthContext = createContext();
 
@@ -263,6 +263,32 @@ export const AuthProvider = ({ children }) => {
     return mins + ':' + secs.toString().padStart(2, '0');
   };
 
+  const switchUserByCode = useCallback(async (sessionCode) => {
+    try {
+      const response = await apiSwitchUserByCode(sessionCode);
+      if (response && response.username) {
+        // Update local storage and state with new user
+        const roles = response.roles || [];
+        setIsAuthenticated(true);
+        setRoles(roles);
+        setUsername(response.username);
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('roles', JSON.stringify(roles));
+        localStorage.setItem('username', response.username);
+        localStorage.setItem('lastActivity', Date.now().toString());
+        
+        // Reset inactivity timer for new session
+        resetInactivityTimer();
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to switch user:', error);
+      throw error;
+    }
+  }, [resetInactivityTimer]);
+
   return (
     <AuthContext.Provider value={{ 
       isAuthenticated,
@@ -274,6 +300,7 @@ export const AuthProvider = ({ children }) => {
       loading,
       validateToken,
       extendSession,
+      switchUserByCode,
       showInactivityWarning,
       remainingTime
     }}>

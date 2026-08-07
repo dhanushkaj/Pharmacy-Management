@@ -3,7 +3,7 @@ import { AuthContext } from '../components/AuthContext';
 import { api } from '../utill/api';
 
 export default function Billing() {
-  const { token, hasRole } = useContext(AuthContext);
+  const { token, hasRole, username } = useContext(AuthContext);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -2468,7 +2468,7 @@ export default function Billing() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
                   <span>Cashier:</span>
-                  <span>{createdBilling.cashierName || 'N/A'}</span>
+                  <span>{username || 'N/A'}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
                   <span>Customer:</span>
@@ -2718,7 +2718,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
               <span>Cashier:</span>
-              <span>{createdBilling.cashierName || 'N/A'}</span>
+              <span>{username || 'N/A'}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
               <span>Customer:</span>

@@ -11,6 +11,8 @@ const AdminUserManagement = () => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [expandedUserCode, setExpandedUserCode] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(null);
 
   useEffect(() => {
     fetchUsers();
@@ -52,8 +54,31 @@ const AdminUserManagement = () => {
     }
   };
 
+  const handleRegenerateUserCode = async (userId, username) => {
+    if (!window.confirm(`Regenerate session code for ${username}? Their old code will no longer work.`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api(`/api/admin/users/${userId}/regenerate-session-code`, { method: 'POST', token });
+      setSuccess(`Session code regenerated for ${username}!`);
+      fetchUsers();
+    } catch (e) {
+      setError(e.message || 'Failed to regenerate session code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopyCode = (code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   return (
-    <div style={{ maxWidth: 700, margin: '40px auto', padding: 24, background: '#f9f9f9', borderRadius: 8 }}>
+    <div style={{ maxWidth: 900, margin: '40px auto', padding: 24, background: '#f9f9f9', borderRadius: 8 }}>
       <h2>Admin User Management</h2>
       <div style={{ marginBottom: 32, borderBottom: '1px solid #ccc', paddingBottom: 24 }}>
         <h3>Create New User</h3>
@@ -88,21 +113,104 @@ const AdminUserManagement = () => {
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: '#eee' }}>
-            <th>Username</th><th>Email</th><th>Address</th><th>Phone</th><th>Roles</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Username</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Email</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Address</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Phone</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Roles</th>
+            <th style={{ textAlign: 'center', padding: 8, borderBottom: '1px solid #ddd' }}>Session Code</th>
           </tr>
         </thead>
         <tbody>
           {users.map(u => (
-            <tr key={u.id}>
-              <td>{u.username}</td>
-              <td>{u.email}</td>
-              <td>{u.address}</td>
-              <td>{u.phone}</td>
-              <td>{(u.roles || []).join(', ')}</td>
+            <tr key={u.userId} style={{ borderBottom: '1px solid #eee' }}>
+              <td style={{ padding: 8 }}>{u.username}</td>
+              <td style={{ padding: 8 }}>{u.email}</td>
+              <td style={{ padding: 8 }}>{u.address}</td>
+              <td style={{ padding: 8 }}>{u.phone}</td>
+              <td style={{ padding: 8 }}>{(u.roles || []).join(', ')}</td>
+              <td style={{ padding: 8, textAlign: 'center' }}>
+                <button
+                  onClick={() => setExpandedUserCode(expandedUserCode === u.userId ? null : u.userId)}
+                  style={{
+                    padding: '6px 12px',
+                    background: expandedUserCode === u.userId ? '#1976d2' : '#e0e0e0',
+                    color: expandedUserCode === u.userId ? '#fff' : '#333',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {expandedUserCode === u.userId ? '▼' : '▶'} {u.sessionCode ? '🔐' : '⚠'}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {/* Expanded Code View */}
+      {expandedUserCode && (
+        <div style={{ marginTop: 16, padding: 16, background: '#e3f2fd', borderRadius: 4 }}>
+          {users.find(u => u.userId === expandedUserCode) && (
+            <>
+              <h4 style={{ marginTop: 0 }}>
+                Session Code for: {users.find(u => u.userId === expandedUserCode)?.username}
+              </h4>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{
+                  flex: 1,
+                  padding: 12,
+                  background: '#fff',
+                  border: '2px solid #1976d2',
+                  borderRadius: 4,
+                  fontFamily: 'monospace',
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  color: '#1976d2',
+                  textAlign: 'center'
+                }}>
+                  {users.find(u => u.userId === expandedUserCode)?.sessionCode || 'No code'}
+                </div>
+                {users.find(u => u.userId === expandedUserCode)?.sessionCode && (
+                  <button
+                    onClick={() => handleCopyCode(users.find(u => u.userId === expandedUserCode)?.sessionCode)}
+                    style={{
+                      padding: '8px 12px',
+                      background: copiedCode === users.find(u => u.userId === expandedUserCode)?.sessionCode ? '#4caf50' : '#1976d2',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {copiedCode === users.find(u => u.userId === expandedUserCode)?.sessionCode ? '✓ Copied' : '📋 Copy'}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => handleRegenerateUserCode(expandedUserCode, users.find(u => u.userId === expandedUserCode)?.username)}
+                disabled={loading}
+                style={{
+                  padding: '8px 16px',
+                  background: '#ff9800',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {loading ? 'Regenerating...' : '🔄 Regenerate Code'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

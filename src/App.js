@@ -40,6 +40,7 @@ import './App.css';
 import GRNListView from './pages/GRNListView';
 import UserProfile from './pages/UserProfile';
 import AdminUserManagement from './pages/AdminUserManagement';
+import CustomerSpectrum from './pages/CustomerSpectrum';
 
 const AppContent = () => {
   const location = useLocation();
@@ -69,6 +70,7 @@ const AppContent = () => {
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
             <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
+            <Route path="/customer-spectrum" element={<PrivateRoute><CustomerSpectrum /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />

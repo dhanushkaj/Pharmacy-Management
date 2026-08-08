@@ -13,6 +13,7 @@ const Sidebar = () => {
   const showReports = hasAdmin || hasManager;
   const [reportsOpen, setReportsOpen] = useState(false);
   const [inventoryCountOpen, setInventoryCountOpen] = useState(false);
+  const [customersOpen, setCustomersOpen] = useState(false);
   console.log('User roles:', roles, 'Fallback role:', fallbackRole, 'hasAdmin:', hasAdmin, 'hasManager:', hasManager);
   const { totalActive, criticalCount } = useAlertSummary();
   return (
@@ -76,7 +77,23 @@ const Sidebar = () => {
           </li>
           
           <li><NavLink to="/billing" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Billing</NavLink></li>
-          <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Customers</NavLink></li>
+          
+          {/* Customers Management Group */}
+          <li>
+            <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setCustomersOpen(o => !o)}>
+              <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '14px', color: '#fff' }}>
+                👥 Customers
+              </span>
+              <span style={{ marginLeft: 4, fontSize: 12, color: '#fff' }}>{customersOpen ? '▼' : '▶'}</span>
+            </div>
+            {customersOpen && (
+              <ul style={{ listStyle: 'none', paddingLeft: 12, marginTop: 2 }}>
+                <li><NavLink to="/customers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>👥 Customer Management</NavLink></li>
+                {showReports && <li><NavLink to="/customer-spectrum" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>📊 Customer Spectrum</NavLink></li>}
+              </ul>
+            )}
+          </li>
+          
           <li><NavLink to="/sales-targets" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>🎯 Sales Targets</NavLink></li>
           <li><NavLink to="/bin" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Product Bin</NavLink></li>
           {showReports && (

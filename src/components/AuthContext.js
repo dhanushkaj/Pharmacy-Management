@@ -248,12 +248,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasRole = (role) => {
-    if (!role) return false;
-    if (!roles) return false;
-    if (Array.isArray(roles)) {
-      return roles.map(r => String(r).toLowerCase()).includes(role.toLowerCase());
+    if (!role || !roles) return false;
+    
+    // Normalize user's roles to lowercase array
+    const userRoles = Array.isArray(roles) 
+      ? roles.map(r => String(r || '').toLowerCase()) 
+      : [String(roles || '').toLowerCase()];
+    
+    // Handle when role parameter is an array (check if user has ANY of the roles)
+    if (Array.isArray(role)) {
+      return role.some(r => userRoles.includes(String(r || '').toLowerCase()));
     }
-    return String(roles).toLowerCase() === role.toLowerCase();
+    
+    // Handle when role parameter is a string
+    return userRoles.includes(String(role || '').toLowerCase());
   };
 
   // Format remaining time for display

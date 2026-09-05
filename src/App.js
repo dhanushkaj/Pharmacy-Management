@@ -41,6 +41,7 @@ import GRNListView from './pages/GRNListView';
 import UserProfile from './pages/UserProfile';
 import AdminUserManagement from './pages/AdminUserManagement';
 import CustomerSpectrum from './pages/CustomerSpectrum';
+import AIDashboard from './components/AIDashboard/AIDashboard';
 
 const AppContent = () => {
   const location = useLocation();
@@ -93,6 +94,7 @@ const AppContent = () => {
             <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
             <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />
             <Route path="/sales-targets" element={<PrivateRoute><SalesTargetManagement /></PrivateRoute>} />
+            <Route path="/ai" element={<PrivateRoute><AIDashboard /></PrivateRoute>} />
           </Routes>
         </div>
         {!isAuthPage && <Footer />}

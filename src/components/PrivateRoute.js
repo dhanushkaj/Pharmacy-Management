@@ -6,7 +6,23 @@ const PrivateRoute = ({ children, allow = [] }) => {
   const { isAuthenticated, roles, loading } = useContext(AuthContext);
   const location = useLocation();
 
-  if (loading) return <div style={{textAlign:'center',marginTop:40}}>Loading...</div>;
+  // Wait for auth context to finish loading
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        textAlign: 'center'
+      }}>
+        <div>
+          <div style={{ fontSize: '18px', marginBottom: '10px' }}>Loading...</div>
+          <div style={{ fontSize: '14px', color: '#666' }}>Validating authentication...</div>
+        </div>
+      </div>
+    );
+  }
   
   // Check if authenticated (token is in HTTP-only cookie, validated by backend)
   if (!isAuthenticated) {

@@ -135,6 +135,7 @@ const Sidebar = () => {
               )}
             </li>
           )}
+          {hasAdmin && <li><NavLink to="/ai" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px', fontWeight: isActive ? '600' : '400' })}>🤖 Ask AI</NavLink></li>}
           <li><NavLink to="/store-settings" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>🏪 Store Settings</NavLink></li>
           <div style={{ flex: 1 }} />
           <li><NavLink to="/profile" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>My Profile</NavLink></li>

@@ -637,7 +637,7 @@ export default function BillingHistory() {
                 </div>
                 {selectedBilling.discountAmount > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                    <span>Discount ({((selectedBilling.discountAmount / selectedBilling.subtotal) * 100).toFixed(0)}%)</span>
+                    <span>Discount ({selectedBilling.discountPercentage || 0}%)</span>
                     <span style={{ textAlign: 'right' }}>-{Number(selectedBilling.discountAmount).toFixed(2)}</span>
                   </div>
                 )}

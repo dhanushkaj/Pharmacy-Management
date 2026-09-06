@@ -278,7 +278,10 @@ export default function Billing() {
         }
         return sum;
       }, 0);
-      const customerDiscountTotal = customerDiscountBase * (effectiveDisc / 100);
+      // Discount applies to the amount net of any return refunds already in the cart
+      const returnRefundForDiscount = cartItems.filter(i => i.isReturn).reduce((sum, item) => sum + Math.abs(item.subtotal), 0);
+      const netDiscountBase = Math.max(0, customerDiscountBase - returnRefundForDiscount);
+      const customerDiscountTotal = netDiscountBase * (effectiveDisc / 100);
       setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
       setIsDiscountManual(false);
     } else {
@@ -574,7 +577,10 @@ export default function Billing() {
         }
         return sum;
       }, 0);
-      const customerDiscountTotal = customerDiscountBase * (selectedCustomer.discountPercentage / 100);
+      // Discount applies to the amount net of any return refunds already in the cart
+      const returnRefundForDiscount = newCartItems.filter(i => i.isReturn).reduce((sum, item) => sum + Math.abs(item.subtotal), 0);
+      const netDiscountBase = Math.max(0, customerDiscountBase - returnRefundForDiscount);
+      const customerDiscountTotal = netDiscountBase * (selectedCustomer.discountPercentage / 100);
       setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
     setProductSearch('');
@@ -602,6 +608,10 @@ export default function Billing() {
   const normalCartItems = cartItems.filter(item => !item.isReturn);
   const returnCartItems = cartItems.filter(item => item.isReturn);
 
+  // Return refund total (positive number representing total refund to customer)
+  // Computed early: customer discount is applied net of returns, not the gross sale amount
+  const returnRefundTotal = Number(returnCartItems.reduce((sum, item) => sum + Math.abs(item.subtotal), 0).toFixed(2));
+
   // Product discounts only apply if customer discount is also applied
   const hasCustomerDiscount = discountPercentage > 0;
 
@@ -620,12 +630,13 @@ export default function Billing() {
     return sum + (item.unitPrice * item.quantity);
   }, 0);
 
-  const customerDiscountBase = normalCartItems.reduce((sum, item) => {
+  // Customer discount base is the non-product-discounted total minus any return refunds
+  const customerDiscountBase = Math.max(0, normalCartItems.reduce((sum, item) => {
     if (!hasCustomerDiscount || !item.productDiscount || item.productDiscount === 0) {
       return sum + (item.unitPrice * item.quantity);
     }
     return sum;
-  }, 0);
+  }, 0) - returnRefundTotal);
   const customerDiscountTotal = customerDiscountBase * (discountPercentage / 100);
 
   // Subtotal already has product discounts applied
@@ -643,14 +654,14 @@ export default function Billing() {
     return sum;
   }, 0);
 
+  // Discount amount (manual or calculated) is capped at the subtotal net of returns
+  const subtotalNetOfReturns = Math.max(0, subtotal - returnRefundTotal);
   const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
   const validDiscount = (discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
-    ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+    ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotalNetOfReturns)
     : customerDiscountTotal;
   const grandTotal = Number((subtotal - validDiscount).toFixed(2));
 
-  // Return refund total (positive number representing total refund to customer)
-  const returnRefundTotal = Number(returnCartItems.reduce((sum, item) => sum + Math.abs(item.subtotal), 0).toFixed(2));
   // Net payable = what the customer actually pays (sale total minus return refunds)
   const netPayable = Number((grandTotal - returnRefundTotal).toFixed(2));
 
@@ -802,7 +813,7 @@ export default function Billing() {
       // Always send the sum of product + customer discount unless manually overridden
       const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
       const discountToSave = (isDiscountManual && discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
-        ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotal)
+        ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotalNetOfReturns)
         : calculatedDiscount;
       
       // Parse amount received - for non-CASH, use grandTotal automatically
@@ -1368,7 +1379,10 @@ export default function Billing() {
         }
         return sum;
       }, 0);
-      const customerDiscountTotal = customerDiscountBase * (effectivePercentage / 100);
+      // Discount applies to the amount net of any return refunds already in the cart
+      const returnRefundForDiscount = cartItems.filter(i => i.isReturn).reduce((sum, item) => sum + Math.abs(item.subtotal), 0);
+      const netDiscountBase = Math.max(0, customerDiscountBase - returnRefundForDiscount);
+      const customerDiscountTotal = netDiscountBase * (effectivePercentage / 100);
       setDiscountAmount(Number(customerDiscountTotal.toFixed(2)));
     }
   }, [cartItems, selectedCustomer, isDiscountManual, paymentMethod]);
@@ -2074,26 +2088,28 @@ export default function Billing() {
                         // When CARD is selected, cap discount to 2%
                         const cappedDiscount = Math.min(originalCustomerDiscount, 2);
                         setDiscountPercentage(cappedDiscount);
-                        // Recalculate discount amount with capped percentage
+                        // Recalculate discount amount with capped percentage, net of any return refunds
                         const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
                           if (!item.productDiscount || item.productDiscount === 0) {
                             return sum + (item.unitPrice * item.quantity);
                           }
                           return sum;
                         }, 0);
-                        const newDiscountAmount = customerDiscountBase * cappedDiscount / 100;
+                        const returnRefundForDiscount = cartItems.filter(i => i.isReturn).reduce((sum, item) => sum + Math.abs(item.subtotal), 0);
+                        const newDiscountAmount = Math.max(0, customerDiscountBase - returnRefundForDiscount) * cappedDiscount / 100;
                         setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
                       } else {
                         // When switching away from CARD, restore original customer discount
                         setDiscountPercentage(originalCustomerDiscount);
-                        // Recalculate discount amount with original percentage
+                        // Recalculate discount amount with original percentage, net of any return refunds
                         const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
                           if (!item.productDiscount || item.productDiscount === 0) {
                             return sum + (item.unitPrice * item.quantity);
                           }
                           return sum;
                         }, 0);
-                        const newDiscountAmount = customerDiscountBase * originalCustomerDiscount / 100;
+                        const returnRefundForDiscount = cartItems.filter(i => i.isReturn).reduce((sum, item) => sum + Math.abs(item.subtotal), 0);
+                        const newDiscountAmount = Math.max(0, customerDiscountBase - returnRefundForDiscount) * originalCustomerDiscount / 100;
                         setDiscountAmount(Number(newDiscountAmount.toFixed(2)));
                       }
                     }
@@ -2156,7 +2172,7 @@ export default function Billing() {
                     <input
                       type="number"
                       min="0"
-                      max={subtotal}
+                      max={subtotalNetOfReturns}
                       step="0.01"
                       value={discountAmount !== null && discountAmount !== undefined && discountAmount !== '' ? Number(parseFloat(discountAmount).toFixed(2)) : ''}
                       onChange={e => {
@@ -2523,7 +2539,7 @@ export default function Billing() {
                 </div>
                 {((createdBilling.discountAmount || 0) > 0) && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                    <span>Discount ({((createdBilling.discountAmount || 0) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                    <span>Discount ({createdBilling.discountPercentage || 0}%)</span>
                     <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
@@ -2773,7 +2789,7 @@ export default function Billing() {
             </div>
             {((createdBilling.discountAmount || 0) > 0) && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                <span>Discount ({((createdBilling.discountAmount || 0) / createdBilling.subtotal * 100).toFixed(0)}%)</span>
+                <span>Discount ({createdBilling.discountPercentage || 0}%)</span>
                 <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
               </div>
             )}

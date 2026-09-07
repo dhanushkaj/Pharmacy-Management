@@ -15,7 +15,7 @@ const DayEndReport = () => {
       <div style={{ background: '#e3f2fd', borderRadius: 8, padding: 16, marginBottom: 24, fontSize: 15, color: '#1a237e' }}>
         <b>Day-End Report Guidance:</b>
         <ul style={{ marginTop: 8, marginBottom: 0 }}>
-          <li><b>Total Sale:</b> All sales for the day (cash, card, online, cheque, credit). Auto-filled from billing.</li>
+          <li><b>Total Sale:</b> All sales for the day (cash, card, online, cheque) + Credit Paid Today. New credit sales are excluded until paid. Auto-filled from billing.</li>
           <li><b>Cash Sales:</b> Only sales paid by cash. Auto-filled from billing.</li>
           <li><b>Expected Cash:</b> <br />
             <span style={{ fontSize: 14 }}>
@@ -53,6 +53,12 @@ const DayEndReport = () => {
   // Denominations
   const [notes, setNotes] = useState({ 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 });
   const [coins, setCoins] = useState({ 10: 0, 5: 0, 1: 0 });
+
+  // Next day opening float: entered separately from Physical Cash Value, netted out of Expected Cash
+  const [nextDayNotes, setNextDayNotes] = useState({ 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 });
+  const [nextDayCoins, setNextDayCoins] = useState({ 10: 0, 5: 0, 1: 0 });
+  // Opening balance carried forward from previous day's retained float
+  const [openingBalance, setOpeningBalance] = useState(0);
 
   // Non-cash
   const [cardPayments, setCardPayments] = useState('0.00');
@@ -95,6 +101,17 @@ const DayEndReport = () => {
             details.coinDenominations.forEach(c => { if (c && c.value in coinsObj) coinsObj[c.value] = c.qty; });
             setCoins(coinsObj);
           }
+          if (Array.isArray(details.nextDayFloatNoteDenominations)) {
+            const floatNotesObj = { 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 };
+            details.nextDayFloatNoteDenominations.forEach(n => { if (n && n.value in floatNotesObj) floatNotesObj[n.value] = n.qty; });
+            setNextDayNotes(floatNotesObj);
+          }
+          if (Array.isArray(details.nextDayFloatCoinDenominations)) {
+            const floatCoinsObj = { 10: 0, 5: 0, 1: 0 };
+            details.nextDayFloatCoinDenominations.forEach(c => { if (c && c.value in floatCoinsObj) floatCoinsObj[c.value] = c.qty; });
+            setNextDayCoins(floatCoinsObj);
+          }
+          setOpeningBalance(details.openingBalanceFromPreviousDay ?? 0);
 
           setSupplierPayments(Array.isArray(details.supplierPayments) ? details.supplierPayments : []);
 
@@ -139,16 +156,12 @@ const DayEndReport = () => {
     fetchDayEndDetails();
   }, [token]);
   
-  // Print-only CSS to restrict print to report section
-  // Print-only CSS to restrict print to report section
-React.useEffect(() => {
-  const style = document.createElement('style');
-  style.type = 'text/css';
-  style.id = 'print-only-style';
-  style.innerHTML = `
+  // Print-only CSS: thermal (float slip) vs A4 (full report), swapped dynamically right before printing
+  const printStyleRef = React.useRef(null);
+  const buildPrintCss = (mode) => `
     @page {
-      size: A4 portrait;
-      margin: 0;
+      size: ${mode === 'floatSlip' ? '72mm auto' : 'A4 portrait'};
+      margin: ${mode === 'floatSlip' ? '0mm' : '0'};
     }
 
     @media print {
@@ -165,7 +178,9 @@ React.useEffect(() => {
       }
 
       #dayend-report-print,
-      #dayend-report-print * {
+      #dayend-report-print *,
+      #float-slip-print,
+      #float-slip-print * {
         visibility: visible !important;
       }
 
@@ -182,6 +197,30 @@ React.useEffect(() => {
         box-shadow: none !important;
       }
 
+      #float-slip-print {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 72mm !important;
+        max-width: 72mm !important;
+        height: auto !important;
+        padding: 2mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 10px !important;
+      }
+
+      /* Only one of the two printable sections shows at a time, toggled via body class */
+      body.print-float-slip-mode #dayend-report-print {
+        display: none !important;
+      }
+      body:not(.print-float-slip-mode) #float-slip-print {
+        display: none !important;
+      }
+
       button {
         display: none !important;
       }
@@ -192,12 +231,19 @@ React.useEffect(() => {
 
     }
   `;
-  document.head.appendChild(style);
-  return () => {
-    const el = document.getElementById('print-only-style');
-    if (el) el.remove();
-  };
-}, []);
+
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.type = 'text/css';
+    style.id = 'print-only-style';
+    style.innerHTML = buildPrintCss('report');
+    document.head.appendChild(style);
+    printStyleRef.current = style;
+    return () => {
+      const el = document.getElementById('print-only-style');
+      if (el) el.remove();
+    };
+  }, []);
 
 
   // Reconciliation
@@ -263,6 +309,12 @@ React.useEffect(() => {
     coinDenominations.reduce((sum, d) => sum + (Number(coins[d]) || 0) * d, 0)
   , [notes, coins]);
 
+  // Next day opening float total (cash set aside for tomorrow, entered separately from Physical Cash Value)
+  const nextDayFloatTotal = React.useMemo(() =>
+    noteDenominations.reduce((sum, d) => sum + (Number(nextDayNotes[d]) || 0) * d, 0) +
+    coinDenominations.reduce((sum, d) => sum + (Number(nextDayCoins[d]) || 0) * d, 0)
+  , [nextDayNotes, nextDayCoins]);
+
   // Non-cash total (auto)
   const nonCashTotal = React.useMemo(() =>
     (parseFloat(cardPayments) || 0) +
@@ -297,6 +349,9 @@ React.useEffect(() => {
         dayEndNo,
         noteDenominations: noteDenominations.map(d => ({ value: d, qty: Number(notes[d]) || 0, total: (Number(notes[d]) || 0) * d })),
         coinDenominations: coinDenominations.map(d => ({ value: d, qty: Number(coins[d]) || 0, total: (Number(coins[d]) || 0) * d })),
+        nextDayFloatNoteDenominations: noteDenominations.map(d => ({ value: d, qty: Number(nextDayNotes[d]) || 0, total: (Number(nextDayNotes[d]) || 0) * d })),
+        nextDayFloatCoinDenominations: coinDenominations.map(d => ({ value: d, qty: Number(nextDayCoins[d]) || 0, total: (Number(nextDayCoins[d]) || 0) * d })),
+        nextDayFloatTotal: Number(nextDayFloatTotal),
         cardPayments: parseFloat(cardPayments) || 0,
         onlineTransfers: parseFloat(onlineTransfers) || 0,
         customerChequePayments: parseFloat(customerChequePayments) || 0,
@@ -334,6 +389,18 @@ React.useEffect(() => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Print only the Next Day Opening Float slip on a thermal (72mm) page — wrap this printout with the retained cash
+  const handlePrintFloatSlip = () => {
+    if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('floatSlip');
+    document.body.classList.add('print-float-slip-mode');
+    window.onafterprint = () => {
+      document.body.classList.remove('print-float-slip-mode');
+      if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('report');
+      window.onafterprint = null;
+    };
+    window.print();
   };
 
   return (
@@ -411,7 +478,7 @@ React.useEffect(() => {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{(submittedData.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Customer:</span><b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(submittedData.manualBillEntries) ? submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               </div>
 
@@ -424,15 +491,20 @@ React.useEffect(() => {
                 if (Array.isArray(submittedData.manualBillEntries)) {
                   manualBillEntriesNum = submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
                 }
-                // Expected Cash = Cash Sales + Manual Bill Entries only
-                const expectedCashCalc = cashSalesNum + manualBillEntriesNum;
+                const floatRetained = Number(submittedData.nextDayFloatTotal) || 0;
+                // Expected Cash = Cash Sales + Manual Bill Entries, net of the float retained for tomorrow
+                const expectedCashCalc = cashSalesNum + manualBillEntriesNum - floatRetained;
                 return (
                   <div style={{ fontSize: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Less: Next Day Float Retained:</span>
+                      <b>-{floatRetained.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Expected Cash:</span>
                       <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                     </div>
-                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill Entry)</div>
+                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill Entry - Next Day Float)</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Physical Cash:</span>
                       <b>{Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
@@ -457,6 +529,17 @@ React.useEffect(() => {
 
               <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
+              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>NEXT DAY OPENING FLOAT</div>
+              <div style={{ fontSize: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Retained in Drawer:</span>
+                  <b>{Number(submittedData.nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                </div>
+                <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(netted out of Expected Cash above)</div>
+              </div>
+
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+
               <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SIGN OFF</div>
               <div style={{ fontSize: 10, marginBottom: 8 }}>
                 <div>Cashier: ___________________</div>
@@ -478,11 +561,128 @@ React.useEffect(() => {
           </div>
         )}
 
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>{guidance}</div>
+
+        {/* Outside the form: the print CSS hides <form> entirely when printing the main report, which would blank out this slip too */}
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <div style={{ background: '#fff3e0', border: '2px solid #e65100', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <h3 style={{ marginTop: 0 }}>Next Day Opening Float (Drawer Retention)</h3>
+            <div style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
+              Cash you are setting aside from the drawer for tomorrow's opening. Enter this <b>first</b>, then count and enter the remainder in "Physical Cash Value" below.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'max-content 80px', gap: '8px 24px', marginBottom: 8 }}>
+              {coinDenominations.map(denom => (
+                <React.Fragment key={`float-coin-${denom}`}>
+                  <label style={{ alignSelf: 'center' }}>{denom} Coin</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={nextDayCoins[denom]}
+                    onChange={e => setNextDayCoins({ ...nextDayCoins, [denom]: e.target.value })}
+                    style={{ width: 70, textAlign: 'right' }}
+                  />
+                </React.Fragment>
+              ))}
+              {noteDenominations.map(denom => (
+                <React.Fragment key={`float-note-${denom}`}>
+                  <label style={{ alignSelf: 'center' }}>{denom} Note</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={nextDayNotes[denom]}
+                    onChange={e => setNextDayNotes({ ...nextDayNotes, [denom]: e.target.value })}
+                    style={{ width: 70, textAlign: 'right' }}
+                  />
+                </React.Fragment>
+              ))}
+            </div>
+            <div style={{ fontWeight: 'bold', marginTop: 8 }}>
+              Next Day Float Total: Rs. {Number(nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 12 }} className="no-print">
+              <button
+                type="button"
+                onClick={handlePrintFloatSlip}
+                style={{ fontSize: 14, padding: '8px 24px', background: '#e65100', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                🖨️ Print Float Slip (Thermal)
+              </button>
+            </div>
+
+            {/* Printable thermal slip: only the next-day float, to wrap with the retained cash */}
+            <div
+              id="float-slip-print"
+              style={{
+                width: 280,
+                margin: '16px auto 0',
+                padding: '12px 8px',
+                fontFamily: "'Courier New', monospace",
+                fontSize: 11,
+                lineHeight: 1.4,
+                background: '#fff',
+                color: '#000',
+                border: '1px dashed #999',
+              }}
+            >
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14, marginBottom: 4 }}>
+                NEXT DAY OPENING FLOAT
+              </div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+              <div style={{ fontSize: 10, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Branch:</span><b>{branch}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><b>{cashier}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Date:</span><b>{new Date().toLocaleDateString()}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Day End No:</span><b>{dayEndNo}</b></div>
+              </div>
+              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+              <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #000' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 0' }}>Denom</th>
+                    <th style={{ textAlign: 'center', padding: '2px 0' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '2px 0' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coinDenominations.filter(d => (Number(nextDayCoins[d]) || 0) > 0).map(d => (
+                    <tr key={`slip-coin-${d}`}>
+                      <td style={{ padding: '2px 0' }}>{d} Coin</td>
+                      <td style={{ textAlign: 'center', padding: '2px 0' }}>{Number(nextDayCoins[d]) || 0}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 0' }}>{((Number(nextDayCoins[d]) || 0) * d).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                  {noteDenominations.filter(d => (Number(nextDayNotes[d]) || 0) > 0).map(d => (
+                    <tr key={`slip-note-${d}`}>
+                      <td style={{ padding: '2px 0' }}>{d} Note</td>
+                      <td style={{ textAlign: 'center', padding: '2px 0' }}>{Number(nextDayNotes[d]) || 0}</td>
+                      <td style={{ textAlign: 'right', padding: '2px 0' }}>{((Number(nextDayNotes[d]) || 0) * d).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 'bold' }}>
+                <span>TOTAL RETAINED:</span>
+                <span>{Number(nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ borderTop: '1px solid #000', margin: '6px 0' }}></div>
+              <div style={{ fontSize: 10, marginTop: 8 }}>
+                <div>Cashier: ___________________</div>
+                <div style={{ marginTop: 4 }}>Received by (next day): ___________________</div>
+              </div>
+              <div style={{ fontSize: 8, textAlign: 'center', fontWeight: 'bold', marginTop: 8 }}>
+                Wrap this slip with the retained cash and place in drawer
+              </div>
+            </div>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} style={{ maxWidth: 700, margin: '0 auto' }}>
 
-           <div style={{ maxWidth: 700, margin: '0 auto' }}>{guidance}</div>
-           
           <h3>Header Info</h3>
+          <div style={{ background: '#fff8e1', border: '1px solid #ffca28', borderRadius: 6, padding: '10px 14px', marginBottom: 12, fontSize: 15 }}>
+            <b>Opening Balance (Carried from Previous Day):</b> Rs. {Number(openingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <input placeholder="Branch" value={branch} onChange={e => setBranch(e.target.value)} />
             <input placeholder="POS ID" value={posId} onChange={e => setPosId(e.target.value)} />
@@ -494,6 +694,9 @@ React.useEffect(() => {
           </div>
 
           <h3>Physical Cash Value (Breakdown)</h3>
+          <div style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
+            Enter the remainder cash only — after setting aside the Next Day Opening Float above.
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'max-content 80px', gap: '8px 24px', marginBottom: 8 }}>
             {noteDenominations.map(denom => (
               <React.Fragment key={denom}>
@@ -521,7 +724,7 @@ React.useEffect(() => {
             ))}
           </div>
           <div style={{ fontWeight: 'bold', marginTop: 8 }}>Total Cash Value: {Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-  
+
           <h3>Supplier Payments (Same Day)</h3>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <input type="text" placeholder="Supplier Name" value={supplierInput.supplierName} onChange={e => setSupplierInput({ ...supplierInput, supplierName: e.target.value })} />
@@ -554,8 +757,9 @@ React.useEffect(() => {
             <div>Cheque Sales: <b>{systemSalesSummary?.chequeSales != null ? systemSalesSummary.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Old Manual Bill Value: <b>{oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Credit Customer Billings: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Credit Paid Today: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+            <div>Next Day Opening Float (Retained): <b>-{Number(nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
 
         <h3>Cash Reconciliation</h3>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../utill/api";
 
@@ -32,6 +32,11 @@ const PurchaseOrder = () => {
   // Selected product + quantity
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [qty, setQty] = useState("");
+
+  // Keyboard navigation for product dropdown
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const dropdownRef = useRef(null);
+  const itemsRef = useRef([]);
 
   // Items in this PO
   const [items, setItems] = useState([]);
@@ -149,12 +154,17 @@ const PurchaseOrder = () => {
     async function search() {
       if (!debouncedQuery || debouncedQuery.trim().length < 2) {
         setResults([]);
+        itemsRef.current = [];
         return;
       }
       setSearching(true);
       try {
         const data = await api(`/api/products/search?q=${encodeURIComponent(debouncedQuery)}`);
-        if (!abort) setResults(Array.isArray(data) ? data : []);
+        if (!abort) {
+          setResults(Array.isArray(data) ? data : []);
+          setHighlightedIndex(-1);
+          itemsRef.current = [];
+        }
       } catch {
         if (!abort) setResults([]);
       } finally {
@@ -167,6 +177,51 @@ const PurchaseOrder = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery]);
+
+  // Keyboard navigation for product dropdown
+  const handleProductSearch_KeyDown = (e) => {
+    if (!results.length) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev < results.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlightedIndex >= 0 && results[highlightedIndex]) {
+          if (isAllowed) {
+            setSelectedProduct(results[highlightedIndex]);
+            setResults([]);
+            setHighlightedIndex(-1);
+          }
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setResults([]);
+        setHighlightedIndex(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Auto-scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedIndex >= 0 && itemsRef.current[highlightedIndex]) {
+      itemsRef.current[highlightedIndex].scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [highlightedIndex]);
 
   const canAdd = useMemo(
     () => Boolean(selectedProduct && qty && Number(qty) > 0),
@@ -199,10 +254,17 @@ const PurchaseOrder = () => {
     setQuery("");
     setQty("");
     setResults([]);
+    setHighlightedIndex(-1);
+    itemsRef.current = [];
   }
 
   function removeItem(pid) {
     setItems((list) => list.filter((i) => i.productId !== pid));
+  }
+
+  function formatCurrency(value) {
+    if (!value) return "0.00";
+    return parseFloat(value).toFixed(2);
   }
 
   async function handleSubmit(e) {
@@ -453,50 +515,64 @@ const PurchaseOrder = () => {
               </button>
             </div>
             <input
-              placeholder="Type at least 2 characters…"
+              placeholder="Type at least 2 characters… (↑↓ to navigate, Enter to select, Esc to close)"
               value={selectedProduct ? selectedProduct.name : query}
               onChange={(e) => {
                 setSelectedProduct(null);
                 setQuery(e.target.value);
               }}
+              onKeyDown={handleProductSearch_KeyDown}
               style={{ padding: 8, width: "100%" }}
               disabled={!isAllowed}
             />
             {!selectedProduct && results.length > 0 && (
               <div
+                ref={dropdownRef}
                 style={{
                   position: "absolute",
                   zIndex: 10,
                   background: "#fff",
-                  border: "1px solid #ddd",
+                  border: "2px solid #1890ff",
                   borderRadius: 6,
                   width: "100%",
                   maxHeight: 240,
                   overflowY: "auto",
                   marginTop: 4,
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
                 }}
               >
-                {results.map((r) => (
-                  <div
-                    key={r.productId}
-                    onClick={() => {
-                      if (!isAllowed) return;
-                      setSelectedProduct(r);
-                      setResults([]);
-                    }}
-                    style={{
-                      padding: 8,
-                      cursor: isAllowed ? "pointer" : "not-allowed",
-                      opacity: isAllowed ? 1 : 0.6,
-                    }}
-                    title={`${r.name} (${r.productCode || "-"})`}
-                  >
-                    <div style={{ fontWeight: 600 }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>
-                      {r.genericName || "-"} • Code: {r.productCode || "-"}
+                {results.map((r, index) => {
+                  const isHighlighted = index === highlightedIndex;
+                  return (
+                    <div
+                      key={r.productId}
+                      ref={(el) => {
+                        if (el) itemsRef.current[index] = el;
+                      }}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onClick={() => {
+                        if (!isAllowed) return;
+                        setSelectedProduct(r);
+                        setResults([]);
+                        setHighlightedIndex(-1);
+                      }}
+                      style={{
+                        padding: 12,
+                        cursor: isAllowed ? "pointer" : "not-allowed",
+                        opacity: isAllowed ? 1 : 0.6,
+                        background: isHighlighted ? "#e6f7ff" : "#fff",
+                        borderLeft: isHighlighted ? "4px solid #1890ff" : "4px solid transparent",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      title={`${r.name} (${r.productCode || "-"})`}
+                    >
+                      <div style={{ fontWeight: 600, color: "#000" }}>{r.name}</div>
+                      <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+                        {r.genericName || "-"} • Code: {r.productCode || "-"}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {searching && (

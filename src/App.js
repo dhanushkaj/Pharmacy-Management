@@ -42,6 +42,7 @@ import UserProfile from './pages/UserProfile';
 import AdminUserManagement from './pages/AdminUserManagement';
 import CustomerSpectrum from './pages/CustomerSpectrum';
 import AIDashboard from './components/AIDashboard/AIDashboard';
+import SupplierPayment from './pages/SupplierPayment';
 
 const AppContent = () => {
   const location = useLocation();
@@ -90,6 +91,7 @@ const AppContent = () => {
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />
+            <Route path="/supplier-payment" element={<PrivateRoute><SupplierPayment /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
             <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
             <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />

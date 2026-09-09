@@ -1223,14 +1223,20 @@ const ProductManagement = () => {
 
       {/* Search */}
       <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-        <input
-          placeholder="Search by Category"
+        <select
           value={search.category}
           onChange={(e) =>
             setSearch((s) => ({ ...s, category: e.target.value }))
           }
           style={{ padding: 8, minWidth: 160 }}
-        />
+        >
+          <option value="">All Categories</option>
+          {categories.map((c) => (
+            <option key={c.categoryId} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         <input
           placeholder="Search by Product Code"
           value={search.code}

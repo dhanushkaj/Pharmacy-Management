@@ -39,6 +39,15 @@ const GRNManagement = () => {
   const [poDateFromFilter, setPoDateFromFilter] = useState("");
   const [poDateToFilter, setPoDateToFilter] = useState("");
   const [approvedGrnForPo, setApprovedGrnForPo] = useState(false);
+
+  // Invoice recording
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [paymentDueDate_Invoice, setPaymentDueDate_Invoice] = useState("");
+  const [submittingInvoice, setSubmittingInvoice] = useState(false);
+  const [invoiceSuccess, setInvoiceSuccess] = useState("");
+  const [grnSupplierId, setGrnSupplierId] = useState(null); // Store supplier ID from approved GRN
   
   const { token: ctxToken, roles: ctxRoles } = useContext(AuthContext);
   const token = useMemo(
@@ -332,10 +341,14 @@ const GRNManagement = () => {
       console.log("Response data:", data);
 
       setApproved(true);
-      alert("GRN Approved and Inventory Updated!");
-      console.log("Approved:", data);
       
-      // Auto-close and redirect to GRN list after 1.5 seconds
+      // Store supplier ID from the GRN response or selected PO
+      const supplierId = data.supplierId || selectedPO?.supplierId;
+      setGrnSupplierId(supplierId);
+      
+      alert("GRN Approved and Inventory Updated!");
+      
+      // Redirect to GRN list
       setTimeout(() => {
         window.location.href = '/grn-list';
       }, 1500);
@@ -345,6 +358,84 @@ const GRNManagement = () => {
       alert("Error approving GRN: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecordInvoice = async (e) => {
+    e.preventDefault();
+    
+    if (!invoiceNumber.trim()) {
+      alert("Enter invoice number");
+      return;
+    }
+    if (!invoiceDate) {
+      alert("Select invoice date");
+      return;
+    }
+    if (!invoiceAmount || Number(invoiceAmount) <= 0) {
+      alert("Enter valid invoice amount");
+      return;
+    }
+    if (!paymentDueDate_Invoice) {
+      alert("Select payment due date");
+      return;
+    }
+
+    // Validate required IDs
+    const grnId = createdGrnId || loadedGrn?.id;
+    const supplierId = grnSupplierId || selectedPO?.supplierId || loadedGrn?.supplierId;
+
+    if (!grnId) {
+      setError("Error: GRN ID is missing. Please approve the GRN first.");
+      return;
+    }
+    if (!supplierId) {
+      setError("Error: Supplier ID is missing. Please ensure the GRN has a supplier.");
+      return;
+    }
+
+    setSubmittingInvoice(true);
+    setError("");
+    setInvoiceSuccess("");
+    try {
+      const payload = {
+        invoiceNumber: invoiceNumber.trim(),
+        grnId: Number(grnId),
+        supplierId: Number(supplierId),
+        invoiceDate: invoiceDate,
+        invoiceAmount: parseFloat(invoiceAmount),
+        paymentDueDate: paymentDueDate_Invoice,
+      };
+
+      console.log("Recording invoice with payload:", payload);
+
+      const response = await api('/api/invoices', {
+        method: 'POST',
+        body: payload,
+      });
+      
+      console.log("Invoice recording response:", response);
+
+      setInvoiceSuccess(`✓ Invoice recorded successfully! Invoice #${invoiceNumber}`);
+      
+      // Reset form
+      setInvoiceNumber("");
+      setInvoiceDate("");
+      setInvoiceAmount("");
+      setPaymentDueDate_Invoice("");
+      
+      // Stay on page, don't redirect
+    } catch (err) {
+      console.error("Invoice recording error:", err);
+      const errorMessage = err.message || "Failed to record invoice";
+      console.error("Full error details:", {
+        message: errorMessage,
+        status: err.status,
+        stack: err.stack
+      });
+      setError(`❌ ${errorMessage}`);
+    } finally {
+      setSubmittingInvoice(false);
     }
   };
 
@@ -366,6 +457,12 @@ const GRNManagement = () => {
     setPaymentDueDays("");
     setChequeDate("");
     setError("");
+    setGrnSupplierId(null);
+    setInvoiceNumber("");
+    setInvoiceDate("");
+    setInvoiceAmount("");
+    setPaymentDueDate_Invoice("");
+    setInvoiceSuccess("");
     // Clear the URL parameter
     window.history.replaceState({}, document.title, "/grn");
   };
@@ -373,6 +470,11 @@ const GRNManagement = () => {
   const closeRejectModal = () => {
     setShowRejectModal(false);
     setRejectReason("");
+  };
+
+  const formatCurrency = (value) => {
+    if (!value) return "0.00";
+    return parseFloat(value).toFixed(2);
   };
 
   const handleReject = async () => {
@@ -881,6 +983,126 @@ const GRNManagement = () => {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Invoice Recording Form - Optional, visible before GRN approval */}
+      {(createdGrnId || loadedGrn) && !approved && (
+        <div style={{
+          marginTop: 24,
+          marginBottom: 24,
+          padding: 20,
+          background: "#f0f9ff",
+          border: "2px solid #2196F3",
+          borderRadius: 8,
+        }}>
+          <h3 style={{ marginTop: 0, color: "#1976d2" }}>📄 Record Supplier Invoice (Optional)</h3>
+          <p style={{ marginTop: 0, marginBottom: 16, color: "#666", fontSize: 14 }}>
+            📝 You can record the supplier's invoice now or later. This is optional and can be skipped.
+          </p>
+          
+          {invoiceSuccess && (
+            <div style={{
+              padding: 12,
+              marginBottom: 16,
+              background: "#d4edda",
+              color: "#155724",
+              border: "1px solid #c3e6cb",
+              borderRadius: 4,
+            }}>
+              ✓ {invoiceSuccess}
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+              padding: 12,
+              marginBottom: 16,
+              background: "#f8d7da",
+              color: "#721c24",
+              border: "1px solid #f5c6cb",
+              borderRadius: 4,
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <form onSubmit={handleRecordInvoice} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Invoice Number *</label>
+              <input
+                type="text"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="e.g., INV-2026-001"
+                style={input}
+                disabled={submittingInvoice}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Invoice Date *</label>
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                style={input}
+                disabled={submittingInvoice}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Invoice Amount *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={invoiceAmount}
+                onChange={(e) => setInvoiceAmount(e.target.value)}
+                placeholder="0.00"
+                style={input}
+                disabled={submittingInvoice}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Payment Due Date *</label>
+              <input
+                type="date"
+                value={paymentDueDate_Invoice}
+                onChange={(e) => setPaymentDueDate_Invoice(e.target.value)}
+                style={input}
+                disabled={submittingInvoice}
+                required
+              />
+            </div>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <button
+                type="submit"
+                disabled={submittingInvoice}
+                style={{
+                  padding: "10px 20px",
+                  background: "#2196F3",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: submittingInvoice ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  opacity: submittingInvoice ? 0.6 : 1,
+                }}
+              >
+                {submittingInvoice ? "Recording..." : "Record Invoice"}
+              </button>
+            </div>
+          </form>
+
+          <p style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
+            💡 <strong>Tip:</strong> After recording the invoice, you can record payments in the Supplier Payment section. You can also record the invoice anytime after GRN approval.
+          </p>
         </div>
       )}
 

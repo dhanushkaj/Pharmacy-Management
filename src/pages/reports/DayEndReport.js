@@ -65,9 +65,11 @@ const DayEndReport = () => {
   const [onlineTransfers, setOnlineTransfers] = useState('0.00');
   const [customerChequePayments, setCustomerChequePayments] = useState('0.00');
 
-  // Supplier payments
-  const [supplierPayments, setSupplierPayments] = useState([]);
-  const [supplierInput, setSupplierInput] = useState({ supplierName: '', mode: 'Cash', amount: '' });
+  // Auto-fetched supplier payments for today
+  const [autoSupplierPayments, setAutoSupplierPayments] = useState('0.00');
+  
+  // Track which payment is being printed (for individual payment printing)
+  const [printingPaymentIndex, setPrintingPaymentIndex] = useState(-1);
 
   // System sales summary
   const [totalSales, setTotalSales] = useState('0.00');
@@ -113,8 +115,6 @@ const DayEndReport = () => {
           }
           setOpeningBalance(details.openingBalanceFromPreviousDay ?? 0);
 
-          setSupplierPayments(Array.isArray(details.supplierPayments) ? details.supplierPayments : []);
-
           setTotalSales(details.totalSales?.toString() ?? '0.00');
           setCashSales(details.cashSales?.toString() ?? '0.00');
           setCardSales(details.cardSales?.toString() ?? '0.00');
@@ -133,6 +133,15 @@ const DayEndReport = () => {
 
           setOldManualBillValue(details.oldManualBillTotal ?? 0);
           setCreditCustomerBillings(details.creditCustomerTotal ?? 0);
+          
+          // Calculate and set supplier payments total from the response array
+          if (Array.isArray(details.supplierPayments)) {
+            const supplierPaymentsTotal = details.supplierPayments.reduce((sum, sp) => {
+              return sum + (parseFloat(sp.amount) || 0);
+            }, 0);
+            setAutoSupplierPayments(supplierPaymentsTotal.toFixed(2));
+          }
+          
           // Fill system sales summary for report display
           setSystemSalesSummary({
             totalSales: details.totalSales ?? 0,
@@ -155,13 +164,57 @@ const DayEndReport = () => {
     };
     fetchDayEndDetails();
   }, [token]);
-  
+
+  // Fetch supplier payments made today (fallback if not in day-end report response)
+  React.useEffect(() => {
+    const fetchSupplierPayments = async () => {
+      // Skip if already loaded from day-end report response
+      if (parseFloat(autoSupplierPayments) > 0) {
+        return;
+      }
+      
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        console.log("🔍 Fetching supplier payments for date:", today);
+        
+        const url = `${process.env.REACT_APP_API_BASE || ''}/api/supplier-payments/date-range?startDate=${today}&endDate=${today}`;
+        console.log("📡 API URL:", url);
+        
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include'
+        });
+        
+        console.log("📨 Response status:", response.status);
+        
+        if (response.ok) {
+          const payments = await response.json();
+          console.log("💰 Supplier payments received:", payments);
+          
+          const total = Array.isArray(payments) 
+            ? payments.reduce((sum, p) => sum + (parseFloat(p.paymentAmount) || 0), 0)
+            : 0;
+          console.log("✅ Total supplier payments today:", total);
+          setAutoSupplierPayments(total.toFixed(2));
+        } else {
+          console.warn("⚠️ Failed to fetch supplier payments:", response.status, response.statusText);
+          setAutoSupplierPayments('0.00');
+        }
+      } catch (e) {
+        console.error("❌ Error fetching supplier payments:", e);
+        setAutoSupplierPayments('0.00');
+      }
+    };
+    if (token) {
+      fetchSupplierPayments();
+    }
+  }, [token, autoSupplierPayments]);
   // Print-only CSS: thermal (float slip) vs A4 (full report), swapped dynamically right before printing
   const printStyleRef = React.useRef(null);
   const buildPrintCss = (mode) => `
     @page {
-      size: ${mode === 'floatSlip' ? '72mm auto' : 'A4 portrait'};
-      margin: ${mode === 'floatSlip' ? '0mm' : '0'};
+      size: ${mode === 'floatSlip' ? '72mm auto' : mode === 'supplierPayments' ? '72mm auto' : 'A4 portrait'};
+      margin: ${mode === 'floatSlip' || mode === 'supplierPayments' ? '0mm' : '0'};
     }
 
     @media print {
@@ -180,7 +233,11 @@ const DayEndReport = () => {
       #dayend-report-print,
       #dayend-report-print *,
       #float-slip-print,
-      #float-slip-print * {
+      #float-slip-print *,
+      #supplier-payments-print,
+      #supplier-payments-print *,
+      [id^="supplier-payment-print-"],
+      [id^="supplier-payment-print-"] * {
         visibility: visible !important;
       }
 
@@ -213,11 +270,101 @@ const DayEndReport = () => {
         font-size: 10px !important;
       }
 
-      /* Only one of the two printable sections shows at a time, toggled via body class */
+      #supplier-payments-print {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 72mm !important;
+        max-width: 72mm !important;
+        height: auto !important;
+        padding: 2mm !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 10px !important;
+      }
+
+      /* Hide all individual payment prints by default */
+      [id^="supplier-payment-print-"] {
+        display: none !important;
+      }
+
+      /* Only one of the sections shows at a time, toggled via body class */
       body.print-float-slip-mode #dayend-report-print {
         display: none !important;
       }
-      body:not(.print-float-slip-mode) #float-slip-print {
+      body.print-float-slip-mode #supplier-payments-print {
+        display: none !important;
+      }
+      body.print-float-slip-mode [id^="supplier-payment-print-"] {
+        display: none !important;
+      }
+
+      body.print-supplier-payments-mode #dayend-report-print {
+        display: none !important;
+      }
+      body.print-supplier-payments-mode #float-slip-print {
+        display: none !important;
+      }
+      body.print-supplier-payments-mode [id^="supplier-payment-print-"] {
+        display: none !important;
+      }
+
+      /* Individual payment printing - show only the selected payment */
+      body[class*="print-single-payment-mode-"] #dayend-report-print {
+        display: none !important;
+      }
+      body[class*="print-single-payment-mode-"] #float-slip-print {
+        display: none !important;
+      }
+      body[class*="print-single-payment-mode-"] #supplier-payments-print {
+        display: none !important;
+      }
+      body[class*="print-single-payment-mode-"] [id^="supplier-payment-print-"] {
+        display: none !important;
+      }
+
+      /* Show the specific payment being printed */
+      body.print-single-payment-mode-0 #supplier-payment-print-0 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-1 #supplier-payment-print-1 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-2 #supplier-payment-print-2 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-3 #supplier-payment-print-3 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-4 #supplier-payment-print-4 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-5 #supplier-payment-print-5 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-6 #supplier-payment-print-6 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-7 #supplier-payment-print-7 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-8 #supplier-payment-print-8 {
+        display: block !important;
+      }
+      body.print-single-payment-mode-9 #supplier-payment-print-9 {
+        display: block !important;
+      }
+
+      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) #float-slip-print {
+        display: none !important;
+      }
+      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) #supplier-payments-print {
+        display: none !important;
+      }
+      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) [id^="supplier-payment-print-"] {
         display: none !important;
       }
 
@@ -329,11 +476,6 @@ const DayEndReport = () => {
     setDifference(diff.toFixed(2));
   }, [cashValue, expectedCash]);
 
-  const handleSupplierAdd = () => {
-    setSupplierPayments([...supplierPayments, supplierInput]);
-    setSupplierInput({ supplierName: '', mode: 'Cash', amount: '' });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -355,7 +497,6 @@ const DayEndReport = () => {
         cardPayments: parseFloat(cardPayments) || 0,
         onlineTransfers: parseFloat(onlineTransfers) || 0,
         customerChequePayments: parseFloat(customerChequePayments) || 0,
-        supplierPayments,
         totalSales: parseFloat(totalSales) || 0,
         cashSales: parseFloat(cashSales) || 0,
         cardSales: parseFloat(cardSales) || 0,
@@ -412,7 +553,11 @@ const DayEndReport = () => {
         {success && <div style={{ color: 'green' }}>{success}</div>}
 
         {showTotal && submittedData && (
-          <div style={{ marginTop: 32 }}>
+          <div style={{ marginTop: 32, clear: 'both', position: 'relative', zIndex: 1 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16, paddingTop: 16, borderTop: '3px solid #1976d2', paddingBottom: 8 }} className="no-print">
+              <h2 style={{ color: '#1976d2', margin: 0 }}>📋 Day-End Report Summary</h2>
+              <p style={{ fontSize: 12, color: '#666', margin: '4px 0 0 0' }}>Submitted on {submittedData?.printedOn ? new Date(submittedData.printedOn).toLocaleString() : 'N/A'}</p>
+            </div>
             <div
               id="dayend-report-print"
               style={{
@@ -443,59 +588,44 @@ const DayEndReport = () => {
 
               <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SUPPLIER PAYMENTS</div>
-              {submittedData.supplierPayments && submittedData.supplierPayments.length > 0 ? (
-                <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #000' }}>
-                      <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold' }}>Supplier</th>
-                      <th style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>Mode</th>
-                      <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submittedData.supplierPayments.map((sp, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #ccc' }}>
-                        <td style={{ padding: '2px 0', fontWeight: 'bold' }}>{sp.supplierName}</td>
-                        <td style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>{sp.mode}</td>
-                        <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>{parseFloat(sp.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ fontSize: 10, fontStyle: 'italic', marginBottom: 4 }}>No supplier payments</div>
-              )}
-
-              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
               <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SYSTEM SALES SUMMARY</div>
               <div style={{ fontSize: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Sales:</span><b>{submittedData.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash Sales:</span><b>{submittedData.cashSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card Sales:</span><b>{submittedData.cardSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Online Transfer:</span><b>{submittedData.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{(submittedData.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(submittedData.manualBillEntries) ? submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Sales:</span><b>{(submittedData?.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash Sales:</span><b>{(submittedData?.cashSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card Sales:</span><b>{(submittedData?.cardSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Online Transfer:</span><b>{(submittedData?.onlineTransferSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{(submittedData?.chequeSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{(submittedData?.returns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{((submittedData?.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{((submittedData?.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Supplier Payments (Paid):</span><b>-{(Array.isArray(submittedData?.supplierPayments) ? submittedData?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(submittedData?.manualBillEntries) ? submittedData?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               </div>
 
               <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
               <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>CASH RECONCILIATION</div>
               {(() => {
-                const cashSalesNum = parseFloat(submittedData.cashSales) || 0;
+                const cashSalesNum = parseFloat(submittedData?.cashSales) || 0;
                 let manualBillEntriesNum = 0;
-                if (Array.isArray(submittedData.manualBillEntries)) {
-                  manualBillEntriesNum = submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
+                if (Array.isArray(submittedData?.manualBillEntries)) {
+                  manualBillEntriesNum = submittedData?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
                 }
-                const floatRetained = Number(submittedData.nextDayFloatTotal) || 0;
-                // Expected Cash = Cash Sales + Manual Bill Entries, net of the float retained for tomorrow
-                const expectedCashCalc = cashSalesNum + manualBillEntriesNum - floatRetained;
+                let supplierPaymentsCashNum = 0;
+                if (Array.isArray(submittedData?.supplierPayments)) {
+                  supplierPaymentsCashNum = submittedData?.supplierPayments
+                    .filter(sp => sp.mode === 'CASH')
+                    .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
+                }
+                const floatRetained = Number(submittedData?.nextDayFloatTotal) || 0;
+                // Expected Cash = Cash Sales + Manual Bill Entries - Supplier Payments (cash) - Next Day Float retained
+                const expectedCashCalc = cashSalesNum + manualBillEntriesNum - supplierPaymentsCashNum - floatRetained;
                 return (
                   <div style={{ fontSize: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Less: Supplier Payments (Cash):</span>
+                      <b>-{supplierPaymentsCashNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Less: Next Day Float Retained:</span>
                       <b>-{floatRetained.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
@@ -504,7 +634,7 @@ const DayEndReport = () => {
                       <span>Expected Cash:</span>
                       <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                     </div>
-                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill Entry - Next Day Float)</div>
+                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill - Supplier Payments - Next Day Float)</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Physical Cash:</span>
                       <b>{Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
@@ -533,7 +663,7 @@ const DayEndReport = () => {
               <div style={{ fontSize: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Retained in Drawer:</span>
-                  <b>{Number(submittedData.nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  <b>{Number(submittedData?.nextDayFloatTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
                 <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(netted out of Expected Cash above)</div>
               </div>
@@ -546,7 +676,7 @@ const DayEndReport = () => {
                 <div style={{ marginTop: 4 }}>Supervisor: ___________________</div>
               </div>
               <div style={{ fontSize: 8, textAlign: 'center', fontWeight: 'bold' }}>
-                Printed: {new Date(submittedData.printedOn).toLocaleString()}
+                Printed: {submittedData?.printedOn ? new Date(submittedData.printedOn).toLocaleString() : 'N/A'}
               </div>
 
               <div style={{ textAlign: 'center', marginTop: 12 }} className="no-print">
@@ -674,6 +804,246 @@ const DayEndReport = () => {
                 Wrap this slip with the retained cash and place in drawer
               </div>
             </div>
+
+            {/* Supplier Payment History - Thermal Slip */}
+            <div style={{ marginTop: 24 }}>
+              <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 12, borderTop: '2px solid #f57c00', paddingBottom: 8 }} className="no-print">
+                <h3 style={{ color: '#f57c00', margin: 0 }}>💳 Supplier Payment History</h3>
+              </div>
+
+              {/* Individual Payment Records with Print Buttons */}
+              <div className="no-print" style={{ maxWidth: 700, margin: '0 auto', marginBottom: 20 }}>
+                {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.length > 0 ? (
+                  submittedData?.supplierPayments.map((payment, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        marginBottom: 12, 
+                        padding: 12, 
+                        border: '1px solid #ddd', 
+                        borderRadius: 6,
+                        background: '#fafafa',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 4 }}>
+                          {idx + 1}. {payment.supplierName}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                          <b>Amount:</b> Rs. {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                          <b>Mode:</b> {payment.mode}
+                        </div>
+                        {payment.mode === 'CHECK' && payment.chequeNumber && (
+                          <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                            <b>Cheque #:</b> {payment.chequeNumber}
+                          </div>
+                        )}
+                        {payment.remarks && (
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 4, fontStyle: 'italic' }}>
+                            Note: {payment.remarks}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document.body.classList.add(`print-single-payment-mode-${idx}`);
+                          window.onafterprint = () => {
+                            document.body.classList.remove(`print-single-payment-mode-${idx}`);
+                            window.onafterprint = null;
+                          };
+                          window.print();
+                        }}
+                        style={{ 
+                          fontSize: 12, 
+                          padding: '6px 12px', 
+                          background: '#f57c00', 
+                          color: '#fff', 
+                          border: 'none', 
+                          borderRadius: 4, 
+                          cursor: 'pointer', 
+                          fontWeight: 'bold',
+                          marginLeft: 12,
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        🖨️ Print
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
+                    No supplier payments today
+                  </div>
+                )}
+              </div>
+
+              <div style={{ textAlign: 'center', marginBottom: 12 }} className="no-print">
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.body.classList.add('print-supplier-payments-mode');
+                    window.onafterprint = () => {
+                      document.body.classList.remove('print-supplier-payments-mode');
+                      window.onafterprint = null;
+                    };
+                    window.print();
+                  }}
+                  style={{ fontSize: 14, padding: '8px 24px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  🖨️ Print All Supplier Payments (Thermal)
+                </button>
+              </div>
+
+              {/* Printable thermal slip: supplier payment history */}
+              <div
+                id="supplier-payments-print"
+                style={{
+                  width: 280,
+                  margin: '16px auto 0',
+                  padding: '12px 8px',
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: 10,
+                  lineHeight: 1.3,
+                  background: '#fff',
+                  color: '#000',
+                  border: '1px dashed #999',
+                }}
+              >
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>
+                  SUPPLIER PAYMENTS
+                </div>
+                <div style={{ fontSize: 9, textAlign: 'center', marginBottom: 2 }}>
+                  Paid Today: {new Date().toLocaleDateString()}
+                </div>
+                <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+                
+                <div style={{ fontSize: 9, marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Branch:</span><b>{branch}</b></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><b>{cashier}</b></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Day End No:</span><b>{dayEndNo}</b></div>
+                </div>
+                
+                <div style={{ borderTop: '1px solid #000', margin: '4px 0', paddingTop: 4, fontSize: 9 }}>
+                  {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.length > 0 ? (
+                    submittedData?.supplierPayments.map((payment, idx) => (
+                      <div key={idx} style={{ marginBottom: 6, paddingBottom: 4, borderBottom: '1px dashed #999' }}>
+                        <div style={{ fontWeight: 'bold', fontSize: 10 }}>{idx + 1}. {payment.supplierName}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Amount:</span>
+                          <b>Rs. {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Mode:</span>
+                          <b>{payment.mode}</b>
+                        </div>
+                        {payment.mode === 'CHECK' && payment.chequeNumber && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Cheque #:</span>
+                            <b>{payment.chequeNumber}</b>
+                          </div>
+                        )}
+                        {payment.remarks && (
+                          <div style={{ fontSize: 8, marginTop: 2, wordWrap: 'break-word' }}>
+                            Note: {payment.remarks}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: 'center', fontSize: 9, color: '#666' }}>No supplier payments today</div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: '2px solid #000', margin: '6px 0', paddingTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 'bold' }}>
+                    <span>TOTAL PAID:</span>
+                    <span>Rs. {(Array.isArray(submittedData?.supplierPayments) ? submittedData?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid #000', margin: '6px 0', paddingTop: 4, fontSize: 9 }}>
+                  <div style={{ marginBottom: 4 }}>Verified by: ___________________</div>
+                  <div>Date/Time: {new Date().toLocaleString()}</div>
+                </div>
+              </div>
+
+              {/* Individual Payment Print Slips */}
+              {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.map((payment, idx) => (
+                <div
+                  key={`payment-print-${idx}`}
+                  id={`supplier-payment-print-${idx}`}
+                  style={{
+                    width: 280,
+                    margin: '16px auto 0',
+                    padding: '12px 8px',
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 10,
+                    lineHeight: 1.3,
+                    background: '#fff',
+                    color: '#000',
+                    border: '1px dashed #999',
+                    display: 'none'
+                  }}
+                >
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>
+                    SUPPLIER PAYMENT
+                  </div>
+                  <div style={{ fontSize: 9, textAlign: 'center', marginBottom: 2 }}>
+                    Payment #{idx + 1}
+                  </div>
+                  <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
+                  
+                  <div style={{ fontSize: 9, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Branch:</span><b>{branch}</b></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><b>{cashier}</b></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Date:</span><b>{new Date().toLocaleDateString()}</b></div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #000', margin: '4px 0', paddingTop: 4 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4, textAlign: 'center' }}>
+                      {payment.supplierName}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+                      <span>Amount:</span>
+                      <b>Rs. {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+                      <span>Mode:</span>
+                      <b>{payment.mode}</b>
+                    </div>
+                    {payment.mode === 'CHECK' && payment.chequeNumber && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+                        <span>Cheque #:</span>
+                        <b>{payment.chequeNumber}</b>
+                      </div>
+                    )}
+                    {payment.remarks && (
+                      <div style={{ fontSize: 8, marginTop: 4, wordWrap: 'break-word', padding: '4px 0', borderTop: '1px dashed #000' }}>
+                        Note: {payment.remarks}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ borderTop: '2px solid #000', margin: '6px 0', paddingTop: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 'bold' }}>
+                      <span>AMOUNT:</span>
+                      <span>Rs. {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #000', margin: '6px 0', paddingTop: 4, fontSize: 9 }}>
+                    <div style={{ marginBottom: 4 }}>Received by: ___________________</div>
+                    <div>Date/Time: {new Date().toLocaleString()}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -725,23 +1095,6 @@ const DayEndReport = () => {
           </div>
           <div style={{ fontWeight: 'bold', marginTop: 8 }}>Total Cash Value: {Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
 
-          <h3>Supplier Payments (Same Day)</h3>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <input type="text" placeholder="Supplier Name" value={supplierInput.supplierName} onChange={e => setSupplierInput({ ...supplierInput, supplierName: e.target.value })} />
-            <select value={supplierInput.mode} onChange={e => setSupplierInput({ ...supplierInput, mode: e.target.value })}>
-              <option value="Cash">Cash</option>
-              <option value="Cheque">Cheque</option>
-            </select>
-            <input type="number" placeholder="Amount" value={supplierInput.amount} onChange={e => setSupplierInput({ ...supplierInput, amount: e.target.value })} />
-            <button type="button" onClick={handleSupplierAdd}>Add Supplier Payment</button>
-          </div>
-          <ul>
-            {supplierPayments.map((sp, idx) => (
-              <li key={idx}>{sp.supplierName} ({sp.mode}) - {sp.amount}</li>
-            ))}
-          </ul>
-
-         
         <DayEndManualBillEntry
           reportDate={new Date().toISOString().split('T')[0]}
           user={cashier}
@@ -758,6 +1111,7 @@ const DayEndReport = () => {
             <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Old Manual Bill Value: <b>{oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
             <div>Credit Paid Today: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
+            <div>Supplier Payments (Paid Today): <b>{Number(autoSupplierPayments).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
             <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
             <div>Next Day Opening Float (Retained): <b>-{Number(nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
@@ -765,11 +1119,8 @@ const DayEndReport = () => {
         <h3>Cash Reconciliation</h3>
         <div style={{ marginBottom: 12, fontSize: 16 }}>
           {(() => {
-            // Calculate supplier payments total
-            let supplierPaymentsTotal = 0;
-            if (Array.isArray(supplierPayments)) {
-              supplierPaymentsTotal = supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
-            }
+            // Calculate supplier payments total from auto-fetched data
+            const supplierPaymentsTotal = parseFloat(autoSupplierPayments) || 0;
             // Calculate expected cash using the updated formula
             const cashSalesNum = parseFloat(cashSales) || 0;
             const returnsNum = parseFloat(returns) || 0;

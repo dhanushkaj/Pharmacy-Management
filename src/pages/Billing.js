@@ -217,14 +217,15 @@ export default function Billing() {
     if (filtered.length === 0) {
       filtered = allProducts.filter(p => p.name?.toLowerCase().startsWith(safeSearchName));
     }
-    // 4. Fallback: includes in name, generic, category, code
+    // 4. Fallback: includes in name, generic, category, code, or price
     if (filtered.length === 0) {
       filtered = allProducts.filter(
         (p) =>
           p.name?.toLowerCase().includes(safeSearchName) ||
           p.genericName?.toLowerCase().includes(safeSearchName) ||
           p.category?.name?.toLowerCase().includes(safeSearchName) ||
-          p.productCode?.toLowerCase().includes(safeSearchName)
+          p.productCode?.toLowerCase().includes(safeSearchName) ||
+          p.lastPrice?.toString().includes(safeSearchName)
       );
     }
     setFilteredProducts(filtered);
@@ -589,14 +590,30 @@ export default function Billing() {
   };
 
   const updateCartItemQuantity = (index, newQuantity) => {
-    if (newQuantity <= 0) {
+    // Allow 0 values (empty field) - user can delete by leaving empty or pressing minus at 0
+    if (newQuantity < 0) {
       removeCartItem(index);
+      return;
+    }
+    if (newQuantity === 0) {
+      // Keep it at 0 (empty field) - will be deleted on blur if still empty
+      const updated = [...cartItems];
+      updated[index].quantity = 0;
+      updated[index].subtotal = 0;
+      setCartItems(updated);
       return;
     }
     const updated = [...cartItems];
     updated[index].quantity = newQuantity;
     updated[index].subtotal = newQuantity * updated[index].unitPrice;
     setCartItems(updated);
+  };
+
+  const handleQuantityBlur = (index) => {
+    // If quantity is 0 or empty, delete the item
+    if (cartItems[index].quantity === 0) {
+      removeCartItem(index);
+    }
   };
 
   const removeCartItem = (index) => {
@@ -1421,9 +1438,16 @@ export default function Billing() {
                         ) : (
                           <input
                             type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => updateCartItemQuantity(idx, parseInt(e.target.value, 10) || 1)}
+                            min="0"
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                updateCartItemQuantity(idx, val);
+                              }
+                            }}
+                            onBlur={() => handleQuantityBlur(idx)}
+                            onFocus={(e) => e.target.select()}
                             style={{ width: 50, padding: 2, fontSize: 12 }}
                           />
                         )}
@@ -1479,10 +1503,19 @@ export default function Billing() {
                         ).toFixed(2)}
                       </div>
                       <button
-                        onClick={() => removeCartItem(idx)}
+                        onClick={() => {
+                          if (item.quantity > 1) {
+                            updateCartItemQuantity(idx, item.quantity - 1);
+                          } else if (item.quantity === 1) {
+                            updateCartItemQuantity(idx, 0);
+                          } else {
+                            removeCartItem(idx);
+                          }
+                        }}
+                        title={item.quantity > 1 ? 'Decrease quantity' : item.quantity === 1 ? 'Press again to delete' : 'Delete item'}
                         style={{ padding: '3px 8px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 11 }}
                       >
-                        ✕
+                        −
                       </button>
                     </div>
                   </div>
@@ -1588,7 +1621,7 @@ export default function Billing() {
             <input
               ref={productSearchRef}
               type="text"
-              placeholder="Type product name... (e.g., 'paracetamol' or 'paracetamol 12*' for 12 units)"
+              placeholder="Search: product name, generic name, price, or category (e.g., 'paracetamol', 'acetaminophen', '150', or 'paracetamol 12*' for 12 units)"
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               onKeyDown={handleProductSearchKeyDown}
@@ -1596,7 +1629,7 @@ export default function Billing() {
             />
             <small style={{ color: '#666', display: 'block', marginBottom: 8 }}>
               <strong>Quick Add Instructions:</strong><br />
-              1. Type product name - dropdown appears<br />
+              1. Search by: Product Name, Generic Name, Price, or Category<br />
               2. <strong>Click on product</strong> or use <strong>Arrow Keys + Enter</strong> to select<br />
               3. Product automatically added to cart (qty: 1)<br />
               4. For multiple units: Type <strong>*12</strong> before selecting for 12 units<br />

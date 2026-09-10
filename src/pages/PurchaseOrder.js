@@ -149,6 +149,7 @@ const PurchaseOrder = () => {
   }, []);
 
   // --- Product search (by name/generic/productCode on backend)
+  // Also handle QTY*PRODUCT format (e.g., "12*baby nappy")
   useEffect(() => {
     let abort = false;
     async function search() {
@@ -157,9 +158,44 @@ const PurchaseOrder = () => {
         itemsRef.current = [];
         return;
       }
+      
+      // Parse QTY*PRODUCT format
+      let searchTerm = debouncedQuery.trim();
+      let extractedQty = "";
+      
+      // Check for "QTY*PRODUCT" or "PRODUCT*QTY" format
+      if (searchTerm.includes('*')) {
+        const parts = searchTerm.split('*');
+        if (parts.length === 2) {
+          const part1 = parts[0].trim();
+          const part2 = parts[1].trim();
+          
+          // First part is number
+          if (!isNaN(part1) && part1.length > 0) {
+            extractedQty = part1;
+            searchTerm = part2;
+          }
+          // Second part is number
+          else if (!isNaN(part2) && part2.length > 0) {
+            extractedQty = part2;
+            searchTerm = part1;
+          }
+        }
+      }
+      
+      if (extractedQty) {
+        setQty(extractedQty);
+      }
+      
+      if (!searchTerm || searchTerm.length < 2) {
+        setResults([]);
+        itemsRef.current = [];
+        return;
+      }
+      
       setSearching(true);
       try {
-        const data = await api(`/api/products/search?q=${encodeURIComponent(debouncedQuery)}`);
+        const data = await api(`/api/products/search?q=${encodeURIComponent(searchTerm)}`);
         if (!abort) {
           setResults(Array.isArray(data) ? data : []);
           setHighlightedIndex(-1);
@@ -197,9 +233,7 @@ const PurchaseOrder = () => {
         e.preventDefault();
         if (highlightedIndex >= 0 && results[highlightedIndex]) {
           if (isAllowed) {
-            setSelectedProduct(results[highlightedIndex]);
-            setResults([]);
-            setHighlightedIndex(-1);
+            handleSelectProduct(results[highlightedIndex]);
           }
         }
         break;
@@ -227,6 +261,46 @@ const PurchaseOrder = () => {
     () => Boolean(selectedProduct && qty && Number(qty) > 0),
     [selectedProduct, qty]
   );
+
+  function handleSelectProduct(product) {
+    if (!isAllowed) return;
+
+    // If qty was parsed from search (e.g., "13*baby"), auto-add to grid
+    if (qty && Number(qty) > 0) {
+      const exists = items.find((i) => i.productId === product.productId);
+      if (exists) {
+        setItems((list) =>
+          list.map((i) =>
+            i.productId === product.productId
+              ? { ...i, quantity: Number(i.quantity) + Number(qty) }
+              : i
+          )
+        );
+      } else {
+        setItems((list) => [
+          ...list,
+          {
+            productId: product.productId,
+            productName: product.name,
+            productCode: product.productCode || "-",
+            quantity: Number(qty),
+          },
+        ]);
+      }
+      // Clear fields after auto-add
+      setSelectedProduct(null);
+      setQuery("");
+      setQty("");
+      setResults([]);
+      setHighlightedIndex(-1);
+      itemsRef.current = [];
+    } else {
+      // No qty parsed, just select the product for manual qty entry
+      setSelectedProduct(product);
+      setResults([]);
+      setHighlightedIndex(-1);
+    }
+  }
 
   function addItem() {
     if (!canAdd) return;
@@ -379,10 +453,28 @@ const PurchaseOrder = () => {
   }
 
   function updateQty(productId, value) {
-    const n = Math.max(1, Number(value) || 1); // force ≥ 1
+    const n = Number(value) || 0;
+    
+    // If user tries to set to 0 or below, delete the item
+    if (n <= 0) {
+      removeItem(productId);
+      return;
+    }
+    
     setItems((list) =>
       list.map((it) => (it.productId === productId ? { ...it, quantity: n } : it))
     );
+  }
+
+  function decreaseQty(productId) {
+    const item = items.find(i => i.productId === productId);
+    if (!item) return;
+    
+    if (item.quantity > 1) {
+      updateQty(productId, item.quantity - 1);
+    } else {
+      removeItem(productId);
+    }
   }
 
   async function safeJson(res) {
@@ -550,12 +642,7 @@ const PurchaseOrder = () => {
                         if (el) itemsRef.current[index] = el;
                       }}
                       onMouseEnter={() => setHighlightedIndex(index)}
-                      onClick={() => {
-                        if (!isAllowed) return;
-                        setSelectedProduct(r);
-                        setResults([]);
-                        setHighlightedIndex(-1);
-                      }}
+                      onClick={() => handleSelectProduct(r)}
                       style={{
                         padding: 12,
                         cursor: isAllowed ? "pointer" : "not-allowed",
@@ -635,17 +722,23 @@ const PurchaseOrder = () => {
                 <td style={{ padding: 8, border: "1px solid #eee", width: 140 }}>
                   <input
                     type="number"
-                    min="1"
-                    value={i.quantity}
-                    onChange={(e) => updateQty(i.productId, e.target.value)}
-                    onBlur={(e) => updateQty(i.productId, e.target.value)}
-                    style={{ width: "100%", padding: 0 }}
+                    min="0"
+                    value={i.quantity === 0 ? '' : i.quantity}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                      if (!isNaN(val)) {
+                        updateQty(i.productId, val);
+                      }
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    style={{ width: "100%", padding: 4 }}
                     disabled={!isAllowed}
                   />
                 </td>
                 <td style={{ padding: 8, border: "1px solid #eee" }}>
                   <button
-                    onClick={() => removeItem(i.productId)}
+                    onClick={() => decreaseQty(i.productId)}
+                    title={i.quantity > 1 ? "Decrease quantity" : "Remove item"}
                     style={{
                       background: "#ff6b6b",
                       color: "#fff",
@@ -655,7 +748,7 @@ const PurchaseOrder = () => {
                     }}
                     disabled={!isAllowed}
                   >
-                    Remove
+                    {i.quantity > 1 ? "−" : "✕"}
                   </button>
                 </td>
               </tr>

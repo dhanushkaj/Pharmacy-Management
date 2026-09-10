@@ -166,6 +166,40 @@ const SupplierPayment = () => {
     setError("");
     setSuccessMessage("");
     loadAllUnpaidInvoices();
+    // Also reload payment history so newly recorded payments show up
+    if (activeTab === "payment-history") {
+      loadSupplierPaymentHistory();
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId) => {
+    if (!window.confirm("Are you sure you want to delete this invoice? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setError("");
+      const response = await fetch(
+        `${API_BASE}/api/invoices/${invoiceId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete invoice (${response.status})`);
+      }
+
+      setSuccessMessage("Invoice deleted successfully!");
+      loadAllUnpaidInvoices();
+    } catch (err) {
+      console.error("Error deleting invoice:", err);
+      setError(`Failed to delete invoice: ${err.message}`);
+    }
   };
 
   const validateForm = () => {
@@ -231,6 +265,8 @@ const SupplierPayment = () => {
       setSuccessMessage(`✓ Payment recorded successfully! Ref: ${result.paymentReference}`);
       
       setTimeout(() => {
+        setActiveTab("payment-history");
+        loadSupplierPaymentHistory();
         handleBackToGrid();
       }, 2000);
     } catch (err) {
@@ -855,21 +891,38 @@ const SupplierPayment = () => {
                             {getPaymentStatusBadge(invoice.paymentStatus)}
                           </td>
                           <td style={{ padding: 12, textAlign: "center" }}>
-                            <button
-                              onClick={() => handleEditInvoice(invoice)}
-                              style={{
-                                padding: "6px 12px",
-                                background: "#2196F3",
-                                color: "#fff",
-                                border: "none",
-                                borderRadius: 4,
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 12,
-                              }}
-                            >
-                              Edit
-                            </button>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                              <button
+                                onClick={() => handleEditInvoice(invoice)}
+                                style={{
+                                  padding: "6px 12px",
+                                  background: "#2196F3",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                  fontWeight: 600,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteInvoice(invoice.id)}
+                                style={{
+                                  padding: "6px 12px",
+                                  background: "#dc3545",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                  fontWeight: 600,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

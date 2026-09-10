@@ -33,9 +33,7 @@ const GRNManagement = () => {
   const [error, setError] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   
-  // PO search/filter
-  const [poSearchTerm, setPoSearchTerm] = useState("");
-  const [poSupplierFilter, setPoSupplierFilter] = useState("");
+  // PO filter
   const [poDateFromFilter, setPoDateFromFilter] = useState("");
   const [poDateToFilter, setPoDateToFilter] = useState("");
   const [approvedGrnForPo, setApprovedGrnForPo] = useState(false);
@@ -48,8 +46,18 @@ const GRNManagement = () => {
   const [submittingInvoice, setSubmittingInvoice] = useState(false);
   const [invoiceSuccess, setInvoiceSuccess] = useState("");
   const [grnSupplierId, setGrnSupplierId] = useState(null); // Store supplier ID from approved GRN
+  const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false); // Invoice confirmation modal
+  const [pendingApproveUser, setPendingApproveUser] = useState(""); // Store user for pending approval
   
-  const { token: ctxToken, roles: ctxRoles } = useContext(AuthContext);
+  // Supplier autocomplete
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState("");
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [highlightedSupplierIndex, setHighlightedSupplierIndex] = useState(-1);
+  const [selectedSupplierId, setSelectedSupplierId] = useState(null);
+  const [selectedSupplierName, setSelectedSupplierName] = useState("");
+  
+  const { token: ctxToken, roles: ctxRoles, username } = useContext(AuthContext);
   const token = useMemo(
     () => ctxToken || localStorage.getItem("token") || "",
     [ctxToken]
@@ -97,6 +105,24 @@ const GRNManagement = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load suppliers for autocomplete
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        const data = await api('/api/suppliers', { token });
+        if (!abort) {
+          setSuppliers(Array.isArray(data) ? data : data.content || []);
+        }
+      } catch (err) {
+        console.error("Error loading suppliers:", err);
+      }
+    })();
+    return () => {
+      abort = true;
+    };
+  }, [token]);
 
   const loadGrnForApproval = async (grnId) => {
     setLoading(true);
@@ -196,6 +222,46 @@ const GRNManagement = () => {
       setGrnNumber(
         `GRN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${poId}`
       );
+    }
+  };
+
+  // Supplier autocomplete handlers
+  const filteredSuppliers = suppliers.filter((s) =>
+    !supplierSearchQuery || s.name.toLowerCase().includes(supplierSearchQuery.toLowerCase())
+  );
+
+  const handleSupplierInput = (value) => {
+    setSupplierSearchQuery(value);
+    setShowSupplierDropdown(true);
+    setHighlightedSupplierIndex(-1);
+  };
+
+  const handleSelectSupplier = (supplier) => {
+    setSelectedSupplierId(supplier.id);
+    setSelectedSupplierName(supplier.name);
+    setSupplierSearchQuery("");
+    setShowSupplierDropdown(false);
+    setHighlightedSupplierIndex(-1);
+  };
+
+  const handleSupplierKeyDown = (e) => {
+    if (!showSupplierDropdown) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedSupplierIndex((prev) =>
+        Math.min(prev + 1, filteredSuppliers.length - 1)
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedSupplierIndex((prev) => Math.max(prev - 1, -1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedSupplierIndex >= 0) {
+        handleSelectSupplier(filteredSuppliers[highlightedSupplierIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setShowSupplierDropdown(false);
     }
   };
 
@@ -319,8 +385,8 @@ const GRNManagement = () => {
   };
 
   const handleApprove = async () => {
-    if (!approvedUser || !approvedUser.trim()) {
-      alert("Enter Approved User");
+    if (!username) {
+      alert("User not logged in");
       return;
     }
     if (!createdGrnId) {
@@ -328,14 +394,27 @@ const GRNManagement = () => {
       return;
     }
 
+    // Check if invoice is empty
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      // Store the approved user for later use
+      setPendingApproveUser(username);
+      setShowInvoiceConfirm(true);
+      return;
+    }
+
+    // If invoice exists, proceed with approval
+    await proceedWithApproval(username);
+  };
+
+  const proceedWithApproval = async (approvedUserVal) => {
     setLoading(true);
     setError("");
     try {
-      console.log("Approving GRN:", createdGrnId, "with user:", approvedUser);
+      console.log("Approving GRN:", createdGrnId, "with user:", approvedUserVal);
       
       const data = await api(`/api/grns/${createdGrnId}/approve`, {
         method: 'PUT',
-        body: { approvedUser: approvedUser.trim() },
+        body: { approvedUser: approvedUserVal.trim() },
       });
 
       console.log("Response data:", data);
@@ -418,8 +497,7 @@ const GRNManagement = () => {
 
       setInvoiceSuccess(`✓ Invoice recorded successfully! Invoice #${invoiceNumber}`);
       
-      // Reset form
-      setInvoiceNumber("");
+      // Reset form (but keep invoiceNumber so approval knows it was entered)
       setInvoiceDate("");
       setInvoiceAmount("");
       setPaymentDueDate_Invoice("");
@@ -515,26 +593,26 @@ const GRNManagement = () => {
         </button>
       </div>
 
-      {/* Error Display */}
+      {/* Error/Warning Display */}
       {error && (
         <div
           style={{
             padding: 12,
             marginBottom: 16,
-            background: "#f8d7da",
-            color: "#721c24",
-            border: "1px solid #f5c6cb",
+            background: error.includes("already approved") ? "#fff3cd" : "#f8d7da",
+            color: error.includes("already approved") ? "#856404" : "#721c24",
+            border: error.includes("already approved") ? "1px solid #ffeeba" : "1px solid #f5c6cb",
             borderRadius: 4,
           }}
         >
-          <strong>Error:</strong> {error}
+          <strong>{error.includes("already approved") ? "Info:" : "Error:"}</strong> {error}
           <button 
             onClick={() => setError("")}
             style={{
               marginLeft: 12,
               background: "transparent",
               border: "none",
-              color: "#721c24",
+              color: error.includes("already approved") ? "#856404" : "#721c24",
               cursor: "pointer",
               fontWeight: "bold"
             }}
@@ -711,19 +789,81 @@ const GRNManagement = () => {
       {!loadedGrn && (
         <div style={{ marginBottom: 24 }}>
           {/* PO Search Filters */}
+          {/* Supplier Autocomplete Filter */}
           <div style={{ marginBottom: 16, padding: 12, background: '#f8f9fa', borderRadius: 6 }}>
-            <h4 style={{ marginTop: 0 }}>Filter Purchase Orders</h4>
+            <h4 style={{ marginTop: 0 }}>Filter by Supplier</h4>
+            <div style={{ position: 'relative', minWidth: 250 }}>
+              <input
+                type="text"
+                placeholder="Type supplier name..."
+                value={supplierSearchQuery || selectedSupplierName}
+                onChange={(e) => handleSupplierInput(e.target.value)}
+                onFocus={() => setShowSupplierDropdown(true)}
+                onKeyDown={handleSupplierKeyDown}
+                style={{
+                  padding: 8,
+                  width: '100%',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                }}
+              />
+              {showSupplierDropdown && filteredSuppliers.length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: '#fff',
+                    border: '1px solid #ccc',
+                    borderTop: 'none',
+                    borderRadius: '0 0 4px 4px',
+                    maxHeight: 250,
+                    overflowY: 'auto',
+                    zIndex: 10,
+                  }}
+                >
+                  {filteredSuppliers.map((supplier, idx) => (
+                    <div
+                      key={supplier.id}
+                      onClick={() => handleSelectSupplier(supplier)}
+                      style={{
+                        padding: 10,
+                        background: idx === highlightedSupplierIndex ? '#e6f7ff' : '#fff',
+                        cursor: 'pointer',
+                        borderLeft: idx === highlightedSupplierIndex ? '4px solid #1890ff' : 'none',
+                      }}
+                    >
+                      {supplier.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedSupplierName && (
+                <button
+                  onClick={() => {
+                    setSelectedSupplierId(null);
+                    setSelectedSupplierName("");
+                    setSupplierSearchQuery("");
+                  }}
+                  style={{
+                    marginTop: 8,
+                    background: '#f5f5f5',
+                    border: '1px solid #d9d9d9',
+                    borderRadius: 4,
+                    padding: '4px 12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear Supplier Filter (✕)
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16, padding: 12, background: '#f8f9fa', borderRadius: 6 }}>
+            <h4 style={{ marginTop: 0 }}>Filter Purchase Orders by Date</h4>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={{ fontSize: 12, fontWeight: 500 }}>Search by Code or Supplier</label>
-                <input
-                  type="text"
-                  placeholder="PO-... or Supplier name"
-                  value={poSearchTerm}
-                  onChange={(e) => setPoSearchTerm(e.target.value)}
-                  style={{ padding: 8, width: '100%', marginTop: 4 }}
-                />
-              </div>
               <div style={{ flex: 1, minWidth: 150 }}>
                 <label style={{ fontSize: 12, fontWeight: 500 }}>Created From</label>
                 <input
@@ -757,11 +897,11 @@ const GRNManagement = () => {
             <option value="">-- Select PO --</option>
             {purchaseOrders
               .filter((po) => {
-                const searchLower = poSearchTerm.toLowerCase();
-                if (poSearchTerm && !((po.orderCode || '').toLowerCase().includes(searchLower) || 
-                    (po.supplierName || '').toLowerCase().includes(searchLower))) {
+                // Filter by supplier name if selected
+                if (selectedSupplierName && (po.supplierName || '').toLowerCase() !== selectedSupplierName.toLowerCase()) {
                   return false;
                 }
+                
                 if (poDateFromFilter && (po.createdAt ? new Date(po.createdAt).toISOString().split('T')[0] : '') < poDateFromFilter) {
                   return false;
                 }
@@ -1115,15 +1255,20 @@ const GRNManagement = () => {
               ℹ️ Please create a GRN first before approving or rejecting.
             </p>
           )}
-          <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-            <input
-              type="text"
-              placeholder="Approved User"
-              value={approvedUser}
-              onChange={(e) => setApprovedUser(e.target.value)}
-              style={input}
-              disabled={loading}
-            />
+          <div style={{ display: "flex", gap: 16, marginBottom: 16, alignItems: "center" }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Approved By:</label>
+              <div style={{ 
+                padding: 10, 
+                background: '#f5f5f5', 
+                border: '1px solid #ccc', 
+                borderRadius: 4,
+                marginTop: 4,
+                fontWeight: 500 
+              }}>
+                {username || "Not logged in"}
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <button
@@ -1203,6 +1348,38 @@ const GRNManagement = () => {
                 disabled={loading || !rejectReason.trim()}
               >
                 {loading ? "Rejecting..." : "Confirm Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Confirmation Modal */}
+      {showInvoiceConfirm && (
+        <div style={modalOverlay}>
+          <div style={modalContent}>
+            <h3 style={{ marginTop: 0 }}>Invoice Not Entered</h3>
+            <p style={{ marginBottom: 16, color: "#666" }}>
+              No invoice number has been entered. Do you want to proceed with GRN approval without an invoice?
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowInvoiceConfirm(false);
+                  setPendingApproveUser("");
+                }}
+                style={btnSecondary}
+              >
+                No, Enter Invoice First
+              </button>
+              <button
+                onClick={() => {
+                  setShowInvoiceConfirm(false);
+                  proceedWithApproval(pendingApproveUser);
+                }}
+                style={btnApprove}
+              >
+                Yes, Approve Without Invoice
               </button>
             </div>
           </div>

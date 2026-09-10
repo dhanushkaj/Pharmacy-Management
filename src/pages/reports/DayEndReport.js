@@ -67,6 +67,7 @@ const DayEndReport = () => {
 
   // Auto-fetched supplier payments for today
   const [autoSupplierPayments, setAutoSupplierPayments] = useState('0.00');
+  const [supplierPaymentsArray, setSupplierPaymentsArray] = useState([]); // Store the array of supplier payments
   
   // Track which payment is being printed (for individual payment printing)
   const [printingPaymentIndex, setPrintingPaymentIndex] = useState(-1);
@@ -140,6 +141,7 @@ const DayEndReport = () => {
               return sum + (parseFloat(sp.amount) || 0);
             }, 0);
             setAutoSupplierPayments(supplierPaymentsTotal.toFixed(2));
+            setSupplierPaymentsArray(details.supplierPayments); // Store the array for display
           }
           
           // Fill system sales summary for report display
@@ -506,6 +508,7 @@ const DayEndReport = () => {
         oldManualBillTotal: parseFloat(oldManualBillValue) || 0,
         creditCustomerTotal: parseFloat(creditCustomerBillings) || 0,
         manualBillEntries: manualBillEntries,
+        supplierPayments: supplierPaymentsArray, // Include supplier payments array
         expectedCash: parseFloat(expectedCash) || 0,
         physicalCashCounted: parseFloat(physicalCashCounted) || 0,
         difference: parseFloat(difference) || 0,
@@ -807,10 +810,6 @@ const DayEndReport = () => {
 
             {/* Supplier Payment History - Thermal Slip */}
             <div style={{ marginTop: 24 }}>
-              <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 12, borderTop: '2px solid #f57c00', paddingBottom: 8 }} className="no-print">
-                <h3 style={{ color: '#f57c00', margin: 0 }}>💳 Supplier Payment History</h3>
-              </div>
-
               {/* Individual Payment Records with Print Buttons */}
               <div className="no-print" style={{ maxWidth: 700, margin: '0 auto', marginBottom: 20 }}>
                 {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.length > 0 ? (
@@ -876,102 +875,9 @@ const DayEndReport = () => {
                       </button>
                     </div>
                   ))
-                ) : (
-                  <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                    No supplier payments today
-                  </div>
-                )}
+                ) : null}
               </div>
-
-              <div style={{ textAlign: 'center', marginBottom: 12 }} className="no-print">
-                <button
-                  type="button"
-                  onClick={() => {
-                    document.body.classList.add('print-supplier-payments-mode');
-                    window.onafterprint = () => {
-                      document.body.classList.remove('print-supplier-payments-mode');
-                      window.onafterprint = null;
-                    };
-                    window.print();
-                  }}
-                  style={{ fontSize: 14, padding: '8px 24px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                  🖨️ Print All Supplier Payments (Thermal)
-                </button>
-              </div>
-
-              {/* Printable thermal slip: supplier payment history */}
-              <div
-                id="supplier-payments-print"
-                style={{
-                  width: 280,
-                  margin: '16px auto 0',
-                  padding: '12px 8px',
-                  fontFamily: "'Courier New', monospace",
-                  fontSize: 10,
-                  lineHeight: 1.3,
-                  background: '#fff',
-                  color: '#000',
-                  border: '1px dashed #999',
-                }}
-              >
-                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>
-                  SUPPLIER PAYMENTS
-                </div>
-                <div style={{ fontSize: 9, textAlign: 'center', marginBottom: 2 }}>
-                  Paid Today: {new Date().toLocaleDateString()}
-                </div>
-                <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
-                
-                <div style={{ fontSize: 9, marginBottom: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Branch:</span><b>{branch}</b></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><b>{cashier}</b></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Day End No:</span><b>{dayEndNo}</b></div>
-                </div>
-                
-                <div style={{ borderTop: '1px solid #000', margin: '4px 0', paddingTop: 4, fontSize: 9 }}>
-                  {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.length > 0 ? (
-                    submittedData?.supplierPayments.map((payment, idx) => (
-                      <div key={idx} style={{ marginBottom: 6, paddingBottom: 4, borderBottom: '1px dashed #999' }}>
-                        <div style={{ fontWeight: 'bold', fontSize: 10 }}>{idx + 1}. {payment.supplierName}</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Amount:</span>
-                          <b>Rs. {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Mode:</span>
-                          <b>{payment.mode}</b>
-                        </div>
-                        {payment.mode === 'CHECK' && payment.chequeNumber && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Cheque #:</span>
-                            <b>{payment.chequeNumber}</b>
-                          </div>
-                        )}
-                        {payment.remarks && (
-                          <div style={{ fontSize: 8, marginTop: 2, wordWrap: 'break-word' }}>
-                            Note: {payment.remarks}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', fontSize: 9, color: '#666' }}>No supplier payments today</div>
-                  )}
-                </div>
-
-                <div style={{ borderTop: '2px solid #000', margin: '6px 0', paddingTop: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 'bold' }}>
-                    <span>TOTAL PAID:</span>
-                    <span>Rs. {(Array.isArray(submittedData?.supplierPayments) ? submittedData?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '6px 0', paddingTop: 4, fontSize: 9 }}>
-                  <div style={{ marginBottom: 4 }}>Verified by: ___________________</div>
-                  <div>Date/Time: {new Date().toLocaleString()}</div>
-                </div>
-              </div>
+              
 
               {/* Individual Payment Print Slips */}
               {Array.isArray(submittedData?.supplierPayments) && submittedData?.supplierPayments.map((payment, idx) => (

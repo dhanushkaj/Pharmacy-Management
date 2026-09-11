@@ -429,11 +429,14 @@ const SupplierPayment = () => {
     printWindow.document.write(receiptHTML);
     printWindow.document.close();
     
-    // Wait for content to load, then print
+    // Wait for content to load and print, then close window after print dialog closes
     setTimeout(() => {
       printWindow.print();
-      printWindow.close();
-    }, 250);
+      // Close window after print dialog is processed
+      printWindow.onafterprint = () => {
+        printWindow.close();
+      };
+    }, 500);
   };
 
   return (

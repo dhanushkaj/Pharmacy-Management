@@ -213,171 +213,10 @@ const DayEndReport = () => {
   }, [token, autoSupplierPayments]);
   // Print-only CSS: thermal (float slip) vs A4 (full report), swapped dynamically right before printing
   const printStyleRef = React.useRef(null);
-  const buildPrintCss = (mode) => `
-    @page {
-      size: ${mode === 'floatSlip' ? '72mm auto' : mode === 'supplierPayments' ? '72mm auto' : 'A4 portrait'};
-      margin: ${mode === 'floatSlip' || mode === 'supplierPayments' ? '0mm' : '0'};
-    }
-
+  const buildPrintCss = () => `
+    /* Simplified - main print CSS is in App.css */
     @media print {
-
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        height: auto !important;
-        overflow: hidden !important;
-      }
-
-      body * {
-        visibility: hidden !important;
-      }
-
-      #dayend-report-print,
-      #dayend-report-print *,
-      #float-slip-print,
-      #float-slip-print *,
-      #supplier-payments-print,
-      #supplier-payments-print *,
-      [id^="supplier-payment-print-"],
-      [id^="supplier-payment-print-"] * {
-        visibility: visible !important;
-      }
-
-      #dayend-report-print {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        width: 210mm !important;
-        min-height: 297mm !important;
-        padding: 12mm !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-
-      #float-slip-print {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        width: 72mm !important;
-        max-width: 72mm !important;
-        height: auto !important;
-        padding: 2mm !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-        font-family: 'Courier New', monospace !important;
-        font-size: 10px !important;
-      }
-
-      #supplier-payments-print {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        width: 72mm !important;
-        max-width: 72mm !important;
-        height: auto !important;
-        padding: 2mm !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-        font-family: 'Courier New', monospace !important;
-        font-size: 10px !important;
-      }
-
-      /* Hide all individual payment prints by default */
-      [id^="supplier-payment-print-"] {
-        display: none !important;
-      }
-
-      /* Only one of the sections shows at a time, toggled via body class */
-      body.print-float-slip-mode #dayend-report-print {
-        display: none !important;
-      }
-      body.print-float-slip-mode #supplier-payments-print {
-        display: none !important;
-      }
-      body.print-float-slip-mode [id^="supplier-payment-print-"] {
-        display: none !important;
-      }
-
-      body.print-supplier-payments-mode #dayend-report-print {
-        display: none !important;
-      }
-      body.print-supplier-payments-mode #float-slip-print {
-        display: none !important;
-      }
-      body.print-supplier-payments-mode [id^="supplier-payment-print-"] {
-        display: none !important;
-      }
-
-      /* Individual payment printing - show only the selected payment */
-      body[class*="print-single-payment-mode-"] #dayend-report-print {
-        display: none !important;
-      }
-      body[class*="print-single-payment-mode-"] #float-slip-print {
-        display: none !important;
-      }
-      body[class*="print-single-payment-mode-"] #supplier-payments-print {
-        display: none !important;
-      }
-      body[class*="print-single-payment-mode-"] [id^="supplier-payment-print-"] {
-        display: none !important;
-      }
-
-      /* Show the specific payment being printed */
-      body.print-single-payment-mode-0 #supplier-payment-print-0 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-1 #supplier-payment-print-1 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-2 #supplier-payment-print-2 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-3 #supplier-payment-print-3 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-4 #supplier-payment-print-4 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-5 #supplier-payment-print-5 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-6 #supplier-payment-print-6 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-7 #supplier-payment-print-7 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-8 #supplier-payment-print-8 {
-        display: block !important;
-      }
-      body.print-single-payment-mode-9 #supplier-payment-print-9 {
-        display: block !important;
-      }
-
-      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) #float-slip-print {
-        display: none !important;
-      }
-      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) #supplier-payments-print {
-        display: none !important;
-      }
-      body:not(.print-float-slip-mode):not(.print-supplier-payments-mode):not([class*="print-single-payment-mode-"]) [id^="supplier-payment-print-"] {
-        display: none !important;
-      }
-
-      button {
-        display: none !important;
-      }
-
-      form {
-        display: none !important;
-      }
-
+      /* Only override if needed for specific styling */
     }
   `;
 
@@ -385,7 +224,7 @@ const DayEndReport = () => {
     const style = document.createElement('style');
     style.type = 'text/css';
     style.id = 'print-only-style';
-    style.innerHTML = buildPrintCss('report');
+    style.innerHTML = buildPrintCss();
     document.head.appendChild(style);
     printStyleRef.current = style;
     return () => {
@@ -537,11 +376,9 @@ const DayEndReport = () => {
 
   // Print only the Next Day Opening Float slip on a thermal (72mm) page — wrap this printout with the retained cash
   const handlePrintFloatSlip = () => {
-    if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('floatSlip');
     document.body.classList.add('print-float-slip-mode');
     window.onafterprint = () => {
       document.body.classList.remove('print-float-slip-mode');
-      if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('report');
       window.onafterprint = null;
     };
     window.print();
@@ -712,9 +549,24 @@ const DayEndReport = () => {
               </div>
 
               <div style={{ textAlign: 'center', marginTop: 12 }} className="no-print">
+                {!submittedData && (
+                  <div style={{ fontSize: 12, color: '#d32f2f', marginBottom: 8, fontWeight: 'bold' }}>
+                    ⚠️ Submit the report first before printing
+                  </div>
+                )}
                 <button
-                  onClick={() => window.print()}
-                  style={{ fontSize: 14, padding: '8px 24px', background: '#388e3c', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
+                  onClick={() => {
+                    if (submittedData) {
+                      document.body.classList.add('print-day-end-report-mode');
+                      window.onafterprint = () => {
+                        document.body.classList.remove('print-day-end-report-mode');
+                        window.onafterprint = null;
+                      };
+                      window.print();
+                    }
+                  }}
+                  disabled={!submittedData}
+                  style={{ fontSize: 14, padding: '8px 24px', background: submittedData ? '#388e3c' : '#bdbdbd', color: '#fff', border: 'none', borderRadius: 4, cursor: submittedData ? 'pointer' : 'not-allowed', fontWeight: 'bold', opacity: submittedData ? 1 : 0.5 }}
                 >
                   🖨️ Print Report
                 </button>

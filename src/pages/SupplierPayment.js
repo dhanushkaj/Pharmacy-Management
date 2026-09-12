@@ -29,6 +29,11 @@ const SupplierPayment = () => {
   // Payment history
   const [paymentHistory, setPaymentHistory] = useState([]);
   
+  // Payment history filters
+  const [historyFilterSupplier, setHistoryFilterSupplier] = useState("");
+  const [historyFilterDateFrom, setHistoryFilterDateFrom] = useState("");
+  const [historyFilterDateTo, setHistoryFilterDateTo] = useState("");
+  
   // UI state
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -139,6 +144,19 @@ const SupplierPayment = () => {
       return matchSupplier && matchInvoiceNumber && matchDateFrom && matchDateTo;
     });
   }, [allUnpaidInvoices, filterSupplier, filterInvoiceNumber, filterDateFrom, filterDateTo]);
+
+  const filteredPaymentHistory = useMemo(() => {
+    return paymentHistory.filter(payment => {
+      const matchSupplier = !historyFilterSupplier || 
+        payment.supplierName?.toLowerCase().includes(historyFilterSupplier.toLowerCase());
+      
+      const paymentDate = new Date(payment.paymentDate);
+      const matchDateFrom = !historyFilterDateFrom || paymentDate >= new Date(historyFilterDateFrom);
+      const matchDateTo = !historyFilterDateTo || paymentDate <= new Date(historyFilterDateTo);
+      
+      return matchSupplier && matchDateFrom && matchDateTo;
+    });
+  }, [paymentHistory, historyFilterSupplier, historyFilterDateFrom, historyFilterDateTo]);
 
   const handleEditInvoice = (invoice) => {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
@@ -296,147 +314,14 @@ const SupplierPayment = () => {
     return <span className={`badge ${statusClass[status] || "badge-secondary"}`}>{status}</span>;
   };
 
-  const printPaymentReceipt = (payment) => {
-    // Create a temporary print window
-    const printWindow = window.open('', '', 'height=400,width=300');
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Supplier Payment Receipt</title>
-        <style>
-          @page {
-            size: 72mm auto;
-            margin: 0;
-          }
-          body {
-            font-family: 'Courier New', monospace;
-            margin: 0;
-            padding: 8px;
-            width: 72mm;
-            font-size: 10px;
-            line-height: 1.4;
-          }
-          .receipt {
-            text-align: center;
-            width: 100%;
-          }
-          .header {
-            font-weight: bold;
-            font-size: 12px;
-            margin-bottom: 6px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 6px;
-          }
-          .field {
-            display: flex;
-            justify-content: space-between;
-            margin: 4px 0;
-            font-size: 9px;
-          }
-          .field-label {
-            text-align: left;
-            flex: 1;
-          }
-          .field-value {
-            text-align: right;
-            font-weight: bold;
-          }
-          .supplier-name {
-            font-weight: bold;
-            font-size: 11px;
-            margin: 6px 0;
-            text-align: center;
-          }
-          .amount-section {
-            margin: 8px 0;
-            padding: 4px 0;
-            border-top: 2px solid #000;
-            border-bottom: 2px solid #000;
-          }
-          .amount-label {
-            font-size: 9px;
-            text-align: left;
-          }
-          .amount-value {
-            font-weight: bold;
-            font-size: 13px;
-            text-align: right;
-            margin: 4px 0;
-          }
-          .footer {
-            margin-top: 8px;
-            font-size: 8px;
-            text-align: center;
-            border-top: 1px solid #000;
-            padding-top: 4px;
-          }
-          .signature-line {
-            margin-top: 8px;
-            font-size: 9px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="header">SUPPLIER PAYMENT</div>
-          <div class="field">
-            <span class="field-label">Ref:</span>
-            <span class="field-value">${payment.paymentReference}</span>
-          </div>
-          <div class="field">
-            <span class="field-label">Date:</span>
-            <span class="field-value">${formatDate(payment.paymentDate)}</span>
-          </div>
-          
-          <div class="supplier-name">${payment.supplierName || 'N/A'}</div>
-          
-          <div class="field">
-            <span class="field-label">Invoice:</span>
-            <span class="field-value">${payment.invoiceNumber || '-'}</span>
-          </div>
-          <div class="field">
-            <span class="field-label">Method:</span>
-            <span class="field-value">${payment.paymentMethod}</span>
-          </div>
-          ${payment.paymentMethod === 'CHECK' && payment.chequeNumber ? `
-          <div class="field">
-            <span class="field-label">Cheque #:</span>
-            <span class="field-value">${payment.chequeNumber}</span>
-          </div>
-          ` : ''}
-          
-          <div class="amount-section">
-            <div class="amount-label">AMOUNT PAID</div>
-            <div class="amount-value">Rs. ${formatCurrency(payment.paymentAmount)}</div>
-          </div>
-          
-          ${payment.remarks ? `
-          <div class="field" style="margin-top: 6px; font-size: 8px;">
-            <span style="text-align: left;">Note: ${payment.remarks}</span>
-          </div>
-          ` : ''}
-          
-          <div class="signature-line">
-            <div>Received by: _______________</div>
-            <div style="margin-top: 4px;">Date/Time: ${new Date().toLocaleString()}</div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    printWindow.document.write(receiptHTML);
-    printWindow.document.close();
-    
-    // Wait for content to load and print, then close window after print dialog closes
-    setTimeout(() => {
-      printWindow.print();
-      // Close window after print dialog is processed
-      printWindow.onafterprint = () => {
-        printWindow.close();
-      };
-    }, 500);
+  const printPaymentReceipt = (index) => {
+    // Use body class to trigger CSS print mode (same as Billing, Day End Report)
+    document.body.classList.add(`print-single-payment-mode-${index}`);
+    window.onafterprint = () => {
+      document.body.classList.remove(`print-single-payment-mode-${index}`);
+      window.onafterprint = null;
+    };
+    window.print();
   };
 
   return (
@@ -942,7 +827,102 @@ const SupplierPayment = () => {
       {activeTab === "payment-history" && (
         <div className="payment-history-section">
           <h3>💾 Payment History</h3>
-          {paymentHistory.length === 0 ? (
+          
+          {/* Search Filters */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: 12,
+            marginBottom: 20,
+            padding: 16,
+            background: '#f9f9f9',
+            borderRadius: 8,
+            border: '1px solid #eee'
+          }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                Search by Supplier
+              </label>
+              <input
+                type="text"
+                placeholder="Enter supplier name..."
+                value={historyFilterSupplier}
+                onChange={(e) => setHistoryFilterSupplier(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  border: '1px solid #ddd',
+                  borderRadius: 4,
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                From Date
+              </label>
+              <input
+                type="date"
+                value={historyFilterDateFrom}
+                onChange={(e) => setHistoryFilterDateFrom(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  border: '1px solid #ddd',
+                  borderRadius: 4,
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                To Date
+              </label>
+              <input
+                type="date"
+                value={historyFilterDateTo}
+                onChange={(e) => setHistoryFilterDateTo(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  border: '1px solid #ddd',
+                  borderRadius: 4,
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryFilterSupplier("");
+                  setHistoryFilterDateFrom("");
+                  setHistoryFilterDateTo("");
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  background: '#f44336',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+          
+          {filteredPaymentHistory.length === 0 ? (
             <div style={{
               textAlign: "center",
               padding: 40,
@@ -950,7 +930,7 @@ const SupplierPayment = () => {
               borderRadius: 8,
               color: "#666",
             }}>
-              <p>No payments recorded yet</p>
+              <p>{paymentHistory.length === 0 ? "No payments recorded yet" : "No payments match your search filters"}</p>
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -973,7 +953,7 @@ const SupplierPayment = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paymentHistory.map((payment, idx) => (
+                  {filteredPaymentHistory.map((payment, idx) => (
                     <tr key={payment.id} style={{
                       borderBottom: "1px solid #eee",
                       background: idx % 2 === 0 ? "#fff" : "#fafafa",
@@ -999,7 +979,7 @@ const SupplierPayment = () => {
                       <td style={{ padding: 12, textAlign: "center", fontSize: 14 }}>
                         <button
                           type="button"
-                          onClick={() => printPaymentReceipt(payment)}
+                          onClick={() => printPaymentReceipt(idx)}
                           style={{
                             fontSize: 12,
                             padding: '6px 12px',
@@ -1020,6 +1000,78 @@ const SupplierPayment = () => {
               </table>
             </div>
           )}
+
+          {/* Print receipt divs for each payment (hidden by default, shown on print) */}
+          {paymentHistory.map((payment, idx) => (
+            <div
+              key={`payment-print-${payment.id}`}
+              id={`supplier-payment-print-${idx}`}
+              style={{
+                width: 280,
+                padding: '8px',
+                fontFamily: "'Courier New', monospace",
+                fontSize: 10,
+                lineHeight: 1.4,
+                background: '#fff',
+                color: '#000',
+              }}
+            >
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 12, marginBottom: 6 }}>
+                SUPPLIER PAYMENT
+              </div>
+              <div style={{ borderTop: '2px solid #000', margin: '6px 0', paddingBottom: 6 }}></div>
+              
+              <div style={{ fontSize: 9, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Ref:</span>
+                  <b>{payment.paymentReference}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Date:</span>
+                  <b>{formatDate(payment.paymentDate)}</b>
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 11, margin: '6px 0' }}>
+                {payment.supplierName || 'N/A'}
+              </div>
+
+              <div style={{ fontSize: 9, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Invoice:</span>
+                  <b>{payment.invoiceNumber || '-'}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Method:</span>
+                  <b>{payment.paymentMethod}</b>
+                </div>
+                {payment.paymentMethod === 'CHECK' && payment.chequeNumber && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Cheque #:</span>
+                    <b>{payment.chequeNumber}</b>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '2px solid #000', borderBottom: '2px solid #000', margin: '8px 0', padding: '4px 0' }}>
+                <div style={{ fontSize: 9, textAlign: 'left', marginBottom: 2 }}>AMOUNT PAID</div>
+                <div style={{ fontWeight: 'bold', fontSize: 13, textAlign: 'right' }}>
+                  Rs. {formatCurrency(payment.paymentAmount)}
+                </div>
+              </div>
+
+              {payment.remarks && (
+                <div style={{ fontSize: 8, marginTop: 6, padding: '4px 0' }}>
+                  <span>Note: {payment.remarks}</span>
+                </div>
+              )}
+
+              <div style={{ fontSize: 9, marginTop: 8, paddingTop: 4, borderTop: '1px solid #000' }}>
+                <div>Received by: _______________</div>
+                <div style={{ marginTop: 4 }}>Date/Time: {new Date().toLocaleString()}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

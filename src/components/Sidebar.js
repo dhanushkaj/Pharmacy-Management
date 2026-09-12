@@ -126,6 +126,7 @@ const Sidebar = () => {
                 <ul style={{ listStyle: 'none', paddingLeft: 12, marginTop: 2 }}>
                   <li><NavLink to="/billing-history" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Billing Report</NavLink></li>
                   <li><NavLink to="/reports/day-end" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Day-End Report</NavLink></li>
+                  <li><NavLink to="/reports/day-end-history" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>📋 Day-End History</NavLink></li>
                   <li><NavLink to="/reports/inventory" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Inventory Report</NavLink></li>
                   <li><NavLink to="/reports/alerts" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Alert Report</NavLink></li>
                   <li><NavLink to="/reports/sales" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>Sales Report</NavLink></li>

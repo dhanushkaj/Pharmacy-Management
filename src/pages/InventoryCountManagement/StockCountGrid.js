@@ -331,9 +331,15 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
                   <td style={{ padding: 12, textAlign: 'center' }}>{line.systemQtyAtCount}</td>
                   <td style={{ padding: 12, textAlign: 'center' }}>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={line.physicalQty !== null && line.physicalQty !== undefined ? line.physicalQty : ''}
-                      onChange={(e) => handlePhysicalQtyChange(line.id, e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^\d+$/.test(val)) {
+                          handlePhysicalQtyChange(line.id, val);
+                        }
+                      }}
                       placeholder="0"
                       style={{ width: 60, padding: 6, border: '1px solid #ddd', borderRadius: 4 }}
                     />

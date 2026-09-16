@@ -145,11 +145,7 @@ html, body {
   }
 }
 
-/* Hide print divs by default (only show when printing) */
-#billing-thermal-print,
-#thermal-bill,
-#dayend-report-print,
-#float-slip-print,
+/* Hide supplier payment print divs by default (they're for printing only) */
 #supplier-payment-print-0,
 #supplier-payment-print-1,
 #supplier-payment-print-2,
@@ -164,7 +160,7 @@ html, body {
   visibility: hidden !important;
 }
 
-/* Print divs are visible on screen by default for user preview */
+/* Show print divs on page for preview (billing-thermal-print, dayend-report-print, float-slip-print) */
 
 /* Print styles - filter which div prints based on body class */
 @media print {

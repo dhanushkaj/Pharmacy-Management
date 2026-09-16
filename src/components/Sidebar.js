@@ -14,6 +14,7 @@ const Sidebar = () => {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [inventoryCountOpen, setInventoryCountOpen] = useState(false);
   const [customersOpen, setCustomersOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
   console.log('User roles:', roles, 'Fallback role:', fallbackRole, 'hasAdmin:', hasAdmin, 'hasManager:', hasManager);
   const { totalActive, criticalCount } = useAlertSummary();
   return (
@@ -54,7 +55,23 @@ const Sidebar = () => {
           <li><NavLink to="/" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Home</NavLink></li>
           <li><NavLink to="/categories" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Categories</NavLink></li>
           <li><NavLink to="/suppliers" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Suppliers</NavLink></li>
-          <li><NavLink to="/products" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Products</NavLink></li>
+          
+          {/* Product Catalog Group */}
+          <li>
+            <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setProductsOpen(o => !o)}>
+              <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '14px', color: '#fff' }}>
+                📦 Product Catalog
+              </span>
+              <span style={{ marginLeft: 4, fontSize: 12, color: '#fff' }}>{productsOpen ? '▼' : '▶'}</span>
+            </div>
+            {productsOpen && (
+              <ul style={{ listStyle: 'none', paddingLeft: 12, marginTop: 2 }}>
+                <li><NavLink to="/products" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>📦 Products</NavLink></li>
+                <li><NavLink to="/customer-discount" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '6px 0', fontSize: '13px' })}>🎯 Seasonal Discounts</NavLink></li>
+              </ul>
+            )}
+          </li>
+          
           <li><NavLink to="/purchase-order" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Purchase Order</NavLink></li>
           {hasAdmin && <li><NavLink to="/grn" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>Approve GRN</NavLink></li>}
           <li><NavLink to="/supplier-payment" style={({ isActive }) => ({ color: isActive ? '#90caf9' : '#fff', textDecoration: 'none', display: 'block', padding: '10px 0', fontSize: '14px' })}>💳 Supplier Payment</NavLink></li>

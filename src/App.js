@@ -14,6 +14,7 @@ import GRNManagement from './pages/GRNManagement';
 import Billing from './pages/Billing';
 import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
+import CustomerDiscount from './pages/CustomerDiscount';
 import ProductBin from './pages/ProductBin';
 import SettingsSecurity from './pages/SettingsSecurity';
 import StoreSettings from './pages/StoreSettings';
@@ -73,6 +74,7 @@ const AppContent = () => {
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
             <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
+            <Route path="/customer-discount" element={<PrivateRoute><CustomerDiscount /></PrivateRoute>} />
             <Route path="/customer-spectrum" element={<PrivateRoute><CustomerSpectrum /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             {/* Removed /reports route to disable parent ReportsAlerts screen */}

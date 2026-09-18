@@ -346,14 +346,14 @@ export default function BillingHistory() {
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerName || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd' }}>{billing.customerPhone || 'N/A'}</td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
-                    <strong>{(billing.grandTotal || (billing.subtotal - (billing.discountAmount || 0))).toFixed(2)}</strong>
+                    <strong>{(Number(billing.grandTotal || 0)).toFixed(2)}</strong>
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right' }}>
                     {billing.amountReceived ? billing.amountReceived.toFixed(2) : '-'}
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right', color: billing.balanceAmount >= 0 ? '#2e7d32' : '#c62828' }}>
                     {billing.amountReceived > 0 ? (
-                      <span>{billing.balanceAmount >= 0 ? '+' : ''}{billing.balanceAmount?.toFixed(2) || '0.00'}</span>
+                      <span>{Math.max(0, Number(billing.grandTotal || 0) - Number(billing.amountReceived || 0)).toFixed(2)}</span>
                     ) : '-'}
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>{billing.paymentMethod}</td>
@@ -635,12 +635,41 @@ export default function BillingHistory() {
                   <span>Subtotal</span>
                   <span style={{ textAlign: 'right' }}>{selectedBilling.subtotal.toFixed(2)}</span>
                 </div>
-                {selectedBilling.discountAmount > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                    <span>Discount ({selectedBilling.discountPercentage || 0}%)</span>
-                    <span style={{ textAlign: 'right' }}>-{Number(selectedBilling.discountAmount).toFixed(2)}</span>
-                  </div>
-                )}
+                
+                {/* Calculate and show product discounts from items using appliedDiscount */}
+                {selectedBilling.items && selectedBilling.items.length > 0 && (() => {
+                  const productDisc = selectedBilling.items.reduce((sum, item) => {
+                    if (item.appliedDiscount && item.appliedDiscount > 0) {
+                      const itemDiscount = (item.quantity * item.unitPrice * item.appliedDiscount) / 100;
+                      return sum + itemDiscount;
+                    }
+                    return sum;
+                  }, 0);
+                  return productDisc > 0.01 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                      <span>Product Discounts</span>
+                      <span style={{ textAlign: 'right' }}>-{productDisc.toFixed(2)}</span>
+                    </div>
+                  ) : null;
+                })()}
+                
+                {/* Calculate and show customer discount from stored discount amount minus product discounts */}
+                {selectedBilling.items && selectedBilling.items.length > 0 && (() => {
+                  const productDisc = selectedBilling.items.reduce((sum, item) => {
+                    if (item.appliedDiscount && item.appliedDiscount > 0) {
+                      const itemDiscount = (item.quantity * item.unitPrice * item.appliedDiscount) / 100;
+                      return sum + itemDiscount;
+                    }
+                    return sum;
+                  }, 0);
+                  const customerDisc = Number(selectedBilling.discountAmount || 0) - productDisc;
+                  return customerDisc > 0.01 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
+                      <span>Customer Discount</span>
+                      <span style={{ textAlign: 'right' }}>-{customerDisc.toFixed(2)}</span>
+                    </div>
+                  ) : null;
+                })()}
                 {/* Show each return item deduction */}
                 {selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 && (
                   selectedBilling.returnRecords.map((ri, idx) => (
@@ -653,7 +682,10 @@ export default function BillingHistory() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
                   <span style={{ textAlign: 'right' }}>
-                    {(Number(selectedBilling.subtotal || 0) - Number(selectedBilling.discountAmount || 0) - (selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}
+                    {(() => {
+                      const returnRefundTotal = selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0;
+                      return (Number(selectedBilling.grandTotal || 0) - returnRefundTotal).toFixed(2);
+                    })()}
                   </span>
                 </div>
               </div>
@@ -669,7 +701,11 @@ export default function BillingHistory() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
                   <span style={{ textAlign: 'right' }}>
-                    {Math.abs(Number(selectedBilling.subtotal || 0) - Number(selectedBilling.discountAmount || 0) - (selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(selectedBilling.amountReceived || 0)).toFixed(2)}
+                    {(() => {
+                      const returnRefundTotal = selectedBilling.returnRecords && selectedBilling.returnRecords.length > 0 ? selectedBilling.returnRecords.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0;
+                      const total = Number(selectedBilling.grandTotal || 0) - returnRefundTotal;
+                      return Math.max(0, total - Number(selectedBilling.amountReceived || 0)).toFixed(2);
+                    })()}
                   </span>
                 </div>
               </div>

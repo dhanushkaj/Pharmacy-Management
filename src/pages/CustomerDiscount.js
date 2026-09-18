@@ -39,20 +39,18 @@ const CustomerDiscount = () => {
     return s1 <= e2 && s2 <= e1;
   };
 
-  // Find products with overlapping discount dates
-  const findOverlappingProducts = () => {
-    if (!startDate || !endDate) return [];
+  // Check if the selected product already has an overlapping discount date range
+  const findOverlappingDiscounts = () => {
+    if (!selectedProduct || !startDate || !endDate) return [];
     
-    return products.filter(product => {
-      // Skip the currently selected product
-      if (product.productId === selectedProduct?.productId) return false;
-      
-      // Check if product has a discount with overlapping dates
-      if (product.discountStartDate && product.discountEndDate) {
-        return checkDateOverlap(startDate, endDate, product.discountStartDate, product.discountEndDate);
+    // Only check WITHIN the same product - if it already has discount dates that overlap with new dates
+    if (selectedProduct.discountStartDate && selectedProduct.discountEndDate) {
+      const hasOverlap = checkDateOverlap(startDate, endDate, selectedProduct.discountStartDate, selectedProduct.discountEndDate);
+      if (hasOverlap) {
+        return [selectedProduct]; // Return the product itself as having an overlap
       }
-      return false;
-    });
+    }
+    return [];
   };
 
   const filteredProducts = searchTerm
@@ -104,8 +102,8 @@ const CustomerDiscount = () => {
       return;
     }
 
-    // Check for overlapping dates with other products
-    const overlaps = findOverlappingProducts();
+    // Check if the same product already has overlapping discount dates
+    const overlaps = findOverlappingDiscounts();
     if (overlaps.length > 0) {
       setOverlapProducts(overlaps);
       setShowOverlapWarning(true);
@@ -254,7 +252,7 @@ const CustomerDiscount = () => {
           }}>
             <h3 style={{ margin: '0 0 16px 0', color: '#d32f2f' }}>⚠️ Date Range Overlap Detected</h3>
             <p style={{ margin: '0 0 16px 0', color: '#666' }}>
-              The discount date range <b>{startDate} to {endDate}</b> overlaps with the following product(s):
+              The discount date range <b>{startDate} to {endDate}</b> overlaps with an existing discount on this product:
             </p>
             <div style={{ 
               background: '#fff3e0', 

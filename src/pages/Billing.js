@@ -274,7 +274,7 @@ export default function Billing() {
     if (cartItems.length > 0) {
       // Only use customer discount base (items without product discount, excluding returns)
       const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-        if (!item.productDiscount || item.productDiscount === 0) {
+        if (!item.activeDiscount || item.activeDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
         return sum;
@@ -550,20 +550,20 @@ export default function Billing() {
       // Update quantity
       const updated = [...cartItems];
       updated[existingIndex].quantity += quantity;
-      // Keep productDiscount if already set
+      // Keep activeDiscount if already set
       updated[existingIndex].subtotal = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
       newCartItems = updated;
       setCartItems(updated);
     } else {
-      // Use product.maxDiscount if available, else 0
-      const maxDiscount = product.maxDiscount ? Number(product.maxDiscount) : 0;
+      // Use product.activeDiscount (computed based on current date - seasonal or permanent)
+      const activeDiscount = product.activeDiscount ? Number(product.activeDiscount) : 0;
       newCartItems = [
         ...cartItems,
         {
           product,
           quantity,
           unitPrice,
-          productDiscount: maxDiscount,
+          activeDiscount: activeDiscount,  // NEW: Use activeDiscount computed on backend
           subtotal: quantity * unitPrice,
         },
       ];
@@ -573,7 +573,7 @@ export default function Billing() {
     if (selectedCustomer && !isDiscountManual) {
       // Only use items with NO product discount for customer discount base (excluding returns)
       const customerDiscountBase = newCartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-        if (!item.productDiscount || item.productDiscount === 0) {
+        if (!item.activeDiscount || item.activeDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
         return sum;
@@ -629,27 +629,27 @@ export default function Billing() {
   // Computed early: customer discount is applied net of returns, not the gross sale amount
   const returnRefundTotal = Number(returnCartItems.reduce((sum, item) => sum + Math.abs(item.subtotal), 0).toFixed(2));
 
-  // Product discounts only apply if customer discount is also applied
-  const hasCustomerDiscount = discountPercentage > 0;
-
+  // UPDATED LOGIC: Product discounts ALWAYS apply if eligible (independent of customer discount)
+  // Customer discounts apply to items WITHOUT product discount
+  
   const productLevelDiscounts = normalCartItems.map(item => {
-    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
-      return Math.min(item.unitPrice * item.quantity * (item.productDiscount / 100), item.unitPrice * item.quantity);
+    if (item.activeDiscount && item.activeDiscount > 0) {
+      return Math.min(item.unitPrice * item.quantity * (item.activeDiscount / 100), item.unitPrice * item.quantity);
     }
     return 0;
   });
   const totalProductLevelDiscount = productLevelDiscounts.reduce((sum, d) => sum + d, 0);
 
   const subtotalAfterProductDiscounts = normalCartItems.reduce((sum, item, idx) => {
-    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
+    if (item.activeDiscount && item.activeDiscount > 0) {
       return sum + (item.unitPrice * item.quantity - productLevelDiscounts[idx]);
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0);
 
-  // Customer discount base is the non-product-discounted total minus any return refunds
+  // Customer discount applies ONLY to items without product discount, minus any return refunds
   const customerDiscountBase = Math.max(0, normalCartItems.reduce((sum, item) => {
-    if (!hasCustomerDiscount || !item.productDiscount || item.productDiscount === 0) {
+    if (!item.activeDiscount || item.activeDiscount === 0) {
       return sum + (item.unitPrice * item.quantity);
     }
     return sum;
@@ -658,15 +658,15 @@ export default function Billing() {
 
   // Subtotal already has product discounts applied
   const subtotal = Number(normalCartItems.reduce((sum, item) => {
-    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
-      return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100));
+    if (item.activeDiscount && item.activeDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.activeDiscount / 100));
     }
     return sum + (item.unitPrice * item.quantity);
   }, 0).toFixed(2));
 
   const productDiscountTotal = normalCartItems.reduce((sum, item) => {
-    if (hasCustomerDiscount && item.productDiscount && item.productDiscount > 0) {
-      return sum + (item.unitPrice * item.quantity * (item.productDiscount / 100));
+    if (item.activeDiscount && item.activeDiscount > 0) {
+      return sum + (item.unitPrice * item.quantity * (item.activeDiscount / 100));
     }
     return sum;
   }, 0);
@@ -1391,7 +1391,7 @@ export default function Billing() {
         setDiscountPercentage(2);
       }
       const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-        if (!item.productDiscount || item.productDiscount === 0) {
+        if (!item.activeDiscount || item.activeDiscount === 0) {
           return sum + (item.unitPrice * item.quantity);
         }
         return sum;
@@ -1451,25 +1451,11 @@ export default function Billing() {
                             style={{ width: 50, padding: 2, fontSize: 12 }}
                           />
                         )}
-                        {/* Inline product discount — only visible when customer discount is active */}
-                        {!item.isReturn && discountPercentage > 0 && (
+                        {/* Inline product discount — always visible if product has discount */}
+                        {!item.isReturn && item.activeDiscount && item.activeDiscount > 0 && (
                           <>
                             <span style={{ fontSize: 11, color: '#999' }}>Disc:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={item.productDiscount || ''}
-                              onChange={e => {
-                                const val = e.target.value === '' ? 0 : Number(parseFloat(e.target.value).toFixed(2));
-                                const updated = [...cartItems];
-                                updated[idx].productDiscount = val;
-                                setCartItems(updated);
-                              }}
-                              style={{ width: 45, padding: 2, fontSize: 11 }}
-                            />
-                            <span style={{ fontSize: 11, color: '#999' }}>%</span>
+                            <span style={{ fontSize: 11, fontWeight: 'bold', color: '#ff9800' }}>{item.activeDiscount.toFixed(2)}%</span>
                           </>
                         )}
                         {!item.isReturn && (
@@ -1497,8 +1483,8 @@ export default function Billing() {
                         {item.isReturn ? '-' : ''}Rs. {Math.abs(
                           item.isReturn
                             ? item.subtotal
-                            : (discountPercentage > 0 && item.productDiscount && item.productDiscount > 0
-                              ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.productDiscount / 100))
+                            : (item.activeDiscount && item.activeDiscount > 0
+                              ? (item.unitPrice * item.quantity - item.unitPrice * item.quantity * (item.activeDiscount / 100))
                               : item.unitPrice * item.quantity)
                         ).toFixed(2)}
                       </div>
@@ -2123,7 +2109,7 @@ export default function Billing() {
                         setDiscountPercentage(cappedDiscount);
                         // Recalculate discount amount with capped percentage, net of any return refunds
                         const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
+                          if (!item.activeDiscount || item.activeDiscount === 0) {
                             return sum + (item.unitPrice * item.quantity);
                           }
                           return sum;
@@ -2136,7 +2122,7 @@ export default function Billing() {
                         setDiscountPercentage(originalCustomerDiscount);
                         // Recalculate discount amount with original percentage, net of any return refunds
                         const customerDiscountBase = cartItems.filter(i => !i.isReturn).reduce((sum, item) => {
-                          if (!item.productDiscount || item.productDiscount === 0) {
+                          if (!item.activeDiscount || item.activeDiscount === 0) {
                             return sum + (item.unitPrice * item.quantity);
                           }
                           return sum;
@@ -2235,7 +2221,7 @@ export default function Billing() {
                 </div>
 
                 {/* Product Discounts */}
-                {discountPercentage > 0 && productDiscountTotal > 0 && (
+                {productDiscountTotal > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span>Product Discounts:</span>
                     <span>-Rs. {productDiscountTotal.toFixed(2)}</span>
@@ -2570,12 +2556,32 @@ export default function Billing() {
                   <span>Subtotal</span>
                   <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
                 </div>
+                
+                {/* Calculate and show product discounts from items using appliedDiscount */}
+                {createdBilling.items && createdBilling.items.length > 0 && (() => {
+                  const productDisc = createdBilling.items.reduce((sum, item) => {
+                    if (item.appliedDiscount && item.appliedDiscount > 0) {
+                      const itemDiscount = (item.quantity * item.unitPrice * item.appliedDiscount) / 100;
+                      return sum + itemDiscount;
+                    }
+                    return sum;
+                  }, 0);
+                  return productDisc > 0.01 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                      <span>Product Discounts</span>
+                      <span style={{ textAlign: 'right' }}>-{productDisc.toFixed(2)}</span>
+                    </div>
+                  ) : null;
+                })()}
+                
+                {/* Show customer discount if any */}
                 {((createdBilling.discountAmount || 0) > 0) && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                    <span>Discount ({createdBilling.discountPercentage || 0}%)</span>
+                    <span>Customer Discount</span>
                     <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
+                
                 {/* Show total return refund (not individual items) */}
                 {createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0, fontSize: '8px' }}>
@@ -2583,10 +2589,11 @@ export default function Billing() {
                     <span style={{ textAlign: 'right' }}>-{(createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0)).toFixed(2)}</span>
                   </div>
                 )}
+                
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
                   <span>TOTAL</span>
                   <span style={{ textAlign: 'right' }}>
-                    {(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}
+                    {(Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -2602,7 +2609,7 @@ export default function Billing() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
                   <span style={{ textAlign: 'right' }}>
-                    {Math.abs(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}
+                    {Math.max(0, Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -2820,15 +2827,35 @@ export default function Billing() {
               <span>Subtotal</span>
               <span style={{ textAlign: 'right' }}>{createdBilling.subtotal.toFixed(2)}</span>
             </div>
+            
+            {/* Calculate and show product discounts from items using appliedDiscount */}
+            {createdBilling.items && createdBilling.items.length > 0 && (() => {
+              const productDisc = createdBilling.items.reduce((sum, item) => {
+                if (item.appliedDiscount && item.appliedDiscount > 0) {
+                  const itemDiscount = (item.quantity * item.unitPrice * item.appliedDiscount) / 100;
+                  return sum + itemDiscount;
+                }
+                return sum;
+              }, 0);
+              return productDisc > 0.01 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                  <span>Product Discounts</span>
+                  <span style={{ textAlign: 'right' }}>-{productDisc.toFixed(2)}</span>
+                </div>
+              ) : null;
+            })()}
+            
+            {/* Show customer discount if any */}
             {((createdBilling.discountAmount || 0) > 0) && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', marginBottom: 0 }}>
-                <span>Discount ({createdBilling.discountPercentage || 0}%)</span>
+                <span>Customer Discount</span>
                 <span style={{ textAlign: 'right' }}>-{(createdBilling.discountAmount || 0).toFixed(2)}</span>
               </div>
             )}
+            
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
               <span>TOTAL</span>
-              <span style={{ textAlign: 'right' }}>{(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{(Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0)).toFixed(2)}</span>
             </div>
           </div>
 
@@ -2842,7 +2869,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Balance</span>
-              <span style={{ textAlign: 'right' }}>{Math.abs(Number(createdBilling.subtotal || 0) - Number(createdBilling.discountAmount || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{Math.max(0, Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}</span>
             </div>
           </div>
 

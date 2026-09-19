@@ -830,7 +830,7 @@ export default function Billing() {
       // Always send the sum of product + customer discount unless manually overridden
       const calculatedDiscount = Number((productDiscountTotal + customerDiscountTotal).toFixed(2));
       const discountToSave = (isDiscountManual && discountAmount !== null && discountAmount !== undefined && discountAmount !== '' && parseFloat(discountAmount) >= 0)
-        ? Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotalNetOfReturns)
+        ? Number((productDiscountTotal + Math.min(Number(parseFloat(discountAmount).toFixed(2)), subtotalNetOfReturns)).toFixed(2))
         : calculatedDiscount;
       
       // Parse amount received - for non-CASH, use grandTotal automatically

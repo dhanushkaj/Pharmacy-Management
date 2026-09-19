@@ -203,29 +203,49 @@ export default function Billing() {
       setSelectedProductIndex(-1);
       return;
     }
+    
+    // Check if search is a price (contains decimal point like 100.00)
+    const isPriceSearch = /^\d+\.?\d*$/.test(searchName);
+    if (isPriceSearch && searchName.includes('.')) {
+      // Search by exact price
+      const searchPrice = parseFloat(searchName);
+      const filtered = allProducts.filter(p => p.lastPrice === searchPrice);
+      setFilteredProducts(filtered);
+      setSelectedProductIndex(-1);
+      return;
+    }
+    
     // Escape regex special characters in searchName
     const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const safeSearchName = escapeRegex(searchName);
-    // 1. Exact match (full string)
-    let filtered = allProducts.filter(p => p.name?.toLowerCase() === safeSearchName);
-    // 2. Word boundary match (e.g., 'ATORVA' matches 'ATORVA 10MG', 'ATORVA TAB')
+    // 1. Exact match (full string) - search NAME and GENERIC NAME
+    let filtered = allProducts.filter(p => 
+      p.name?.toLowerCase() === safeSearchName || 
+      p.genericName?.toLowerCase() === safeSearchName
+    );
+    // 2. Word boundary match (e.g., 'ATORVA' matches 'ATORVA 10MG', 'ATORVA TAB') - search NAME and GENERIC NAME
     if (filtered.length === 0) {
       const wordBoundary = new RegExp(`\\b${safeSearchName}\\b`, 'i');
-      filtered = allProducts.filter(p => wordBoundary.test(p.name));
+      filtered = allProducts.filter(p => 
+        wordBoundary.test(p.name) || 
+        wordBoundary.test(p.genericName)
+      );
     }
-    // 3. Prefix match
+    // 3. Prefix match - search NAME and GENERIC NAME
     if (filtered.length === 0) {
-      filtered = allProducts.filter(p => p.name?.toLowerCase().startsWith(safeSearchName));
+      filtered = allProducts.filter(p => 
+        p.name?.toLowerCase().startsWith(safeSearchName) ||
+        p.genericName?.toLowerCase().startsWith(safeSearchName)
+      );
     }
-    // 4. Fallback: includes in name, generic, category, code, or price
+    // 4. Fallback: includes in name, generic, category, or code
     if (filtered.length === 0) {
       filtered = allProducts.filter(
         (p) =>
           p.name?.toLowerCase().includes(safeSearchName) ||
           p.genericName?.toLowerCase().includes(safeSearchName) ||
           p.category?.name?.toLowerCase().includes(safeSearchName) ||
-          p.productCode?.toLowerCase().includes(safeSearchName) ||
-          p.lastPrice?.toString().includes(safeSearchName)
+          p.productCode?.toLowerCase().includes(safeSearchName)
       );
     }
     setFilteredProducts(filtered);
@@ -1650,6 +1670,11 @@ export default function Billing() {
                           <div style={{ fontSize: 14, fontWeight: 'bold', color: '#1976d2' }}>
                             {p.name || 'N/A'}
                           </div>
+                          {p.genericName && (
+                            <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
+                              Generic: {p.genericName}
+                            </div>
+                          )}
                           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                             {p.category?.name || 'N/A'}
                           </div>

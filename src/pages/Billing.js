@@ -1509,19 +1509,18 @@ export default function Billing() {
                         ).toFixed(2)}
                       </div>
                       <button
-                        onClick={() => {
-                          if (item.quantity > 1) {
-                            updateCartItemQuantity(idx, item.quantity - 1);
-                          } else if (item.quantity === 1) {
-                            updateCartItemQuantity(idx, 0);
-                          } else {
-                            removeCartItem(idx);
-                          }
-                        }}
-                        title={item.quantity > 1 ? 'Decrease quantity' : item.quantity === 1 ? 'Press again to delete' : 'Delete item'}
-                        style={{ padding: '3px 8px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 11 }}
+                        onClick={() => updateCartItemQuantity(idx, item.quantity - 1)}
+                        title="Decrease quantity by 1"
+                        style={{ padding: '3px 8px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
                       >
                         −
+                      </button>
+                      <button
+                        onClick={() => removeCartItem(idx)}
+                        title="Remove item from cart"
+                        style={{ padding: '3px 6px', background: '#f44336', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}
+                      >
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -2634,7 +2633,7 @@ export default function Billing() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
                   <span style={{ textAlign: 'right' }}>
-                    {Math.max(0, Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}
+                    {Math.abs(Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -2894,7 +2893,7 @@ export default function Billing() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
               <span>Balance</span>
-              <span style={{ textAlign: 'right' }}>{Math.max(0, Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}</span>
+              <span style={{ textAlign: 'right' }}>{Math.abs(Number(createdBilling.grandTotal || 0) - (createdBilling.returnCartItems && createdBilling.returnCartItems.length > 0 ? createdBilling.returnCartItems.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0) : 0) - Number(createdBilling.amountReceived || 0)).toFixed(2)}</span>
             </div>
           </div>
 

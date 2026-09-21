@@ -1,4 +1,170 @@
-// Helper: Inventory Return modal (for customer/supplier returns)
+// Helper: Supplier Return modal (new multi-item format)
+function SupplierReturnDetailsModal({ ret, onClose }) {
+  if (!ret) return null;
+  
+  const handlePrintReturn = () => {
+    if (!ret) return;
+
+    const printWindow = window.open('', '', 'height=600,width=400');
+    
+    // Thermal printer format (80mm width)
+    const itemsHTML = ret.returnItems
+      .map(
+        (item) => `
+        <div style="font-family: monospace; font-size: 11px; line-height: 1.4;">
+          <div>${item.productName}</div>
+          <div>Code: ${item.productCode} | Qty: ${item.quantity}</div>
+          <div>@Rs. ${parseFloat(item.unitPrice).toFixed(2)} = Rs. ${parseFloat(item.itemTotal).toFixed(2)}</div>
+          ${item.batchNo ? `<div>Batch: ${item.batchNo}</div>` : ''}
+          <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+        </div>
+      `
+      )
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Supplier Return #${ret.returnNumber}</title>
+        <style>
+          body { 
+            font-family: monospace; 
+            margin: 0; 
+            padding: 10px; 
+            width: 80mm;
+            font-size: 11px;
+          }
+          .receipt { width: 100%; }
+          .header { text-align: center; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+          .header h2 { margin: 0; font-size: 12px; }
+          .details { margin: 5px 0; font-size: 10px; }
+          .item-line { display: flex; justify-content: space-between; font-size: 10px; margin: 3px 0; }
+          .separator { border-top: 1px dashed #000; margin: 5px 0; }
+          .total-line { font-weight: bold; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 3px 0; margin: 5px 0; text-align: right; }
+          .footer { text-align: center; font-size: 9px; margin-top: 10px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <h2>SUPPLIER RETURN</h2>
+            <div>Ref: ${ret.returnNumber}</div>
+          </div>
+
+          <div class="details">
+            <div>Date: ${new Date(ret.returnDate).toLocaleDateString()}</div>
+            <div>Time: ${new Date(ret.returnDate).toLocaleTimeString()}</div>
+            <div>Supplier: ${ret.supplierName}</div>
+          </div>
+
+          <div class="separator"></div>
+
+          <div style="font-size: 10px; margin: 5px 0;">
+            ${itemsHTML}
+          </div>
+
+          <div class="separator"></div>
+
+          <div class="total-line">
+            TOTAL: Rs. ${parseFloat(ret.totalReturnAmount).toFixed(2)}
+          </div>
+
+          ${ret.notes ? `<div style="font-size: 9px; margin: 5px 0; border: 1px solid #ccc; padding: 3px;">Note: ${ret.notes}</div>` : ''}
+
+          <div class="footer">
+            <div>Printed: ${new Date().toLocaleString()}</div>
+            <div style="margin-top: 10px;">Thank You</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    // Auto-trigger print after content loads
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+  
+  const table = { width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 8 };
+  const th = { padding: 8, border: '1px solid #ddd', background: '#f8f9fa', fontWeight: 'bold', textAlign: 'left' };
+  const td = { padding: 8, border: '1px solid #ddd' };
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 700, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', minWidth: 350 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: 16, borderBottom: '1px solid #eee' }}>
+          <h3 style={{ margin: 0 }}>Supplier Return Details</h3>
+          <button onClick={onClose} style={{ background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer', marginLeft: 8 }}>✕</button>
+        </div>
+        <div style={{ padding: '0 16px 16px 16px' }}>
+          <div style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><strong>Return Number:</strong> {ret.returnNumber || '-'}</div>
+            <div><strong>Date:</strong> {ret.returnDate ? new Date(ret.returnDate).toLocaleString() : '-'}</div>
+            <div><strong>Supplier:</strong> {ret.supplierName || '-'}</div>
+            <div><strong>Total Amount:</strong> <span style={{ color: '#1976d2', fontWeight: 'bold' }}>Rs. {ret.totalReturnAmount?.toFixed(2)}</span></div>
+          </div>
+          
+          <h4 style={{ marginTop: 16, marginBottom: 8 }}>Return Items</h4>
+          {Array.isArray(ret.returnItems) && ret.returnItems.length > 0 ? (
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Product</th>
+                  <th style={th}>Qty</th>
+                  <th style={th}>Unit Price</th>
+                  <th style={th}>Total</th>
+                  <th style={th}>Batch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ret.returnItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td style={td}>{item.productName} <div style={{ fontSize: 10, color: '#666' }}>({item.productCode})</div></td>
+                    <td style={td}>{item.quantity}</td>
+                    <td style={td}>Rs. {item.unitPrice?.toFixed(2)}</td>
+                    <td style={td}>Rs. {item.itemTotal?.toFixed(2)}</td>
+                    <td style={td}>{item.batchNo || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ color: '#888', fontSize: 12 }}>No items found for this return.</div>
+          )}
+          
+          {ret.notes && (
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+              <strong>Notes:</strong> {ret.notes}
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button
+              onClick={handlePrintReturn}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              🖨️ Print
+            </button>
+            <button onClick={onClose} style={{ background: '#eee', color: '#333', border: 'none', borderRadius: 4, padding: '10px 20px', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper: Inventory Return modal (for legacy customer/supplier returns)
 function InventoryReturnDetailsModal({ ret, onClose }) {
   if (!ret) return null;
   return (
@@ -522,6 +688,7 @@ const ProductBin = () => {
                           if (t.referenceType === 'BILL' || t.referenceType === 'BILLING') docLabel = `Bill #${t.referenceId}`;
                           else if (t.referenceType === 'GRN') docLabel = `GRN #${t.referenceId}`;
                           else if (t.referenceType === 'INVENTORY_RETURN') docLabel = `Return #${t.referenceId}`;
+                          else if (t.referenceType === 'SUPPLIER_RETURN') docLabel = `Supplier Return #${t.referenceId}`;
                           else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
                           else if (t.referenceType === 'PRODUCT_UPDATE' || t.referenceType === 'MANUAL_INVENTORY') docLabel = 'Manual Inventory Change';
                           else if (t.referenceType === 'QUICK_PRICE_ADD') docLabel = `Quick Price Add - Rs. ${t.price || '-'}`;
@@ -581,7 +748,22 @@ const ProductBin = () => {
                                           relatedMovements = await api(`/api/grns/${grn.id}/movements`, { token });
                                         }
                                       } else if (t.referenceType === 'INVENTORY_RETURN') {
-                                        doc = await api(`/api/inventory-returns/${t.referenceId}`, { token });
+                                        try {
+                                          // Try new supplier returns endpoint first
+                                          doc = await api(`/api/supplier-returns/${t.referenceId}`, { token });
+                                        } catch (e) {
+                                          // Fallback to legacy inventory returns endpoint
+                                          try {
+                                            doc = await api(`/api/inventory-returns/${t.referenceId}`, { token });
+                                          } catch {}
+                                        }
+                                      } else if (t.referenceType === 'SUPPLIER_RETURN') {
+                                        try {
+                                          const returnId = parseInt(t.referenceId, 10); // Convert string ID to numeric
+                                          doc = await api(`/api/supplier-returns/${returnId}`, { token });
+                                        } catch (e) {
+                                          console.error('Failed to fetch supplier return:', e);
+                                        }
                                       } else if (t.referenceType === 'BILLING_DELETE') {
                                         let bill = null;
                                         try {
@@ -636,7 +818,11 @@ const ProductBin = () => {
           <BillDetailsModal bill={viewDoc.doc} onClose={() => setViewDoc(null)} storeSettings={{ storeName: 'PHARMACY' }} />
         ) : viewDoc.doc && (viewDoc.doc.grnCode || viewDoc.doc.purchaseOrderCode) ? (
           <GrnDetailsModal grn={viewDoc.doc} onClose={() => setViewDoc(null)} />
+        ) : viewDoc.doc && (viewDoc.doc.returnNumber && viewDoc.doc.returnItems) ? (
+          // New supplier return format (multi-item)
+          <SupplierReturnDetailsModal ret={viewDoc.doc} onClose={() => setViewDoc(null)} />
         ) : viewDoc.doc && (viewDoc.doc.returnId && (viewDoc.doc.returnType === 'FROM_CUSTOMER' || viewDoc.doc.returnType === 'TO_SUPPLIER')) ? (
+          // Legacy inventory return format (single-item)
           <InventoryReturnDetailsModal ret={viewDoc.doc} onClose={() => setViewDoc(null)} />
         ) : viewDoc.doc && viewDoc.doc.type === 'PRODUCT_UPDATE' ? (
           <ManualInventoryChangeModal movement={viewDoc.doc} onClose={() => setViewDoc(null)} />

@@ -353,7 +353,7 @@ export default function BillingHistory() {
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'right', color: billing.balanceAmount >= 0 ? '#2e7d32' : '#c62828' }}>
                     {billing.amountReceived > 0 ? (
-                      <span>{Math.max(0, Number(billing.grandTotal || 0) - Number(billing.amountReceived || 0)).toFixed(2)}</span>
+                      <span>{Math.abs(Number(billing.grandTotal || 0) - Number(billing.amountReceived || 0)).toFixed(2)}</span>
                     ) : '-'}
                   </td>
                   <td style={{ padding: 10, border: '1px solid #ddd', textAlign: 'center' }}>{billing.paymentMethod}</td>
@@ -696,7 +696,7 @@ export default function BillingHistory() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
                   <span>Balance</span>
                   <span style={{ textAlign: 'right' }}>
-                    {Math.max(0, Number(selectedBilling.grandTotal || 0) - Number(selectedBilling.amountReceived || 0)).toFixed(2)}
+                    {Math.abs(Number(selectedBilling.grandTotal || 0) - Number(selectedBilling.amountReceived || 0)).toFixed(2)}
                   </span>
                 </div>
               </div>

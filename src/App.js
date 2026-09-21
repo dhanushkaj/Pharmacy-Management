@@ -31,7 +31,7 @@ import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
-import InventoryReturn from './pages/InventoryReturn';
+import InventoryReturnsHome from './pages/InventoryReturnsHome';
 import InventoryCount from './pages/InventoryCountManagement/PhysicalCount';
 import InventoryCountApproval from './pages/InventoryCountManagement/ApprovalCenter';
 import InventoryCountHistory from './pages/InventoryCountManagement/HistoryViewer';
@@ -86,7 +86,7 @@ const AppContent = () => {
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
             <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
-            <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
+            <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturnsHome /></PrivateRoute>} />
             <Route path="/inventory-count" element={<PrivateRoute><InventoryCount /></PrivateRoute>} />
             <Route path="/inventory-count-approval" element={<PrivateRoute><InventoryCountApproval /></PrivateRoute>} />
             <Route path="/inventory-count-history" element={<PrivateRoute><InventoryCountHistory /></PrivateRoute>} />

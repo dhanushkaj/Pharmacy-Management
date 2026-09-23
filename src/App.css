@@ -206,6 +206,7 @@ html, body {
   /* Restore ONLY the thermal print divs (both main Billing and BillingHistory) */
   #billing-thermal-print,
   #thermal-bill,
+  #credit-report-bill-print,
   #dayend-report-print,
   #float-slip-print,
   #supplier-payment-print-0,
@@ -246,9 +247,10 @@ html, body {
     padding: 2mm 2mm 6mm 2mm !important;
   }
 
-  /* Restore all children */
+  /* Restore all children - preserve visibility and colors */
   #billing-thermal-print *,
   #thermal-bill *,
+  #credit-report-bill-print *,
   #dayend-report-print *,
   #float-slip-print *,
   #supplier-payment-print-0 *,
@@ -262,14 +264,13 @@ html, body {
   #supplier-payment-print-8 *,
   #supplier-payment-print-9 * {
     visibility: visible !important;
-    display: block !important;
     color: #000 !important;
-    background: transparent !important;
   }
 
   /* Explicitly restore flex containers */
   #billing-thermal-print div[style*="flex"],
   #thermal-bill div[style*="flex"],
+  #credit-report-bill-print div[style*="flex"],
   #dayend-report-print div[style*="flex"],
   #float-slip-print div[style*="flex"],
   #supplier-payment-print-0 div[style*="flex"],
@@ -288,6 +289,7 @@ html, body {
   /* Explicitly restore grid containers */
   #billing-thermal-print div[style*="grid"],
   #thermal-bill div[style*="grid"],
+  #credit-report-bill-print div[style*="grid"],
   #dayend-report-print div[style*="grid"],
   #float-slip-print div[style*="grid"],
   #supplier-payment-print-0 div[style*="grid"],
@@ -306,6 +308,7 @@ html, body {
   /* Images */
   #billing-thermal-print img,
   #thermal-bill img,
+  #credit-report-bill-print img,
   #dayend-report-print img,
   #float-slip-print img,
   #supplier-payment-print-0 img,
@@ -326,6 +329,7 @@ html, body {
   /* Spans stay inline */
   #billing-thermal-print span,
   #thermal-bill span,
+  #credit-report-bill-print span,
   #dayend-report-print span,
   #float-slip-print span,
   #supplier-payment-print-0 span,
@@ -339,6 +343,25 @@ html, body {
   #supplier-payment-print-8 span,
   #supplier-payment-print-9 span {
     display: inline !important;
+  }
+
+  /* Regular divs display as block (but flex/grid rules override this) */
+  #billing-thermal-print div,
+  #thermal-bill div,
+  #credit-report-bill-print div,
+  #dayend-report-print div,
+  #float-slip-print div,
+  #supplier-payment-print-0 div,
+  #supplier-payment-print-1 div,
+  #supplier-payment-print-2 div,
+  #supplier-payment-print-3 div,
+  #supplier-payment-print-4 div,
+  #supplier-payment-print-5 div,
+  #supplier-payment-print-6 div,
+  #supplier-payment-print-7 div,
+  #supplier-payment-print-8 div,
+  #supplier-payment-print-9 div {
+    display: block !important;
   }
 
   /* Filter day-end report vs float slip based on body class */
@@ -493,8 +516,17 @@ html, body {
     display: none !important;
   }
 
-  @page {
-    size: 76mm auto;
-    margin: 0mm;
+  /* Credit Report Bill Print - Isolated to ONLY affect credit report printing */
+  body.print-credit-report-bill-mode {
+    visibility: hidden !important;
   }
+
+  body.print-credit-report-bill-mode #credit-report-bill-print {
+    visibility: visible !important;
+  }
+}
+
+@page {
+  size: 72mm auto;
+  margin: 0mm;
 }

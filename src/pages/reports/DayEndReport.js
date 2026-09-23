@@ -17,14 +17,15 @@ const DayEndReport = () => {
         <ul style={{ marginTop: 8, marginBottom: 0 }}>
           <li><b>Total Sale:</b> All sales for the day (cash, card, online, cheque) + Credit Paid Today. New credit sales are excluded until paid. Auto-filled from billing.</li>
           <li><b>Cash Sales:</b> Only sales paid by cash. Auto-filled from billing.</li>
+          <li><b>Credit Paid Today:</b> Amount of previously credited sales that were paid today. Now included in SYSTEM SALES SUMMARY as part of system sales recognition.</li>
           <li><b>System Cash Expected:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <i>Total Sales (System) + Manual Bill Entries - Returns/Refunds - Supplier Payments (Cash)</i>
+              <i>Total Sales (System) + Credit Paid Today + Manual Bill Entries - Returns/Refunds - Supplier Payments (Cash)</i>
             </span>
           </li>
           <li><b>Manual Cash Expected:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <i>Physical Cash Counted (remainder denomination breakdown, excludes Next Day Float) + Card Payments (cashier-entered, from the card machine)</i>
+              <i>Manual Bill Entry + Physical Cash Counted (remainder denomination breakdown, excludes Next Day Float) + Card Payments (cashier-entered, from the card machine)</i>
             </span>
           </li>
           <li><b>Physical Cash Counted:</b> Actual cash you count, based on denominations entered.</li>
@@ -444,6 +445,7 @@ const DayEndReport = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{(submittedData?.chequeSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{(submittedData?.returns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{((submittedData?.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{(parseFloat(submittedData?.creditCustomerTotal) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Supplier Payments (Paid):</span><b>-{(Array.isArray(submittedData?.supplierPayments) ? submittedData?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               </div>
 
@@ -460,15 +462,15 @@ const DayEndReport = () => {
                       .filter(sp => sp.mode === 'CASH')
                       .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
                   }
-                  // Displayed System Cash Expected excludes Manual Bill Entry (shown as its own line below)
-                  const systemCashExpectedDisplay = totalSalesNum - returnsNum - supplierPaymentsCashNum;
-                  // System Cash Expected: purely system-derived (Total Sales already covers cash+card+online+cheque+old-manual+credit paid)
-                  const systemCashExpected = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
+                  // Displayed System Cash Expected includes Credit Paid Today (now part of system sales)
+                  const systemCashExpectedDisplay = totalSalesNum + creditPaidTodayNum - returnsNum - supplierPaymentsCashNum;
+                  // System Cash Expected: system-derived sales + manual bill entries + credit paid - returns - supplier cash payments
+                  const systemCashExpected = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
                   // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
                   const physicalCashNum = Number(submittedData?.physicalCashCounted || 0);
                   const cardPaymentsNum = parseFloat(submittedData?.cardPayments) || 0;
-                  // Manual Cash Expected: Manual Bill Entry + Credit Paid Today + Card Payments (Cashier) + Physical Cash Counted
-                  const manualCashExpected = manualBillEntriesNum + creditPaidTodayNum + cardPaymentsNum + physicalCashNum;
+                  // Manual Cash Expected: Manual Bill Entry + Card Payments (Cashier) + Physical Cash Counted (Credit Paid Today now in system sales)
+                  const manualCashExpected = manualBillEntriesNum + cardPaymentsNum + physicalCashNum;
                   const difference = manualCashExpected - systemCashExpected;
                   
                   return (
@@ -478,15 +480,11 @@ const DayEndReport = () => {
                         <b>{systemCashExpectedDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                       </div>
                       <div style={{ fontSize: 8, color: '#555' }}>
-                        (Total Sales - Returns/Refunds - Supplier Payments (Cash); excludes Manual Bill Entry)
+                        (Total Sales + Credit Paid Today + Manual Bill Entry - Returns/Refunds - Supplier Payments (Cash))
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                         <span>Manual Bill Entry:</span>
                         <b>{manualBillEntriesNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Credit Paid Today:</span>
-                        <b>{creditPaidTodayNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Physical Cash Counted:</span>

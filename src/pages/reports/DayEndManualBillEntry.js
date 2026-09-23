@@ -7,6 +7,7 @@ const DayEndManualBillEntry = ({ reportDate, user, onChange }) => {
   const [manualBills, setManualBills] = useState([]);
   const [newBill, setNewBill] = useState({ billNumber: '', amount: '' });
   const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState('');
   const { token } = useContext(AuthContext);
 
   useEffect(() => {
@@ -20,22 +21,51 @@ const DayEndManualBillEntry = ({ reportDate, user, onChange }) => {
   };
 
   const handleAdd = async () => {
-    if (!newBill.billNumber || !newBill.amount) return;
+    setError('');
+    if (!newBill.billNumber || !newBill.amount) {
+      setError('Bill Number and Amount are required');
+      return;
+    }
+    
+    // Check if bill number already exists
+    const isDuplicate = manualBills.some(bill => bill.billNumber === newBill.billNumber);
+    if (isDuplicate) {
+      setError(`❌ Bill Number "${newBill.billNumber}" already exists! Please use a unique bill number.`);
+      return;
+    }
+    
     await api('/api/day-end-manual-bills', {
       method: 'POST',
       body: { ...newBill, reportDate, createdBy: user },
       token
     });
     setNewBill({ billNumber: '', amount: '' });
+    setError('');
     fetchBills();
   };
 
   const handleEdit = (bill) => {
     setEditingId(bill.id);
     setNewBill({ billNumber: bill.billNumber, amount: bill.amount });
+    setError('');
   };
 
   const handleUpdate = async () => {
+    setError('');
+    if (!newBill.billNumber || !newBill.amount) {
+      setError('Bill Number and Amount are required');
+      return;
+    }
+    
+    // Check if bill number already exists (excluding the current bill being edited)
+    const isDuplicate = manualBills.some(bill => 
+      bill.billNumber === newBill.billNumber && bill.id !== editingId
+    );
+    if (isDuplicate) {
+      setError(`❌ Bill Number "${newBill.billNumber}" already exists! Please use a unique bill number.`);
+      return;
+    }
+    
     await api(`/api/day-end-manual-bills/${editingId}`, {
       method: 'PUT',
       body: { ...newBill, reportDate, createdBy: user },
@@ -43,6 +73,7 @@ const DayEndManualBillEntry = ({ reportDate, user, onChange }) => {
     });
     setEditingId(null);
     setNewBill({ billNumber: '', amount: '' });
+    setError('');
     fetchBills();
   };
 
@@ -54,6 +85,20 @@ const DayEndManualBillEntry = ({ reportDate, user, onChange }) => {
   return (
     <div style={{ marginTop: 24 }}>
        <h3>Manual Bill Entry</h3>
+      {error && (
+        <div style={{ 
+          padding: 12, 
+          marginBottom: 12, 
+          background: '#ffebee', 
+          border: '2px solid #e53935', 
+          borderRadius: 4, 
+          color: '#c62828',
+          fontWeight: 'bold',
+          fontSize: 13
+        }}>
+          {error}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
         <input
           type="text"

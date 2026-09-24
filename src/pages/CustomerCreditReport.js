@@ -60,7 +60,25 @@ const CustomerCreditReport = () => {
   const handleMarkPaid = async (billingNumber) => {
     if (!window.confirm('Mark this bill as paid?')) return;
     try {
+      // Mark as paid in database
       await api(`/api/billings/${billingNumber}/mark-paid`, { method: 'PUT', token });
+      
+      // Ask to print
+      const shouldPrint = window.confirm('Bill marked as PAID! Do you want to print the paid bill?');
+      if (shouldPrint) {
+        // Fetch and load bill data (don't show modal)
+        const bill = await api(`/api/billings/by-number/${billingNumber}`, { token });
+        // Explicitly set paid to true for the print display
+        bill.paid = true;
+        setSelectedBill(bill);
+        // showBillModal stays false - only thermal div renders
+        // Wait for React to render, then print
+        setTimeout(() => {
+          handlePrintBill();
+        }, 200);
+      }
+      
+      // Remove from results
       setResults(results.filter(b => b.billingNumber !== billingNumber));
     } catch (e) {
       alert('Failed to mark as paid');
@@ -77,14 +95,7 @@ const CustomerCreditReport = () => {
     }
   };
 
-  const handlePrintBill = (bill) => {
-    if (!bill) return;
-    // Add body class for print mode
-    document.body.classList.add('print-credit-report-bill-mode');
-    window.onafterprint = () => {
-      document.body.classList.remove('print-credit-report-bill-mode');
-      window.onafterprint = null;
-    };
+  const handlePrintBill = () => {
     window.print();
   };
 
@@ -164,124 +175,130 @@ const CustomerCreditReport = () => {
           </tbody>
         </table>
       )}
+
+      {/* Thermal Print Format - Always renders when selectedBill exists for printing */}
+      {selectedBill && (
+        <div id="credit-report-bill-print" style={{ width: '100%', maxWidth: 260, margin: '0 auto', padding: '12px 4px', fontFamily: 'monospace', fontSize: '10px', lineHeight: 1.3, background: '#fff', display: 'none' }}>
+          {/* Store Name Header - Logo placeholder, Name Right */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
+            {/* Logo */}
+            {storeSettings?.logo && (
+              <img
+                src={storeSettings.logo}
+                alt="Logo"
+                style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
+              />
+            )}
+            {!storeSettings?.logo && (
+              <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
+            )}
+            {/* Store Name - Center aligned */}
+            <div style={{ textAlign: 'center', minWidth: 0 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
+                {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+            {storeSettings?.address || 'Store Address'}
+          </div>
+          {storeSettings?.phone && storeSettings.phone !== 'N/A' && (
+            <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 1, lineHeight: 1.1, fontWeight: '700' }}>
+              Ph: {storeSettings.phone}
+            </div>
+          )}
+
+          <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
+
+          {/* Bill Details */}
+          <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Bill No:</span>
+              <span>{selectedBill?.billingNumber || 'N/A'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Date:</span>
+              <span>{selectedBill?.billingDate ? new Date(selectedBill.billingDate).toLocaleDateString() : 'N/A'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
+              <span>Customer:</span>
+              <span>{selectedBill?.customerName || 'N/A'}</span>
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#000', marginTop: 1 }}>
+              {selectedBill?.paid ? '** PAID **' : '** CREDIT **'}
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Items List */}
+          <div style={{ marginBottom: 0 }}>
+            {selectedBill?.items && selectedBill.items.map((item, idx) => (
+              <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
+                <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
+                  {item.productName?.substring(0, 22) || 'Item'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
+                  <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
+                  <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice?.toFixed(2) || '0.00'}</span>
+                  <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{(item.quantity * item.unitPrice)?.toFixed(2) || '0.00'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Totals */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Subtotal</span>
+              <span style={{ textAlign: 'right' }}>{selectedBill?.subtotal?.toFixed(2) || '0.00'}</span>
+            </div>
+            
+            {selectedBill?.discountAmount && selectedBill.discountAmount > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+                <span>Discount</span>
+                <span style={{ textAlign: 'right' }}>-{selectedBill.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
+              <span>TOTAL</span>
+              <span style={{ textAlign: 'right' }}>{selectedBill?.grandTotal?.toFixed(2) || '0.00'}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Payment Summary - For Credit Bills */}
+          <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Status</span>
+              <span style={{ textAlign: 'right' }}>{selectedBill?.paid ? 'PAID' : 'UNPAID'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
+              <span>Payment</span>
+              <span style={{ textAlign: 'right' }}>{selectedBill?.paymentMethod || 'CREDIT'}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
+
+          {/* Footer */}
+          <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
+            <div>Items Sold: {selectedBill?.items?.length || 0}</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
+            <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Bill Modal - Only shows when viewing/printing from Credit Bill link */}
       {showBillModal && selectedBill && (
         <>
           {selectedBill.items ? (
             <>
-              {/* Thermal Print Format - Exact BillingHistory replica */}
-              <div id="credit-report-bill-print" style={{ width: '100%', maxWidth: 260, margin: '0 auto', padding: '12px 4px', fontFamily: 'monospace', fontSize: '10px', lineHeight: 1.3, background: '#fff', display: 'none' }}>
-                {/* Store Name Header - Logo placeholder, Name Right */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3px', marginBottom: 1, paddingLeft: '2px', paddingRight: '2px' }}>
-                  {/* Logo */}
-                  {storeSettings?.logo && (
-                    <img
-                      src={storeSettings.logo}
-                      alt="Logo"
-                      style={{ width: '65px', height: '65px', objectFit: 'contain', flexShrink: 0 }}
-                    />
-                  )}
-                  {!storeSettings?.logo && (
-                    <div style={{ width: '65px', height: '65px', backgroundColor: '#000', flexShrink: 0, borderRadius: '1px' }}></div>
-                  )}
-                  {/* Store Name - Center aligned */}
-                  <div style={{ textAlign: 'center', minWidth: 0 }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: 1.0, marginBottom: 0, wordWrap: 'break-word' }}>
-                      {(storeSettings?.storeName || 'PHARMACY').split(' ').slice(1).join(' ') || 'PHARMACY'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'center', fontSize: '9px', marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
-                  {storeSettings?.address || 'Store Address'}
-                </div>
-                {storeSettings?.phone && storeSettings.phone !== 'N/A' && (
-                  <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: 1, lineHeight: 1.1, fontWeight: '700' }}>
-                    Ph: {storeSettings.phone}
-                  </div>
-                )}
-
-                <div style={{ borderTop: '2px solid #000', margin: '2px 0' }}></div>
-
-                {/* Bill Details */}
-                <div style={{ fontSize: '9px', marginBottom: 1, lineHeight: 1.2, fontWeight: '600' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
-                    <span>Bill No:</span>
-                    <span>{selectedBill?.billingNumber || 'N/A'}</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
-                    <span>Date:</span>
-                    <span>{selectedBill?.billingDate ? new Date(selectedBill.billingDate).toLocaleDateString() : 'N/A'}</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '2px' }}>
-                    <span>Customer:</span>
-                    <span>{selectedBill?.customerName || 'N/A'}</span>
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#000', marginTop: 1 }}>** CREDIT **</div>
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
-
-                {/* Items List */}
-                <div style={{ marginBottom: 0 }}>
-                  {selectedBill?.items && selectedBill.items.map((item, idx) => (
-                    <div key={idx} style={{ marginBottom: 1, paddingBottom: 1 }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '10px', wordBreak: 'break-word', marginBottom: 1, letterSpacing: '0.5px' }}>
-                        {item.productName?.substring(0, 22) || 'Item'}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '30px 50px 1fr', gap: '0px', fontSize: '9px', fontWeight: '700', alignItems: 'center' }}>
-                        <span style={{ whiteSpace: 'nowrap' }}>Q:{item.quantity}</span>
-                        <span style={{ whiteSpace: 'nowrap', paddingLeft: '2px' }}>P:{item.unitPrice?.toFixed(2) || '0.00'}</span>
-                        <span style={{ textAlign: 'right', fontWeight: '900', whiteSpace: 'nowrap', paddingLeft: '2px' }}>{(item.quantity * item.unitPrice)?.toFixed(2) || '0.00'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
-
-                {/* Totals */}
-                <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
-                    <span>Subtotal</span>
-                    <span style={{ textAlign: 'right' }}>{selectedBill?.subtotal?.toFixed(2) || '0.00'}</span>
-                  </div>
-                  
-                  {selectedBill?.discountAmount && selectedBill.discountAmount > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
-                      <span>Discount</span>
-                      <span style={{ textAlign: 'right' }}>-{selectedBill.discountAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: 1, marginTop: 1 }}>
-                    <span>TOTAL</span>
-                    <span style={{ textAlign: 'right' }}>{selectedBill?.grandTotal?.toFixed(2) || '0.00'}</span>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
-
-                {/* Payment Summary - For Credit Bills */}
-                <div style={{ fontSize: '9px', fontWeight: 'bold', lineHeight: 1.2, marginBottom: 1 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
-                    <span>Status</span>
-                    <span style={{ textAlign: 'right' }}>UNPAID</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '2px' }}>
-                    <span>Payment</span>
-                    <span style={{ textAlign: 'right' }}>{selectedBill?.paymentMethod || 'CREDIT'}</span>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '1px 0' }}></div>
-
-                {/* Footer */}
-                <div style={{ textAlign: 'left', fontSize: '8px', marginTop: 0, marginBottom: 0, lineHeight: 1.1, fontWeight: '600' }}>
-                  <div>Items Sold: {selectedBill?.items?.length || 0}</div>
-                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginTop: 0 }}>Thank You Come Again!</div>
-                  <div style={{ textAlign: 'center', fontSize: '12px', marginTop: 0, fontWeight: 'bold' }}>Need Advice? Contact Us: {storeSettings?.phone || 'N/A'}</div>
-                </div>
-              </div>
-
               {/* Modal Overlay with Print Button in Header */}
               <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }} onClick={() => setShowBillModal(false)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 600, width: '90vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
@@ -290,7 +307,7 @@ const CustomerCreditReport = () => {
                     <span style={{ fontWeight: 'bold', fontSize: 13 }}>Bill #: {selectedBill?.billingNumber}</span>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
-                        onClick={() => handlePrintBill(selectedBill)}
+                        onClick={handlePrintBill}
                         title="Print in thermal format"
                         style={{
                           padding: '8px 14px',
@@ -369,8 +386,8 @@ const CustomerCreditReport = () => {
                           <strong>Customer:</strong>
                           <span>{selectedBill?.customerName || 'N/A'}</span>
                         </div>
-                        <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 'bold', marginTop: 8 }}>
-                          ** CREDIT **
+                        <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 'bold', marginTop: 8, color: selectedBill?.paid ? '#4caf50' : '#f44336' }}>
+                          {selectedBill?.paid ? '** PAID **' : '** CREDIT **'}
                         </div>
                       </div>
 
@@ -417,7 +434,9 @@ const CustomerCreditReport = () => {
                       <div style={{ marginBottom: 12, fontSize: 11 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                           <strong>Status:</strong>
-                          <span style={{ color: '#f44336', fontWeight: 'bold' }}>UNPAID</span>
+                          <span style={{ color: selectedBill?.paid ? '#4caf50' : '#f44336', fontWeight: 'bold' }}>
+                            {selectedBill?.paid ? 'PAID' : 'UNPAID'}
+                          </span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <strong>Payment:</strong>

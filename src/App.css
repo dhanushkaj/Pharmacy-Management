@@ -516,14 +516,6 @@ html, body {
     display: none !important;
   }
 
-  /* Credit Report Bill Print - Isolated to ONLY affect credit report printing */
-  body.print-credit-report-bill-mode {
-    visibility: hidden !important;
-  }
-
-  body.print-credit-report-bill-mode #credit-report-bill-print {
-    visibility: visible !important;
-  }
 }
 
 @page {

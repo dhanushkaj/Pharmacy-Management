@@ -392,6 +392,7 @@ export default function DayEndReportHistory() {
             lineHeight: 1.4,
             background: '#fff',
             color: '#000',
+            display: 'none'
           }}
         >
           {/* Store Header */}
@@ -430,10 +431,8 @@ export default function DayEndReportHistory() {
           <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>CASH RECONCILIATION</div>
           {(() => {
             const totalSalesNum = parseFloat(selectedReport?.totalSales) || 0;
-            let manualBillEntriesNum = 0;
-            if (Array.isArray(selectedReport?.manualBillEntries)) {
-              manualBillEntriesNum = selectedReport?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
-            }
+            const manualBillEntriesNum = Array.isArray(selectedReport?.manualBillEntries) ? selectedReport?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0;
+            const creditPaidTodayNum = parseFloat(selectedReport?.creditCustomerTotal) || 0;
             const returnsNum = parseFloat(selectedReport?.returns) || 0;
             let supplierPaymentsCashNum = 0;
             if (Array.isArray(selectedReport?.supplierPayments)) {
@@ -441,73 +440,45 @@ export default function DayEndReportHistory() {
                 .filter(sp => sp.mode === 'CASH')
                 .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
             }
-            const floatRetained = Number(selectedReport?.nextDayFloatTotal) || 0;
-            // System Cash Expected: purely system-derived (Total Sales already covers cash+card+online+cheque+old-manual+credit paid)
-            const systemCashExpected = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
-            const physicalCashNum = Number(selectedReport?.physicalCashCounted) || 0;
+            // Displayed System Cash Expected includes Credit Paid Today (now part of system sales)
+            const systemCashExpectedDisplay = totalSalesNum + creditPaidTodayNum - returnsNum - supplierPaymentsCashNum;
+            // System Cash Expected: system-derived sales + manual bill entries + credit paid - returns - supplier cash payments
+            const systemCashExpected = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
+            // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
+            const physicalCashNum = Number(selectedReport?.physicalCashCounted || 0);
             const cardPaymentsNum = parseFloat(selectedReport?.cardPayments) || 0;
-            // Manual Cash Expected: what's actually in hand — physical cash counted + the cashier's card-machine reading
-            const manualCashExpected = physicalCashNum + cardPaymentsNum;
-            const difference = Number(selectedReport?.difference) || 0;
-            const cashForDeposit = physicalCashNum;
+            // Manual Cash Expected: Manual Bill Entry + Card Payments (Cashier) + Physical Cash Counted (Credit Paid Today now in system sales)
+            const manualCashExpected = manualBillEntriesNum + cardPaymentsNum + physicalCashNum;
+            const difference = manualCashExpected - systemCashExpected;
             
             return (
               <div style={{ fontSize: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Total Sales (System):</span>
-                  <b>{totalSalesNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Manual Bill Entry:</span>
-                  <b>+{manualBillEntriesNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Less: Returns/Refunds:</span>
-                  <b>-{returnsNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Less: Supplier Payments (Cash):</span>
-                  <b>-{supplierPaymentsCashNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', paddingTop: 2, borderTop: '1px dashed #000' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                   <span>System Cash Expected:</span>
-                  <b>{systemCashExpected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  <b>{systemCashExpectedDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
-                <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 4 }}>(Total Sales + Manual Bill Entry - Returns - Supplier Payments)</div>
-                
+                <div style={{ fontSize: 8, color: '#555' }}>
+                  (Total Sales + Credit Paid Today + Manual Bill Entry - Returns/Refunds - Supplier Payments (Cash))
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span>Manual Bill Entry:</span>
+                  <b>{manualBillEntriesNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Physical Cash Counted:</span>
                   <b>{physicalCashNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Card Payments (Cashier):</span>
-                  <b>+{cardPaymentsNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  <b>{cardPaymentsNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', paddingTop: 2, borderTop: '1px dashed #000' }}>
+                <div style={{ borderTop: '1px solid #000', margin: '2px 0', paddingTop: 2, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                   <span>Manual Cash Expected:</span>
                   <b>{manualCashExpected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', paddingTop: 2, borderTop: '1px dashed #000' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontWeight: 'bold', color: difference > 0 ? '#28a745' : difference < 0 ? '#dc3545' : '#000' }}>
                   <span>Difference:</span>
-                  <b style={{ color: difference > 0 ? '#28a745' : difference < 0 ? '#dc3545' : '#000' }}>
-                    {difference >= 0 ? '+' : ''}{difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, paddingTop: 2, borderTop: '1px solid #000' }}>
-                  <span>Status:</span>
-                  <b style={{ fontSize: 12 }}>{selectedReport?.status || 'N/A'}</b>
-                </div>
-
-                <div style={{ borderTop: '1px solid #000', margin: '8px 0', paddingTop: 8 }}>
-                  <div style={{ fontWeight: 'bold', fontSize: 10, marginBottom: 4 }}>CASH ALLOCATION</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9 }}>
-                    <span>Retained for Next Day Float:</span>
-                    <b>{floatRetained.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 'bold', paddingTop: 2, borderTop: '1px dashed #000' }}>
-                    <span>Available for Deposit/Settlement:</span>
-                    <b>{cashForDeposit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                  </div>
+                  <b>{difference >= 0 ? '+' : ''}{difference.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({difference > 0 ? 'EXCESS' : difference < 0 ? 'SHORT' : 'BALANCED'})</b>
                 </div>
               </div>
             );

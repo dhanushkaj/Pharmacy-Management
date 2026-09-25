@@ -423,7 +423,7 @@ export default function DayEndReportHistory() {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{((selectedReport?.oldManualBillTotal != null ? parseFloat(selectedReport.oldManualBillTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{((selectedReport?.creditCustomerTotal != null ? parseFloat(selectedReport.creditCustomerTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Supplier Payments (Paid):</span><b>-{(Array.isArray(selectedReport?.supplierPayments) ? selectedReport?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(selectedReport?.manualBillEntries) ? selectedReport?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(selectedReport?.manualBillEntriesTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
           </div>
 
           <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
@@ -431,7 +431,7 @@ export default function DayEndReportHistory() {
           <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>CASH RECONCILIATION</div>
           {(() => {
             const totalSalesNum = parseFloat(selectedReport?.totalSales) || 0;
-            const manualBillEntriesNum = Array.isArray(selectedReport?.manualBillEntries) ? selectedReport?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0;
+            const manualBillEntriesNum = parseFloat(selectedReport?.manualBillEntriesTotal) || 0;
             const returnsNum = parseFloat(selectedReport?.returns) || 0;
             let supplierPaymentsCashNum = 0;
             if (Array.isArray(selectedReport?.supplierPayments)) {

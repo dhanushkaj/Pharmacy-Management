@@ -469,9 +469,9 @@ const DayEndReport = () => {
                       .filter(sp => sp.mode === 'CASH')
                       .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
                   }
-                  // System Cash Expected: Total Sales (which already includes all sales types and Credit Paid Today) + Manual Bill Entry - Returns - Supplier Cash Payments
-                  const systemCashExpectedDisplay = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
-                  const systemCashExpected = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
+                  // System Cash Expected: Total Sales (which already includes all sales types and Old Manual Bill and Credit Paid Today) - Returns - Supplier Cash Payments (NO Manual Bill Entry added)
+                  const systemCashExpectedDisplay = totalSalesNum - returnsNum - supplierPaymentsCashNum;
+                  const systemCashExpected = totalSalesNum - returnsNum - supplierPaymentsCashNum;
                   // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
                   const physicalCashNum = Number(submittedData?.physicalCashCounted || 0);
                   const cardPaymentsNum = parseFloat(submittedData?.cardPayments) || 0;
@@ -486,7 +486,7 @@ const DayEndReport = () => {
                         <b>{systemCashExpectedDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                       </div>
                       <div style={{ fontSize: 8, color: '#555' }}>
-                        (Cash Sales + Card Sales + Online Transfer + Cheque Sales + Credit Paid Today + Old Manual Bill + Manual Bill Entry - Returns/Refunds - Supplier Payments (Cash))
+                        (Cash Sales + Card Sales + Online Transfer + Cheque Sales + Credit Paid Today + Old Manual Bill - Returns/Refunds - Supplier Payments (Cash))
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                         <span>Manual Bill Entry:</span>

@@ -470,9 +470,8 @@ const DayEndReport = () => {
                       .filter(sp => sp.mode === 'CASH')
                       .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
                   }
-                  // Displayed System Cash Expected includes Credit Paid Today (now part of system sales)
-                  const systemCashExpectedDisplay = totalSalesNum + creditPaidTodayNum - returnsNum - supplierPaymentsCashNum;
-                  // System Cash Expected: system-derived sales + manual bill entries + credit paid - returns - supplier cash payments
+                  // System Cash Expected: Total Sales (all types) + Credit Paid Today + Manual Bill Entries - Returns - Supplier Cash Payments
+                  const systemCashExpectedDisplay = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
                   const systemCashExpected = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
                   // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
                   const physicalCashNum = Number(submittedData?.physicalCashCounted || 0);

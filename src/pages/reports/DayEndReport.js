@@ -67,7 +67,7 @@ const DayEndReport = () => {
   const [openingBalance, setOpeningBalance] = useState(0);
 
   // Non-cash
-  const [cardPayments, setCardPayments] = useState('0.00');
+  const [cardPayments, setCardPayments] = useState('');
   const [onlineTransfers, setOnlineTransfers] = useState('0.00');
   const [customerChequePayments, setCustomerChequePayments] = useState('0.00');
 
@@ -128,7 +128,7 @@ const DayEndReport = () => {
           setOnlineTransferSales(details.onlineTransferSales?.toString() ?? '0.00');
           setChequeSales(details.chequeSales?.toString() ?? '0.00');
           setReturns(details.returns?.toString() ?? '0.00');
-          setCardPayments(details.cardPayments?.toString() ?? '0.00');
+          setCardPayments((details.cardPayments !== null && details.cardPayments !== undefined && details.cardPayments !== 0) ? details.cardPayments.toString() : '');
 
           setExpectedCash(details.expectedCash?.toString() ?? '0.00');
           setPhysicalCashCounted(details.physicalCashCounted?.toString() ?? '0.00');
@@ -331,6 +331,14 @@ const DayEndReport = () => {
     setError(null);
     setSuccess(null);
     setShowTotal(false);
+    
+    // Validate card payments is filled
+    if (cardPayments === '' || cardPayments === null || cardPayments === undefined) {
+      setError('Card Payments amount is required. Enter 0.00 if no card payments.');
+      setLoading(false);
+      return;
+    }
+    
     try {
       const payload = {
         branch,
@@ -721,14 +729,15 @@ const DayEndReport = () => {
 
           <h3>Card Payments</h3>
           <div style={{ marginBottom: 12 }}>
-            <label>Card Payments (Decimal)</label>
+            <label>Card Payments (Decimal) <span style={{ color: '#d32f2f' }}>*</span></label>
             <input
               type="number"
               step="0.01"
               min="0"
-              placeholder="0.00"
+              placeholder="Enter amount (0.00 is valid)"
               value={cardPayments}
               onChange={e => setCardPayments(e.target.value)}
+              required
               style={{ width: 150, padding: '8px', fontSize: 14 }}
             />
           </div>

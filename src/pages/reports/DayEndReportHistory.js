@@ -432,7 +432,6 @@ export default function DayEndReportHistory() {
           {(() => {
             const totalSalesNum = parseFloat(selectedReport?.totalSales) || 0;
             const manualBillEntriesNum = Array.isArray(selectedReport?.manualBillEntries) ? selectedReport?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0;
-            const creditPaidTodayNum = parseFloat(selectedReport?.creditCustomerTotal) || 0;
             const returnsNum = parseFloat(selectedReport?.returns) || 0;
             let supplierPaymentsCashNum = 0;
             if (Array.isArray(selectedReport?.supplierPayments)) {
@@ -440,9 +439,9 @@ export default function DayEndReportHistory() {
                 .filter(sp => sp.mode === 'CASH')
                 .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
             }
-            // System Cash Expected: Total Sales (all types) + Credit Paid Today + Manual Bill Entries - Returns - Supplier Cash Payments
-            const systemCashExpectedDisplay = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
-            const systemCashExpected = totalSalesNum + creditPaidTodayNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
+            // System Cash Expected: Total Sales (which already includes all sales types and Credit Paid Today) + Manual Bill Entry - Returns - Supplier Cash Payments
+            const systemCashExpectedDisplay = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
+            const systemCashExpected = totalSalesNum + manualBillEntriesNum - returnsNum - supplierPaymentsCashNum;
             // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
             const physicalCashNum = Number(selectedReport?.physicalCashCounted || 0);
             const cardPaymentsNum = parseFloat(selectedReport?.cardPayments) || 0;
@@ -457,7 +456,7 @@ export default function DayEndReportHistory() {
                   <b>{systemCashExpectedDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
                 <div style={{ fontSize: 8, color: '#555' }}>
-                  (Total Sales + Credit Paid Today + Manual Bill Entry - Returns/Refunds - Supplier Payments (Cash))
+                  (Cash Sales + Card Sales + Online Transfer + Cheque Sales + Credit Paid Today + Old Manual Bill + Manual Bill Entry - Returns/Refunds - Supplier Payments (Cash))
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                   <span>Manual Bill Entry:</span>

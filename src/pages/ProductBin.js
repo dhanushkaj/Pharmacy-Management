@@ -537,10 +537,14 @@ const ProductBin = () => {
     try {
       let url = `/api/products/${product.productId}/bin-movements?page=${pageNum}&size=20`;
       if (dateFromFilter) {
-        url += `&dateFrom=${dateFromFilter}`;
+        // Backend expects epoch millis (startDateMillis) - start of the selected day
+        const startMillis = new Date(`${dateFromFilter}T00:00:00`).getTime();
+        url += `&startDateMillis=${startMillis}`;
       }
       if (dateToFilter) {
-        url += `&dateTo=${dateToFilter}`;
+        // Backend expects epoch millis (endDateMillis) - end of the selected day
+        const endMillis = new Date(`${dateToFilter}T23:59:59.999`).getTime();
+        url += `&endDateMillis=${endMillis}`;
       }
       console.log('Fetching movements from:', url);
       const movementsPage = await api(url, { token });

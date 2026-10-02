@@ -24,6 +24,7 @@ import DayEndReportHistory from './pages/reports/DayEndReportHistory';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
 import InventoryReport from './pages/reports/InventoryReport';
+import ProductMovementReport from './pages/reports/ProductMovementReport';
 import PurchaseOrder from './pages/PurchaseOrder';
 import PurchaseOrderDetails from './pages/PurchaseOrderDetails';
 import PurchaseOrderList from "./pages/PurchaseOrderList";
@@ -84,6 +85,7 @@ const AppContent = () => {
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
+            <Route path="/reports/product-movement" element={<PrivateRoute><ProductMovementReport /></PrivateRoute>} />
             <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
             <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturnsHome /></PrivateRoute>} />

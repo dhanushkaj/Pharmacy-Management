@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { AuthContext } from '../../components/AuthContext';
+import { formatCountDocumentNumber } from '../../utill/countDocumentNumber';
 import '../../css/InventoryCount.css';
 
 const ApprovalCenter = () => {
@@ -129,6 +130,9 @@ const ApprovalCenter = () => {
     if (!selectedSession) return;
 
     try {
+      // Unique reference for this count document - stable across repeated prints/exports of the same session version
+      const documentNumber = formatCountDocumentNumber(selectedSession);
+
       // Prepare data for export - ONLY items with entered physical quantities
       const exportData = selectedSession.lines
         .filter(l => {
@@ -152,12 +156,20 @@ const ApprovalCenter = () => {
           };
         });
 
-      // Create worksheet
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      
+      // Header block identifying the document - date, category, unique number - shown above the grid
+      const exportDate = new Date().toLocaleDateString();
+      const headerRows = [
+        ['Physical Inventory Count Sheet - Approval'],
+        [`Date: ${exportDate}`, '', `Category: ${selectedSession.categoryName}`, '', `Document No: ${documentNumber}`],
+        []
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(headerRows);
+      XLSX.utils.sheet_add_json(ws, exportData, { origin: -1 });
+
       // Set column widths
       const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
       ws['!cols'] = colWidths.map(width => ({ wch: width }));
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colWidths.length - 1 } }];
 
       // Create workbook
       const wb = XLSX.utils.book_new();
@@ -182,6 +194,7 @@ const ApprovalCenter = () => {
       const metaData = [
         ['Physical Inventory Count - Approval'],
         [''],
+        ['Document No', documentNumber],
         ['Session ID', selectedSession.id],
         ['Category', selectedSession.categoryName],
         ['Status', selectedSession.status],
@@ -200,7 +213,7 @@ const ApprovalCenter = () => {
       XLSX.utils.book_append_sheet(wb, wsMetadata, 'Summary');
 
       // Generate filename
-      const filename = `Physical_Count_Approval_${selectedSession.categoryName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const filename = `Physical_Count_Approval_${selectedSession.categoryName}_${documentNumber}.xlsx`;
       
       // Write file
       XLSX.writeFile(wb, filename);
@@ -257,6 +270,9 @@ const ApprovalCenter = () => {
                     <div style={{ fontWeight: 'bold', color: '#1976d2' }}>
                       {session.categoryName}
                     </div>
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                      Doc No: {formatCountDocumentNumber(session)}
+                    </div>
                     <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
                       Submitted: {new Date(session.submittedAt).toLocaleString()}
                     </div>
@@ -278,6 +294,9 @@ const ApprovalCenter = () => {
                 <div className="print-header" style={{ display: 'none', marginBottom: 20, paddingBottom: 10, borderBottom: '2px solid #333' }}>
                   <h2 style={{ marginBottom: 5 }}>✅ Count Approval Summary - {selectedSession.categoryName}</h2>
                   <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
+                    <strong>Document No:</strong> {formatCountDocumentNumber(selectedSession)} | <strong>Category:</strong> {selectedSession.categoryName} | <strong>Date:</strong> {new Date().toLocaleDateString()}
+                  </div>
+                  <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
                     <strong>Session ID:</strong> {selectedSession.id} | <strong>Version:</strong> {selectedSession.versionNumber} | <strong>Status:</strong> {selectedSession.status}
                   </div>
                   <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
@@ -292,7 +311,10 @@ const ApprovalCenter = () => {
                 </div>
 
                 {/* Session Details Heading */}
-                <h3 style={{ marginBottom: 12 }}>Session Details - {selectedSession.categoryName}</h3>
+                <h3 style={{ marginBottom: 4 }}>Session Details - {selectedSession.categoryName}</h3>
+                <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
+                  Document No: <strong>{formatCountDocumentNumber(selectedSession)}</strong>
+                </div>
 
                 {/* Session Statistics Grid */}
                 <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, border: '1px solid #ddd' }}>

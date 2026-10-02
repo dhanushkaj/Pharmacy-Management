@@ -3,6 +3,7 @@ import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../components/AuthContext';
+import { formatCountDocumentNumber } from '../../utill/countDocumentNumber';
 import '../../css/InventoryCount.css';
 
 const HistoryViewer = () => {
@@ -251,7 +252,7 @@ const HistoryViewer = () => {
                     >
                       <td style={{ padding: 12 }}>
                         <div style={{ fontWeight: 'bold', color: '#1976d2' }}>{session.categoryName}</div>
-                        <div style={{ fontSize: 11, color: '#999' }}>ID: {session.id}</div>
+                        <div style={{ fontSize: 11, color: '#999' }}>{formatCountDocumentNumber(session)}</div>
                       </td>
                       <td style={{ padding: 12 }}>
                         {getStatusBadge(session.status)}
@@ -268,7 +269,10 @@ const HistoryViewer = () => {
 
           {selectedSession && (
             <div style={{ flex: '1 1 450px', minWidth: 400, border: '1px solid #ddd', borderRadius: 8, padding: 16, maxHeight: '70vh', overflowY: 'auto' }}>
-              <h3>{selectedSession.categoryName} - Details</h3>
+              <h3 style={{ marginBottom: 4 }}>{selectedSession.categoryName} - Details</h3>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
+                Document No: <strong>{formatCountDocumentNumber(selectedSession)}</strong>
+              </div>
               
               <div style={{ marginBottom: 16 }}>
                 {getStatusBadge(selectedSession.status)}

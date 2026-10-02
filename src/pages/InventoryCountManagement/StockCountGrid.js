@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTable, useFilters } from 'react-table';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
+import { formatCountDocumentNumber } from '../../utill/countDocumentNumber';
 import '../../css/StockCountGrid.css';
 
 const StockCountGrid = ({ session, onSessionUpdate, category }) => {
@@ -135,6 +136,9 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
 
   const countedItems = lines.filter(l => l.counted).length;
   const totalItems = lines.length;
+  const categoryName = category?.name || session?.category?.name || session?.categoryName || 'Category';
+  // Unique reference for this count document - stable across repeated prints/exports of the same session version
+  const documentNumber = formatCountDocumentNumber(session);
 
   const handlePrint = () => {
     document.body.setAttribute('data-print-context', 'inventory');
@@ -165,12 +169,20 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
         };
       });
 
-      // Create worksheet
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      
+      // Header block identifying the document - date, category, unique number - shown above the grid
+      const exportDate = new Date().toLocaleDateString();
+      const headerRows = [
+        ['Physical Inventory Count Sheet'],
+        [`Date: ${exportDate}`, '', `Category: ${categoryName}`, '', `Document No: ${documentNumber}`],
+        []
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(headerRows);
+      XLSX.utils.sheet_add_json(ws, exportData, { origin: -1 });
+
       // Set column widths
       const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
       ws['!cols'] = colWidths.map(width => ({ wch: width }));
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colWidths.length - 1 } }];
 
       // Create workbook
       const wb = XLSX.utils.book_new();
@@ -180,8 +192,9 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
       const metaData = [
         ['Physical Inventory Count - Draft'],
         [''],
+        ['Document No', documentNumber],
         ['Session ID', session.id],
-        ['Category', category?.name || session?.category?.name || session?.categoryName || 'Category'],
+        ['Category', categoryName],
         ['Status', session.status],
         ['Version', session.versionNumber],
         ['Created By', session.createdBy?.name || 'N/A'],
@@ -198,7 +211,7 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
       XLSX.utils.book_append_sheet(wb, wsMetadata, 'Summary');
 
       // Generate filename
-      const filename = `Physical_Count_${session.categoryName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const filename = `Physical_Count_${categoryName}_${documentNumber}.xlsx`;
       
       // Write file
       XLSX.writeFile(wb, filename);
@@ -216,6 +229,20 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
       <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }} className="progress-bar-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
+            <div style={{ marginBottom: 6 }}>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 10px',
+                background: '#333',
+                color: '#fff',
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 'bold',
+                letterSpacing: 0.5
+              }}>
+                Document No: {documentNumber}
+              </span>
+            </div>
             <span style={{ fontWeight: 'bold', fontSize: 14 }}>Progress: {countedItems}/{totalItems} items</span>
             <div style={{ marginTop: 6, background: '#ddd', borderRadius: 4, height: 8, width: 200, overflow: 'hidden' }}>
               <div style={{ background: '#4caf50', height: '100%', width: `${(countedItems / totalItems) * 100}%` }} />
@@ -295,12 +322,15 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
 
       {/* Print Header - Only visible in print */}
       <div className="print-header" style={{ marginBottom: 20, paddingBottom: 10, borderBottom: '2px solid #333' }}>
-        <h2 style={{ marginBottom: 5 }}>📦 Physical Inventory Count - {category?.name || session?.category?.name || session?.categoryName || 'Category'}</h2>
+        <h2 style={{ marginBottom: 5 }}>📦 Physical Inventory Count - {categoryName}</h2>
+        <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
+          <strong>Document No:</strong> {documentNumber} | <strong>Category:</strong> {categoryName} | <strong>Date:</strong> {new Date().toLocaleDateString()}
+        </div>
         <div className="print-info" style={{ fontSize: 12, color: '#333', marginBottom: 5 }}>
           <strong>Session ID:</strong> {session.id} | <strong>Version:</strong> {session.versionNumber} | <strong>Status:</strong> {session.status}
         </div>
         <div className="print-info" style={{ fontSize: 12, color: '#333' }}>
-          <strong>Created by:</strong> {session.createdBy?.name || 'N/A'} | <strong>Date:</strong> {new Date(session.createdAt).toLocaleString()}
+          <strong>Created by:</strong> {session.createdBy?.name || 'N/A'} | <strong>Created Date:</strong> {new Date(session.createdAt).toLocaleString()}
         </div>
       </div>
 

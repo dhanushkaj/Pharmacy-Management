@@ -348,10 +348,79 @@ function GrnDetailsModal({ grn, onClose }) {
     </div>
   );
 }
+// Helper: Physical Inventory Count modal - shows the submitted/approved count document linked from a bin movement
+function PhysicalCountDetailsModal({ session, onClose }) {
+  if (!session) return <div style={{ padding: 32, color: 'crimson' }}>No count session data found.</div>;
+  const documentNumber = formatCountDocumentNumber(session);
+  const detailRow = { display: 'flex', justifyContent: 'space-between', marginBottom: 8 };
+  const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 8 };
+  const th = { padding: 8, border: '1px solid #ddd', background: '#f8f9fa' };
+  const td = { padding: 8, border: '1px solid #ddd' };
+  const closeButton = { background: '#f44336', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer', marginLeft: 8 };
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, maxWidth: 700, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', minWidth: 350 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: 16 }}>
+          <h3 style={{ margin: 0 }}>📦 Physical Inventory Count</h3>
+          <button onClick={onClose} style={closeButton}>✕</button>
+        </div>
+        <div style={{ padding: '0 16px 16px 16px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <div style={detailRow}><strong>Document No:</strong><span>{documentNumber}</span></div>
+            <div style={detailRow}><strong>Category:</strong><span>{session.categoryName || 'N/A'}</span></div>
+            <div style={detailRow}><strong>Status:</strong><span>{session.status}</span></div>
+            <div style={detailRow}><strong>Created By:</strong><span>{session.createdByName || 'N/A'} on {session.createdAt ? new Date(session.createdAt).toLocaleString() : 'N/A'}</span></div>
+            {session.submittedAt && (<div style={detailRow}><strong>Submitted By:</strong><span>{session.submittedByName || 'N/A'} on {new Date(session.submittedAt).toLocaleString()}</span></div>)}
+            {session.approvedAt && (<div style={detailRow}><strong>Approved By:</strong><span>{session.approvedByName || 'N/A'} on {new Date(session.approvedAt).toLocaleString()}</span></div>)}
+            {session.rejectedAt && (<div style={detailRow}><strong>Rejected By:</strong><span style={{ color: '#dc3545' }}>{session.rejectedByName || 'N/A'} on {new Date(session.rejectedAt).toLocaleString()}</span></div>)}
+          </div>
+          <h4 style={{ marginTop: 16, marginBottom: 8 }}>Counted Items</h4>
+          {Array.isArray(session.lines) && session.lines.length > 0 ? (
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Product</th>
+                  <th style={th}>System Qty</th>
+                  <th style={th}>Physical Qty</th>
+                  <th style={th}>Variance</th>
+                  <th style={th}>Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {session.lines.map(line => (
+                  <tr key={line.id}>
+                    <td style={td}>{line.productName} <div style={{ fontSize: 10, color: '#666' }}>({line.productCode})</div></td>
+                    <td style={td}>{line.systemQtyAtCount}</td>
+                    <td style={td}>{line.physicalQty ?? '-'}</td>
+                    <td style={{ ...td, fontWeight: 'bold', color: (line.variance || 0) > 0 ? '#388e3c' : (line.variance || 0) < 0 ? '#d32f2f' : 'inherit' }}>
+                      {line.variance > 0 ? `+${line.variance}` : (line.variance ?? 0)}
+                    </td>
+                    <td style={td}>{line.lineComment || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ color: '#888', margin: '16px 0' }}>No lines found for this session.</div>
+          )}
+          {session.overallComment && (
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+              <strong>Overall Comment:</strong> {session.overallComment}
+            </div>
+          )}
+          <div style={{ marginTop: 24, textAlign: 'right' }}>
+            <button onClick={onClose} style={{ background: '#eee', color: '#333', border: 'none', borderRadius: 4, padding: '7px 18px', cursor: 'pointer' }}>Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 import React, { useState, useEffect, useContext } from 'react';
 // For bill modal rendering
 import { api } from '../utill/api';
 import { AuthContext } from '../components/AuthContext';
+import { formatCountDocumentNumber } from '../utill/countDocumentNumber';
 
 // Helper: Bill modal content (extracted from BillingHistory.js, simplified for reuse)
 export function BillDetailsModal({ bill, onClose, storeSettings, width = 600 }) {
@@ -692,6 +761,7 @@ const ProductBin = () => {
                           else if (t.referenceType === 'BILLING_DELETE') docLabel = `Deleted Bill #${t.referenceId}`;
                           else if (t.referenceType === 'PRODUCT_UPDATE' || t.referenceType === 'MANUAL_INVENTORY') docLabel = 'Manual Inventory Change';
                           else if (t.referenceType === 'QUICK_PRICE_ADD') docLabel = `Quick Price Add - Rs. ${t.price || '-'}`;
+                          else if (t.referenceType === 'INVENTORY_COUNT_SESSION') docLabel = `Physical Count #${t.referenceId}`;
                           else docLabel = `${t.referenceType} #${t.referenceId}`;
                         } else if (t.referenceType === 'QUICK_PRICE_ADD') {
                           docLabel = `Quick Price Add - Rs. ${t.price || '-'}`;
@@ -778,6 +848,10 @@ const ProductBin = () => {
                                         doc = t;
                                       } else if (t.referenceType === 'MANUAL_INVENTORY') {
                                         doc = t;
+                                      } else if (t.referenceType === 'INVENTORY_COUNT_SESSION') {
+                                        doc = await api(`/api/inventory-count/sessions/${t.referenceId}`, { token });
+                                        setViewDoc({ doc, docType: 'PHYSICAL_COUNT' });
+                                        return;
                                       } else {
                                         doc = { type: t.referenceType, id: t.referenceId };
                                       }
@@ -814,7 +888,9 @@ const ProductBin = () => {
         <div style={{ marginTop: 32, color: '#888' }}>Select a product to view its transactions.</div>
       )}
       {viewDoc && (
-        viewDoc.doc && (viewDoc.doc.billingNumber || viewDoc.doc.billingId) ? (
+        viewDoc.docType === 'PHYSICAL_COUNT' ? (
+          <PhysicalCountDetailsModal session={viewDoc.doc} onClose={() => setViewDoc(null)} />
+        ) : viewDoc.doc && (viewDoc.doc.billingNumber || viewDoc.doc.billingId) ? (
           <BillDetailsModal bill={viewDoc.doc} onClose={() => setViewDoc(null)} storeSettings={{ storeName: 'PHARMACY' }} />
         ) : viewDoc.doc && (viewDoc.doc.grnCode || viewDoc.doc.purchaseOrderCode) ? (
           <GrnDetailsModal grn={viewDoc.doc} onClose={() => setViewDoc(null)} />

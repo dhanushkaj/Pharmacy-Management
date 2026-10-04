@@ -56,11 +56,15 @@ const ProductMovementReport = () => {
     }
   };
 
-  const filteredProducts = products.filter(p => {
-    if (!searchProduct) return true;
-    const search = searchProduct.toLowerCase();
-    return p.name?.toLowerCase().includes(search) || p.productCode?.toLowerCase().includes(search);
-  });
+  const getTotalQuantity = (p) => (p.monthlyQuantities || []).reduce((sum, q) => sum + (q || 0), 0);
+
+  const filteredProducts = products
+    .filter(p => {
+      if (!searchProduct) return true;
+      const search = searchProduct.toLowerCase();
+      return p.name?.toLowerCase().includes(search) || p.productCode?.toLowerCase().includes(search);
+    })
+    .sort((a, b) => getTotalQuantity(b) - getTotalQuantity(a));
 
   const columnTotals = months.map((_, idx) =>
     filteredProducts.reduce((sum, p) => sum + (p.monthlyQuantities?.[idx] || 0), 0)

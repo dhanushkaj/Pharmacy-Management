@@ -13,6 +13,30 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [movementData, setMovementData] = useState({});
+  const [movementMonths, setMovementMonths] = useState([]);
+
+  // Fetch movement data for this category
+  useEffect(() => {
+    const fetchMovementData = async () => {
+      try {
+        const categoryId = category?.categoryId || session?.categoryId;
+        if (!categoryId) return;
+        const token = localStorage.getItem('token');
+        const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+        const response = await axios.get(`/api/reports/product-movement?categoryId=${categoryId}`, config);
+        setMovementMonths(response.data?.months || []);
+        const lookup = {};
+        (response.data?.products || []).forEach(p => {
+          lookup[p.productId] = p.monthlyQuantities || [];
+        });
+        setMovementData(lookup);
+      } catch (err) {
+        console.error('Error fetching movement data:', err);
+      }
+    };
+    fetchMovementData();
+  }, [category, session]);
 
   // Auto-save on blur with debounce
   const updateLineDebounced = useCallback((lineId, updates) => {
@@ -61,15 +85,6 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
     setLines(newLines);
     setHasUnsavedChanges(true);
     updateLineDebounced(lineId, { physicalQty: value ? parseInt(value) : null });
-  };
-
-  const handleLineCommentChange = (lineId, comment) => {
-    const newLines = lines.map(line =>
-      line.id === lineId ? { ...line, lineComment: comment } : line
-    );
-    setLines(newLines);
-    setHasUnsavedChanges(true);
-    updateLineDebounced(lineId, { lineComment: comment });
   };
 
   const handleOverallCommentChange = (comment) => {
@@ -155,18 +170,23 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
       const exportData = lines.map(line => {
         const qtyVariance = line.variance !== null && line.variance !== undefined ? line.variance : 0;
         const sellingPrice = line.sellPrice || 0;
-        const priceVariance = qtyVariance * sellingPrice;
+        const movements = movementData[line.productId] || [];
         
-        return {
+        const row = {
           'Product Name': line.productName,
-          'Product SKU': line.productSku,
           'System Qty': line.systemQtyAtCount,
           'Physical Qty': line.physicalQty !== null && line.physicalQty !== undefined ? line.physicalQty : '',
           'Quantity Variance': qtyVariance,
-          'Selling Price (Rs.)': sellingPrice.toFixed(2),
-          'Price Variance (Rs.)': priceVariance !== 0 ? priceVariance.toFixed(2) : '0.00',
-          'Comment': line.lineComment || ''
+          'Selling Price (Rs.)': sellingPrice.toFixed(2)
         };
+        
+        // Add movement columns
+        movementMonths.forEach((month, idx) => {
+          row[month] = movements[idx] || 0;
+        });
+        row['Total Sales'] = movements.reduce((sum, q) => sum + (q || 0), 0);
+        
+        return row;
       });
 
       // Header block identifying the document - date, category, unique number - shown above the grid
@@ -179,36 +199,14 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
       const ws = XLSX.utils.aoa_to_sheet(headerRows);
       XLSX.utils.sheet_add_json(ws, exportData, { origin: -1 });
 
-      // Set column widths
-      const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
+      // Set column widths (5 base columns + 4 movement columns)
+      const colWidths = [25, 12, 12, 18, 18, 12, 12, 12, 12];
       ws['!cols'] = colWidths.map(width => ({ wch: width }));
       ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colWidths.length - 1 } }];
 
-      // Create workbook
+      // Create workbook and add sheet
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Physical Count');
-
-      // Add metadata sheet
-      const metaData = [
-        ['Physical Inventory Count - Draft'],
-        [''],
-        ['Document No', documentNumber],
-        ['Session ID', session.id],
-        ['Category', categoryName],
-        ['Status', session.status],
-        ['Version', session.versionNumber],
-        ['Created By', session.createdBy?.name || 'N/A'],
-        ['Created Date', new Date(session.createdAt).toLocaleString()],
-        ['Total Items', totalItems],
-        ['Items Counted', countedItems],
-        ['Items with Variance', lines.filter(l => l.variance !== 0 && l.variance !== null).length],
-        ['Overall Comment', overallComment || 'N/A'],
-        ['Export Date', new Date().toLocaleString()]
-      ];
-      
-      const wsMetadata = XLSX.utils.aoa_to_sheet(metaData);
-      wsMetadata['!cols'] = [{ wch: 25 }, { wch: 40 }];
-      XLSX.utils.book_append_sheet(wb, wsMetadata, 'Summary');
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventory Count');
 
       // Generate filename
       const filename = `Physical_Count_${categoryName}_${documentNumber}.xlsx`;
@@ -343,15 +341,16 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
               <th style={{ padding: 12, textAlign: 'center' }}>Physical Qty</th>
               <th style={{ padding: 12, textAlign: 'center' }}>Quantity Variance</th>
               <th style={{ padding: 12, textAlign: 'center' }}>Selling Price</th>
-              <th style={{ padding: 12, textAlign: 'center' }}>Selling Price Variance</th>
-              <th style={{ padding: 12, textAlign: 'left' }}>Comment</th>
+              {movementMonths.map(month => (
+                <th key={month} style={{ padding: 12, textAlign: 'center', fontSize: 11 }}>{month} Sales</th>
+              ))}
+              <th style={{ padding: 12, textAlign: 'center', fontSize: 11 }}>Total Sales</th>
             </tr>
           </thead>
           <tbody>
             {lines.map(line => {
               const sellingPrice = line.sellPrice || 0;
               const qtyVariance = line.variance !== null && line.variance !== undefined ? line.variance : 0;
-              const priceVariance = qtyVariance * sellingPrice;
               return (
                 <tr key={line.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: 12 }}>
@@ -380,17 +379,11 @@ const StockCountGrid = ({ session, onSessionUpdate, category }) => {
                   <td style={{ padding: 12, textAlign: 'center' }}>
                     Rs. {sellingPrice.toFixed(2)}
                   </td>
-                  <td style={{ padding: 12, textAlign: 'center', fontWeight: 'bold', color: priceVariance !== 0 ? '#ff9800' : '#666' }}>
-                    {priceVariance !== 0 ? (priceVariance > 0 ? '+' : '') + 'Rs. ' + priceVariance.toFixed(2) : 'Rs. 0.00'}
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <input
-                      type="text"
-                      value={line.lineComment || ''}
-                      onChange={(e) => handleLineCommentChange(line.id, e.target.value)}
-                      placeholder="Add note..."
-                      style={{ width: '100%', padding: 6, border: '1px solid #ddd', borderRadius: 4, fontSize: 11 }}
-                    />
+                  {(movementData[line.productId] || []).map((qty, idx) => (
+                    <td key={idx} style={{ padding: 12, textAlign: 'center', fontSize: 11, color: '#666' }}>{qty || 0}</td>
+                  ))}
+                  <td style={{ padding: 12, textAlign: 'center', fontSize: 11, fontWeight: 'bold', color: '#1976d2' }}>
+                    {(movementData[line.productId] || []).reduce((sum, q) => sum + (q || 0), 0)}
                   </td>
                 </tr>
               );

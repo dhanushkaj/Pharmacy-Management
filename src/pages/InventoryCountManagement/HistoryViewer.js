@@ -19,10 +19,35 @@ const HistoryViewer = () => {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchCategory, setSearchCategory] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [movementData, setMovementData] = useState({});
+  const [movementMonths, setMovementMonths] = useState([]);
 
   useEffect(() => {
     fetchAllSessions();
   }, []);
+
+  // Fetch movement data when session is selected
+  useEffect(() => {
+    const fetchMovementData = async () => {
+      if (!selectedSession) return;
+      try {
+        const categoryId = selectedSession?.categoryId;
+        if (!categoryId) return;
+        const token = localStorage.getItem('token');
+        const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+        const response = await axios.get(`/api/reports/product-movement?categoryId=${categoryId}`, config);
+        setMovementMonths(response.data?.months || []);
+        const lookup = {};
+        (response.data?.products || []).forEach(p => {
+          lookup[p.productId] = p.monthlyQuantities || [];
+        });
+        setMovementData(lookup);
+      } catch (err) {
+        console.error('Error fetching movement data:', err);
+      }
+    };
+    fetchMovementData();
+  }, [selectedSession]);
 
   const fetchAllSessions = async () => {
     setLoading(true);
@@ -389,29 +414,46 @@ const HistoryViewer = () => {
               {selectedSession.lines?.filter(l => l.variance !== 0 && l.variance !== null).length > 0 && (
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ff9800', marginBottom: 8 }}>Items with Variance:</div>
-                  <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4 }}>
-                    {selectedSession.lines
-                      ?.filter(l => l.variance !== 0 && l.variance !== null)
-                      .map(line => {
-                        const sellingPrice = line.sellPrice || 0;
-                        const priceVariance = (line.variance || 0) * sellingPrice;
-                        return (
-                          <div key={line.id} style={{ padding: 8, borderBottom: '1px solid #f0f0f0', fontSize: 11 }}>
-                            <div style={{ fontWeight: 'bold' }}>{line.productName}</div>
-                            <div style={{ color: '#666', marginTop: 2 }}>
-                              System: {line.systemQtyAtCount} → Physical: {line.physicalQty} (Qty Variance: {line.variance > 0 ? '+' : ''}{line.variance})
-                            </div>
-                            <div style={{ color: '#666', marginTop: 2 }}>
-                              Selling Price: Rs. {sellingPrice.toFixed(2)} | Price Variance: {priceVariance !== 0 ? (priceVariance > 0 ? '+' : '') + 'Rs. ' + priceVariance.toFixed(2) : 'Rs. 0.00'}
-                            </div>
-                            {line.lineComment && (
-                              <div style={{ color: '#2196f3', fontSize: 10, marginTop: 4 }}>
-                                Note: {line.lineComment}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                  <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                      <thead>
+                        <tr style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: 6, textAlign: 'left' }}>Product</th>
+                          <th style={{ padding: 6, textAlign: 'center' }}>System</th>
+                          <th style={{ padding: 6, textAlign: 'center' }}>Physical</th>
+                          <th style={{ padding: 6, textAlign: 'center' }}>Variance</th>
+                          {movementMonths.map(month => (
+                            <th key={month} style={{ padding: 6, textAlign: 'center', fontSize: 9 }}>{month}</th>
+                          ))}
+                          <th style={{ padding: 6, textAlign: 'center', fontSize: 9 }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedSession.lines
+                          ?.filter(l => l.variance !== 0 && l.variance !== null)
+                          .map(line => {
+                            const movements = movementData[line.productId] || [];
+                            return (
+                              <tr key={line.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                <td style={{ padding: 6 }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: 10 }}>{line.productName}</div>
+                                </td>
+                                <td style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>{line.systemQtyAtCount}</td>
+                                <td style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>{line.physicalQty}</td>
+                                <td style={{ padding: 6, textAlign: 'center', fontWeight: 'bold', color: '#ff9800', fontSize: 10 }}>
+                                  {line.variance > 0 ? '+' : ''}{line.variance}
+                                </td>
+                                {movements.map((qty, idx) => (
+                                  <td key={idx} style={{ padding: 6, textAlign: 'center', fontSize: 9, color: '#666' }}>{qty || 0}</td>
+                                ))}
+                                <td style={{ padding: 6, textAlign: 'center', fontSize: 9, fontWeight: 'bold', color: '#1976d2' }}>
+                                  {movements.reduce((sum, q) => sum + (q || 0), 0)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

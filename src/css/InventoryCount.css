@@ -648,21 +648,25 @@
     word-wrap: break-word !important;
   }
 
-  /* Column widths — 7 columns */
+  /* Column widths — 9 columns (5 base + 4 movement) */
   .inventory-count-container th:nth-child(1),
-  .inventory-count-container td:nth-child(1) { width: 24% !important; } /* Product */
+  .inventory-count-container td:nth-child(1) { width: 28% !important; } /* Product */
   .inventory-count-container th:nth-child(2),
-  .inventory-count-container td:nth-child(2) { width: 10% !important; } /* System Qty */
+  .inventory-count-container td:nth-child(2) { width: 8% !important; } /* System Qty */
   .inventory-count-container th:nth-child(3),
-  .inventory-count-container td:nth-child(3) { width: 10% !important; } /* Physical Qty */
+  .inventory-count-container td:nth-child(3) { width: 8% !important; } /* Physical Qty */
   .inventory-count-container th:nth-child(4),
-  .inventory-count-container td:nth-child(4) { width: 12% !important; } /* Quantity Variance */
+  .inventory-count-container td:nth-child(4) { width: 10% !important; } /* Quantity Variance */
   .inventory-count-container th:nth-child(5),
   .inventory-count-container td:nth-child(5) { width: 12% !important; } /* Selling Price */
   .inventory-count-container th:nth-child(6),
-  .inventory-count-container td:nth-child(6) { width: 14% !important; } /* Selling Price Variance */
+  .inventory-count-container td:nth-child(6) { width: 6.5% !important; } /* Month 1 Sales */
   .inventory-count-container th:nth-child(7),
-  .inventory-count-container td:nth-child(7) { width: 18% !important; } /* Comment */
+  .inventory-count-container td:nth-child(7) { width: 6.5% !important; } /* Month 2 Sales */
+  .inventory-count-container th:nth-child(8),
+  .inventory-count-container td:nth-child(8) { width: 6.5% !important; } /* Month 3 Sales */
+  .inventory-count-container th:nth-child(9),
+  .inventory-count-container td:nth-child(9) { width: 6.5% !important; } /* Total Sales */
 
   /* Inputs render as plain text */
   .inventory-count-container input[type="number"],

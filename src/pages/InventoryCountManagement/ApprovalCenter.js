@@ -17,11 +17,36 @@ const ApprovalCenter = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [approving, setApproving] = useState(false);
   const [editableLines, setEditableLines] = useState({});
+  const [movementData, setMovementData] = useState({});
+  const [movementMonths, setMovementMonths] = useState([]);
 
   // Fetch submitted sessions on mount
   useEffect(() => {
     fetchSubmittedSessions();
   }, []);
+
+  // Fetch movement data when session is selected
+  useEffect(() => {
+    const fetchMovementData = async () => {
+      if (!selectedSession) return;
+      try {
+        const categoryId = selectedSession?.categoryId;
+        if (!categoryId) return;
+        const token = localStorage.getItem('token');
+        const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+        const response = await axios.get(`/api/reports/product-movement?categoryId=${categoryId}`, config);
+        setMovementMonths(response.data?.months || []);
+        const lookup = {};
+        (response.data?.products || []).forEach(p => {
+          lookup[p.productId] = p.monthlyQuantities || [];
+        });
+        setMovementData(lookup);
+      } catch (err) {
+        console.error('Error fetching movement data:', err);
+      }
+    };
+    fetchMovementData();
+  }, [selectedSession]);
 
   const fetchSubmittedSessions = async () => {
     setLoading(true);
@@ -142,18 +167,23 @@ const ApprovalCenter = () => {
         .map(line => {
           const qtyVariance = (getLineValue(line, 'physicalQty') || 0) - line.systemQtyAtCount;
           const sellingPrice = line.sellPrice || 0;
-          const priceVariance = qtyVariance * sellingPrice;
+          const movements = movementData[line.productId] || [];
           
-          return {
+          const row = {
             'Product Name': line.productName,
-            'Product SKU': line.productCode,
             'System Qty': line.systemQtyAtCount,
             'Physical Qty': getLineValue(line, 'physicalQty') || '',
             'Quantity Variance': qtyVariance,
-            'Selling Price (Rs.)': sellingPrice.toFixed(2),
-            'Price Variance (Rs.)': priceVariance !== 0 ? priceVariance.toFixed(2) : '0.00',
-            'Note': getLineValue(line, 'lineComment') || ''
+            'Selling Price (Rs.)': sellingPrice.toFixed(2)
           };
+          
+          // Add movement columns
+          movementMonths.forEach((month, idx) => {
+            row[month] = movements[idx] || 0;
+          });
+          row['Total Sales'] = movements.reduce((sum, q) => sum + (q || 0), 0);
+          
+          return row;
         });
 
       // Header block identifying the document - date, category, unique number - shown above the grid
@@ -166,8 +196,8 @@ const ApprovalCenter = () => {
       const ws = XLSX.utils.aoa_to_sheet(headerRows);
       XLSX.utils.sheet_add_json(ws, exportData, { origin: -1 });
 
-      // Set column widths
-      const colWidths = [25, 15, 12, 12, 18, 18, 20, 25];
+      // Set column widths (5 base columns + 4 movement columns)
+      const colWidths = [25, 12, 12, 18, 18, 12, 12, 12, 12];
       ws['!cols'] = colWidths.map(width => ({ wch: width }));
       ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colWidths.length - 1 } }];
 
@@ -402,8 +432,10 @@ const ApprovalCenter = () => {
                               <th style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>Physical Qty</th>
                               <th style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>Qty Variance</th>
                               <th style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>Selling Price</th>
-                              <th style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>Price Variance</th>
-                              <th style={{ padding: 6, textAlign: 'left', fontSize: 10 }}>Note</th>
+                              {movementMonths.map(month => (
+                                <th key={month} style={{ padding: 6, textAlign: 'center', fontSize: 9 }}>{month}</th>
+                              ))}
+                              <th style={{ padding: 6, textAlign: 'center', fontSize: 9 }}>Total Sales</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -415,7 +447,6 @@ const ApprovalCenter = () => {
                               .map(line => {
                                 const sellingPrice = line.sellPrice || 0;
                                 const qtyVariance = (getLineValue(line, 'physicalQty') || 0) - line.systemQtyAtCount;
-                                const priceVariance = qtyVariance * sellingPrice;
                                 return (
                                   <tr key={line.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: 6 }}>
@@ -439,17 +470,11 @@ const ApprovalCenter = () => {
                                     <td style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>
                                       Rs. {sellingPrice.toFixed(2)}
                                     </td>
-                                    <td style={{ padding: 6, textAlign: 'center', fontWeight: 'bold', color: priceVariance !== 0 ? '#ff9800' : '#666', fontSize: 10 }}>
-                                      {priceVariance !== 0 ? (priceVariance > 0 ? '+' : '') + 'Rs. ' + priceVariance.toFixed(2) : 'Rs. 0.00'}
-                                    </td>
-                                    <td style={{ padding: 6, fontSize: 10 }}>
-                                      <input
-                                        type="text"
-                                        value={getLineValue(line, 'lineComment') || ''}
-                                        onChange={(e) => handleVarianceLineChange(line.id, 'lineComment', e.target.value)}
-                                        placeholder="Add note..."
-                                        style={{ width: '85%', padding: 3, border: '1px solid #ddd', borderRadius: 2, fontSize: 9 }}
-                                      />
+                                    {(movementData[line.productId] || []).map((qty, idx) => (
+                                      <td key={idx} style={{ padding: 6, textAlign: 'center', fontSize: 9, color: '#666' }}>{qty || 0}</td>
+                                    ))}
+                                    <td style={{ padding: 6, textAlign: 'center', fontSize: 9, fontWeight: 'bold', color: '#1976d2' }}>
+                                      {(movementData[line.productId] || []).reduce((sum, q) => sum + (q || 0), 0)}
                                     </td>
                                   </tr>
                                 );

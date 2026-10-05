@@ -383,7 +383,6 @@ function PhysicalCountDetailsModal({ session, onClose }) {
                   <th style={th}>System Qty</th>
                   <th style={th}>Physical Qty</th>
                   <th style={th}>Variance</th>
-                  <th style={th}>Comment</th>
                 </tr>
               </thead>
               <tbody>
@@ -395,7 +394,6 @@ function PhysicalCountDetailsModal({ session, onClose }) {
                     <td style={{ ...td, fontWeight: 'bold', color: (line.variance || 0) > 0 ? '#388e3c' : (line.variance || 0) < 0 ? '#d32f2f' : 'inherit' }}>
                       {line.variance > 0 ? `+${line.variance}` : (line.variance ?? 0)}
                     </td>
-                    <td style={td}>{line.lineComment || '-'}</td>
                   </tr>
                 ))}
               </tbody>

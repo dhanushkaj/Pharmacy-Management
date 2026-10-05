@@ -63,9 +63,9 @@ const CustomerDiscount = () => {
     setSearchTerm('');
     setShowSuggestions(false);
     
-    // Auto-fill discount percentage if product already has one
-    if (product.maxDiscount && product.maxDiscount > 0) {
-      setDiscountPercent(product.maxDiscount.toString());
+    // Auto-fill discount percentage if product already has a seasonal discount
+    if (product.seasonalDiscountPercent && product.seasonalDiscountPercent > 0) {
+      setDiscountPercent(product.seasonalDiscountPercent.toString());
     } else {
       setDiscountPercent('');
     }
@@ -102,6 +102,15 @@ const CustomerDiscount = () => {
       return;
     }
 
+    // Enforce the product's max discount ceiling only if one is configured; if no ceiling
+    // is set, there's nothing to restrict against and any value is allowed.
+    const ceiling = selectedProduct.maxDiscount;
+    if (ceiling && Number(ceiling) > 0 && Number(discountPercent) > Number(ceiling)) {
+      setMessage(`❌ Discount cannot exceed the maximum allowed discount of ${ceiling}% for this product.`);
+      setTimeout(() => setMessage(''), 4000);
+      return;
+    }
+
     // Check if the same product already has overlapping discount dates
     const overlaps = findOverlappingDiscounts();
     if (overlaps.length > 0) {
@@ -110,8 +119,8 @@ const CustomerDiscount = () => {
       return;
     }
 
-    // Check if product already has a discount
-    if (selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0) {
+    // Check if product already has a seasonal discount
+    if (selectedProduct.seasonalDiscountPercent && selectedProduct.seasonalDiscountPercent > 0) {
       setShowConfirm(true);
     } else {
       proceedWithSave();
@@ -121,8 +130,8 @@ const CustomerDiscount = () => {
   const proceedWithSave = async () => {
     try {
       setShowConfirm(false);
-      // Determine which endpoint to use based on whether product already has discount
-      const endpoint = (selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0)
+      // Determine which endpoint to use based on whether product already has a seasonal discount
+      const endpoint = (selectedProduct.seasonalDiscountPercent && selectedProduct.seasonalDiscountPercent > 0)
         ? `/api/products/${selectedProduct.productId}/discount/overwrite`
         : `/api/products/${selectedProduct.productId}/discount`;
       
@@ -142,10 +151,16 @@ const CustomerDiscount = () => {
       loadProducts();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
-      setMessage('❌ Error saving discount');
-      setTimeout(() => setMessage(''), 3000);
+      setMessage(`❌ ${err.message || 'Error saving discount'}`);
+      setTimeout(() => setMessage(''), 4000);
     }
   };
+
+  // Whether the currently-typed discount would exceed this product's configured ceiling.
+  // No ceiling configured (maxDiscount null/0) means there's nothing to restrict against.
+  const exceedsCeiling = !!(selectedProduct && discountPercent &&
+    selectedProduct.maxDiscount && Number(selectedProduct.maxDiscount) > 0 &&
+    Number(discountPercent) > Number(selectedProduct.maxDiscount));
 
   return (
     <div style={{ padding: 24, maxWidth: 700, margin: '0 auto' }}>
@@ -188,7 +203,7 @@ const CustomerDiscount = () => {
           }}>
             <h3 style={{ margin: '0 0 16px 0', color: '#ff9800' }}>⚠️ Overwrite Existing Discount?</h3>
             <p style={{ margin: '0 0 12px 0', color: '#666' }}>
-              This product already has a discount of <b>{selectedProduct?.maxDiscount}%</b>.
+              This product already has a discount of <b>{selectedProduct?.seasonalDiscountPercent}%</b>.
               <br />
               <br />
               Do you want to overwrite it with the new discount of <b>{discountPercent}%</b>?
@@ -267,7 +282,7 @@ const CustomerDiscount = () => {
                 <div key={product.productId} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #ffe0b2' }}>
                   <div style={{ fontWeight: 'bold', color: '#e65100' }}>{product.name}</div>
                   <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                    Discount: {product.maxDiscount}% ({product.discountStartDate} to {product.discountEndDate})
+                    Discount: {product.seasonalDiscountPercent}% ({product.discountStartDate} to {product.discountEndDate})
                   </div>
                 </div>
               ))}
@@ -295,7 +310,7 @@ const CustomerDiscount = () => {
                   setShowOverlapWarning(false);
                   setOverlapProducts([]);
                   // Check if product already has discount, then proceed
-                  if (selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0) {
+                  if (selectedProduct.seasonalDiscountPercent && selectedProduct.seasonalDiscountPercent > 0) {
                     setShowConfirm(true);
                   } else {
                     proceedWithSave();
@@ -382,8 +397,8 @@ const CustomerDiscount = () => {
                     <div style={{ fontWeight: '500' }}>{product.name}</div>
                     <div style={{ fontSize: 12, color: '#999' }}>
                       Price: Rs. {product.price?.toFixed(2)} 
-                      {product.discountPercentage && product.discountPercentage > 0 && 
-                        ` | Current Discount: ${product.discountPercentage}%`}
+                      {product.seasonalDiscountPercent && product.seasonalDiscountPercent > 0 && 
+                        ` | Current Discount: ${product.seasonalDiscountPercent}%`}
                     </div>
                   </div>
                   <span style={{ fontSize: 16 }}>→</span>
@@ -408,9 +423,9 @@ const CustomerDiscount = () => {
           }}>
             <div>
               ✓ Selected: <b>{selectedProduct.name}</b>
-              {selectedProduct.discountPercentage && selectedProduct.discountPercentage > 0 && 
+              {selectedProduct.seasonalDiscountPercent && selectedProduct.seasonalDiscountPercent > 0 && 
                 <div style={{ fontSize: 12, marginTop: 4, color: '#ff6f00' }}>
-                  ⚠️ Current discount: {selectedProduct.maxDiscount}% ({selectedProduct.discountStartDate} to {selectedProduct.discountEndDate})
+                  ⚠️ Current discount: {selectedProduct.seasonalDiscountPercent}% ({selectedProduct.discountStartDate} to {selectedProduct.discountEndDate})
                 </div>
               }
             </div>
@@ -445,13 +460,23 @@ const CustomerDiscount = () => {
           border: '2px solid #1976d2',
           borderRadius: 8,
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1fr 1fr 1fr',
           gap: 16
         }}>
           <div>
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Max Allowed (Ceiling)</div>
+            <div style={{ fontSize: 18, fontWeight: 'bold', color: '#6a1b9a' }}>
+              {selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0 ? `${selectedProduct.maxDiscount}%` : 'Not set'}
+            </div>
+            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+              Set in Product Management
+            </div>
+          </div>
+
+          <div>
             <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Current Discount</div>
             <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1565c0' }}>
-              {selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0 ? selectedProduct.maxDiscount : '—'}%
+              {selectedProduct.seasonalDiscountPercent && selectedProduct.seasonalDiscountPercent > 0 ? selectedProduct.seasonalDiscountPercent : '—'}%
             </div>
             <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
               {selectedProduct.discountStartDate ? `${selectedProduct.discountStartDate} to ${selectedProduct.discountEndDate}` : 'No discount set'}
@@ -460,7 +485,7 @@ const CustomerDiscount = () => {
           
           <div>
             <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>New Discount</div>
-            <div style={{ fontSize: 18, fontWeight: 'bold', color: '#388e3c' }}>
+            <div style={{ fontSize: 18, fontWeight: 'bold', color: exceedsCeiling ? '#d32f2f' : '#388e3c' }}>
               {discountPercent || '—'}%
             </div>
             <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
@@ -474,6 +499,11 @@ const CustomerDiscount = () => {
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: 14 }}>
           % Discount (0-100)
+          {selectedProduct && (
+            <span style={{ fontWeight: 'normal', color: '#666', marginLeft: 8 }}>
+              (Max allowed: {selectedProduct.maxDiscount && selectedProduct.maxDiscount > 0 ? `${selectedProduct.maxDiscount}%` : 'not configured'})
+            </span>
+          )}
         </label>
         <input
           type="number"
@@ -486,11 +516,16 @@ const CustomerDiscount = () => {
             width: '100%',
             padding: '10px 12px',
             fontSize: 14,
-            border: '1px solid #ddd',
+            border: exceedsCeiling ? '1px solid #d32f2f' : '1px solid #ddd',
             borderRadius: 4,
             boxSizing: 'border-box'
           }}
         />
+        {exceedsCeiling && (
+          <div style={{ color: '#d32f2f', fontSize: 12, marginTop: 6 }}>
+            ⚠️ Cannot exceed the maximum allowed discount of {selectedProduct.maxDiscount}% for this product.
+          </div>
+        )}
       </div>
 
       {/* Date Range */}
@@ -536,14 +571,15 @@ const CustomerDiscount = () => {
       {/* Save Button */}
       <button
         onClick={handleSave}
+        disabled={exceedsCeiling}
         style={{
           width: '100%',
           padding: '14px',
-          background: '#388e3c',
+          background: exceedsCeiling ? '#9e9e9e' : '#388e3c',
           color: '#fff',
           border: 'none',
           borderRadius: 4,
-          cursor: 'pointer',
+          cursor: exceedsCeiling ? 'not-allowed' : 'pointer',
           fontWeight: 'bold',
           fontSize: 16,
           marginBottom: 32

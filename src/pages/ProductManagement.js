@@ -1280,6 +1280,7 @@ const ProductManagement = () => {
             <th>Min</th>
             <th>Max</th>
             <th>Max Disc %</th>
+            <th>Seasonal Disc %</th>
             <th>Bin</th>
             <th>Pack Size</th>
             <th>Actions</th>
@@ -1322,6 +1323,21 @@ const ProductManagement = () => {
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.maxDiscount ?? "-"}
+                </td>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  {p.seasonalDiscountPercent && p.seasonalDiscountPercent > 0 ? (
+                    <span style={{ color: p.activeDiscount > 0 ? "#2e7d32" : "#999" }}>
+                      {p.seasonalDiscountPercent}%
+                      {p.discountStartDate && (
+                        <div style={{ fontSize: 10, color: "#999" }}>
+                          {p.discountStartDate} to {p.discountEndDate}
+                          {p.activeDiscount > 0 ? "" : " (inactive)"}
+                        </div>
+                      )}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.binLocation || "-"}

@@ -204,6 +204,15 @@ export default function Billing() {
       return;
     }
     
+    // Exact barcode match - barcode scanners submit the full code, so check this first
+    // (before price search, since most barcodes are pure digits with no decimal point)
+    const barcodeMatch = allProducts.filter(p => p.barcode?.toLowerCase() === searchName);
+    if (barcodeMatch.length > 0) {
+      setFilteredProducts(barcodeMatch);
+      setSelectedProductIndex(-1);
+      return;
+    }
+
     // Check if search is a price (contains decimal point like 100.00)
     const isPriceSearch = /^\d+\.?\d*$/.test(searchName);
     if (isPriceSearch && searchName.includes('.')) {
@@ -238,14 +247,15 @@ export default function Billing() {
         p.genericName?.toLowerCase().startsWith(safeSearchName)
       );
     }
-    // 4. Fallback: includes in name, generic, category, or code
+    // 4. Fallback: includes in name, generic, category, code, or barcode
     if (filtered.length === 0) {
       filtered = allProducts.filter(
         (p) =>
           p.name?.toLowerCase().includes(safeSearchName) ||
           p.genericName?.toLowerCase().includes(safeSearchName) ||
           p.category?.name?.toLowerCase().includes(safeSearchName) ||
-          p.productCode?.toLowerCase().includes(safeSearchName)
+          p.productCode?.toLowerCase().includes(safeSearchName) ||
+          p.barcode?.toLowerCase().includes(safeSearchName)
       );
     }
     setFilteredProducts(filtered);
@@ -414,11 +424,12 @@ export default function Billing() {
       const quantity = parseQuantityMultiplier(productSearch);
       const productName = getProductNameFromSearch(productSearch);
       
-      // Find product by name
+      // Find product by name or barcode (barcode scanners submit the full code)
       let product = selectedProduct;
       if (!product) {
         product = allProducts.find(p => 
-          p.name?.toLowerCase() === productName.toLowerCase()
+          p.name?.toLowerCase() === productName.toLowerCase() ||
+          p.barcode?.toLowerCase() === productName.toLowerCase()
         );
       }
       

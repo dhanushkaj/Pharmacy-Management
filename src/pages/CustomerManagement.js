@@ -14,6 +14,8 @@ const CustomerManagement = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
 
   // ---- helpers --------------------------------------------------------------
@@ -134,6 +136,17 @@ const CustomerManagement = () => {
       (c.address || '').toLowerCase().includes(q)
     );
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCustomers = filtered.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -273,13 +286,16 @@ const CustomerManagement = () => {
       {loading && <div>Loading…</div>}
 
       {/* Search */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center', justifyContent: 'space-between' }}>
         <input
           placeholder="Search name / phone / email / address"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ padding: 8, minWidth: 260 }}
         />
+        <div style={{ fontSize: 14, color: '#666' }}>
+          Showing {currentCustomers.length > 0 ? startIndex + 1 : 0} - {Math.min(endIndex, filtered.length)} of {filtered.length} customers
+        </div>
       </div>
 
       {/* Table */}
@@ -298,7 +314,7 @@ const CustomerManagement = () => {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((c) => (
+          {currentCustomers.map((c) => (
             <tr key={c.customerId}>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.customerId}</td>
               <td style={{ padding: 10, border: '1px solid #ccc' }}>{c.title || '-'}</td>
@@ -324,15 +340,54 @@ const CustomerManagement = () => {
               </td>
             </tr>
           ))}
-          {filtered.length === 0 && (
+          {currentCustomers.length === 0 && (
             <tr>
               <td colSpan={6} style={{ padding: 12, textAlign: 'center' }}>
-                No customers
+                {filtered.length === 0 ? 'No customers' : 'No data on this page'}
               </td>
             </tr>
           )}
         </tbody>
       </table>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'center', alignItems: 'center' }}>
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            style={{ padding: '8px 12px', background: currentPage === 1 ? '#ddd' : '#1976d2', color: currentPage === 1 ? '#999' : '#fff', border: 'none', borderRadius: 4, cursor: currentPage === 1 ? 'default' : 'pointer' }}
+          >
+            ← Previous
+          </button>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                style={{
+                  padding: '6px 10px',
+                  background: page === currentPage ? '#1976d2' : '#f0f0f0',
+                  color: page === currentPage ? '#fff' : '#333',
+                  border: page === currentPage ? '1px solid #1976d2' : '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                }}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            style={{ padding: '8px 12px', background: currentPage === totalPages ? '#ddd' : '#1976d2', color: currentPage === totalPages ? '#999' : '#fff', border: 'none', borderRadius: 4, cursor: currentPage === totalPages ? 'default' : 'pointer' }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
     </div>
   );
 };

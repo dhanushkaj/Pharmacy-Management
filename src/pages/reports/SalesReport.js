@@ -39,13 +39,26 @@ const SalesReport = () => {
         const grouped = data.content.map(bill => {
           const totalQuantity = bill.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
           const totalSales = bill.items?.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0) || 0;
+          // Calculate product discounts
+          const productDiscounts = bill.items?.reduce((sum, item) => {
+            if (item.appliedDiscount && item.appliedDiscount > 0) {
+              return sum + ((item.quantity || 0) * (item.unitPrice || 0) * (item.appliedDiscount / 100));
+            }
+            return sum;
+          }, 0) || 0;
+          // Customer discount = total discount - product discounts
+          const customerDiscount = (bill.discountAmount || 0) - productDiscounts;
           return {
             billingId: bill.billingId,
             billingNumber: bill.billingNumber,
             billingDate: bill.billingDate,
             customerName: bill.customerName,
             totalQuantity,
-            totalSales,
+            totalSales, // Subtotal
+            productDiscounts,
+            customerDiscount,
+            totalDiscount: bill.discountAmount || 0,
+            grandTotal: bill.grandTotal || 0, // Final amount after all discounts
             items: bill.items || [],
           };
         });
@@ -81,9 +94,12 @@ const SalesReport = () => {
     return s.items && s.items.some(item => item.productName && item.productName.toLowerCase().includes(filter));
   });
 
-  const totalSales = filteredSales.reduce((sum, s) => sum + s.totalSales, 0);
+  const totalSales = filteredSales.reduce((sum, s) => sum + s.grandTotal, 0);
   const totalQuantity = filteredSales.reduce((sum, s) => sum + s.totalQuantity, 0);
   const totalTransactions = filteredSales.length;
+  const totalSubtotal = filteredSales.reduce((sum, s) => sum + s.totalSales, 0);
+  const totalProductDiscount = filteredSales.reduce((sum, s) => sum + s.productDiscounts, 0);
+  const totalCustomerDiscount = filteredSales.reduce((sum, s) => sum + s.customerDiscount, 0);
 
   const handleExportCSV = () => {
     const headers = [
@@ -175,8 +191,23 @@ const SalesReport = () => {
       {/* Summary Cards */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 200, background: '#e3f2fd', padding: 16, borderRadius: 8 }}>
-          <div style={{ fontSize: 14, color: '#666' }}>Total Sales</div>
+          <div style={{ fontSize: 14, color: '#666' }}>Total Subtotal</div>
           <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1976d2' }}>
+            Rs. {totalSubtotal.toFixed(2)}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 200, background: '#fff3e0', padding: 16, borderRadius: 8 }}>
+          <div style={{ fontSize: 14, color: '#666' }}>Total Discounts</div>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#f57c00' }}>
+            Rs. {(totalProductDiscount + totalCustomerDiscount).toFixed(2)}
+          </div>
+          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+            Product: Rs. {totalProductDiscount.toFixed(2)} | Customer: Rs. {totalCustomerDiscount.toFixed(2)}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 200, background: '#e8f5e9', padding: 16, borderRadius: 8 }}>
+          <div style={{ fontSize: 14, color: '#666' }}>Total Sales (After Discount)</div>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#388e3c' }}>
             Rs. {totalSales.toFixed(2)}
           </div>
         </div>
@@ -186,9 +217,9 @@ const SalesReport = () => {
             {totalQuantity}
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 200, background: '#e8f5e9', padding: 16, borderRadius: 8 }}>
+        <div style={{ flex: 1, minWidth: 200, background: '#fce4ec', padding: 16, borderRadius: 8 }}>
           <div style={{ fontSize: 14, color: '#666' }}>Total Transactions</div>
-          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#388e3c' }}>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#c2185b' }}>
             {totalTransactions}
           </div>
         </div>
@@ -214,8 +245,10 @@ const SalesReport = () => {
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Billing No</th>
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'left' }}>Customer</th>
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Date</th>
-              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Quantity Sold</th>
-              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Total Sales (Rs.)</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Qty</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Subtotal (Rs.)</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right' }}>Discounts (Rs.)</th>
+              <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'right', fontWeight: 'bold' }}>Final Amount (Rs.)</th>
               <th style={{ padding: 10, border: '1px solid #90caf9', textAlign: 'center' }}>Details</th>
             </tr>
           </thead>
@@ -226,7 +259,13 @@ const SalesReport = () => {
                 <td style={{ padding: 10, border: '1px solid #e0e0e0' }}>{s.customerName || '-'}</td>
                 <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>{s.billingDate ? new Date(s.billingDate).toLocaleDateString() : '-'}</td>
                 <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{s.totalQuantity}</td>
-                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{s.totalSales.toFixed(2)}</td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>Rs. {s.totalSales.toFixed(2)}</td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right', color: '#d32f2f' }}>
+                  Rs. {s.totalDiscount.toFixed(2)}
+                </td>
+                <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right', fontWeight: 'bold', background: '#e8f5e9' }}>
+                  Rs. {s.grandTotal.toFixed(2)}
+                </td>
                 <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'center' }}>
                   <button onClick={() => setSelectedBilling(s)} style={{ padding: '4px 12px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                     View
@@ -241,7 +280,9 @@ const SalesReport = () => {
               <td></td>
               <td></td>
               <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{totalQuantity}</td>
-              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>{totalSales.toFixed(2)}</td>
+              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right' }}>Rs. {totalSubtotal.toFixed(2)}</td>
+              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right', color: '#d32f2f' }}>Rs. {(totalProductDiscount + totalCustomerDiscount).toFixed(2)}</td>
+              <td style={{ padding: 10, border: '1px solid #e0e0e0', textAlign: 'right', background: '#e8f5e9' }}>Rs. {totalSales.toFixed(2)}</td>
               <td></td>
             </tr>
           </tfoot>
@@ -255,14 +296,14 @@ const SalesReport = () => {
                   <strong>Date:</strong> {selectedBilling.billingDate ? new Date(selectedBilling.billingDate).toLocaleString() : '-'}<br />
                   <strong>Customer:</strong> {selectedBilling.customerName || '-'}
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', marginBottom: 16 }}>
                   <thead>
                     <tr style={{ background: '#f5f5f5' }}>
-                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Product</th>
-                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Quantity</th>
-                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Unit Price</th>
-                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Subtotal</th>
-                      <th style={{ padding: 8, border: '1px solid #ddd' }}>Batch No</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>Product</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Quantity</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Unit Price</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Subtotal</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right' }}>Batch No</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -270,13 +311,27 @@ const SalesReport = () => {
                       <tr key={idx}>
                         <td style={{ padding: 8, border: '1px solid #eee' }}>{item.productName}</td>
                         <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.quantity}</td>
-                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.unitPrice?.toFixed(2)}</td>
-                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>{item.subtotal?.toFixed(2)}</td>
-                        <td style={{ padding: 8, border: '1px solid #eee' }}>{item.batchNo || '-'}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>Rs. {item.unitPrice?.toFixed(2)}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'right' }}>Rs. {(item.quantity * item.unitPrice)?.toFixed(2)}</td>
+                        <td style={{ padding: 8, border: '1px solid #eee', textAlign: 'center' }}>{item.batchNo || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {/* Summary */}
+                <div style={{ background: '#f9f9f9', padding: 12, borderRadius: 4, fontSize: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <strong>Subtotal:</strong> Rs. {selectedBilling.totalSales.toFixed(2)}<br/>
+                      <strong>Product Discounts:</strong> Rs. {selectedBilling.productDiscounts.toFixed(2)}<br/>
+                      <strong>Customer Discounts:</strong> Rs. {selectedBilling.customerDiscount.toFixed(2)}<br/>
+                      <strong>Total Discounts:</strong> Rs. {selectedBilling.totalDiscount.toFixed(2)}
+                    </div>
+                    <div style={{ textAlign: 'right', fontWeight: 'bold', color: '#388e3c', fontSize: 16 }}>
+                      Final Amount:<br/>Rs. {selectedBilling.grandTotal.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </Modal>

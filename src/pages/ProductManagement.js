@@ -1223,14 +1223,20 @@ const ProductManagement = () => {
 
       {/* Search */}
       <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-        <input
-          placeholder="Search by Category"
+        <select
           value={search.category}
           onChange={(e) =>
             setSearch((s) => ({ ...s, category: e.target.value }))
           }
           style={{ padding: 8, minWidth: 160 }}
-        />
+        >
+          <option value="">All Categories</option>
+          {categories.map((c) => (
+            <option key={c.categoryId} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         <input
           placeholder="Search by Product Code"
           value={search.code}
@@ -1274,6 +1280,7 @@ const ProductManagement = () => {
             <th>Min</th>
             <th>Max</th>
             <th>Max Disc %</th>
+            <th>Seasonal Disc %</th>
             <th>Bin</th>
             <th>Pack Size</th>
             <th>Actions</th>
@@ -1316,6 +1323,21 @@ const ProductManagement = () => {
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.maxDiscount ?? "-"}
+                </td>
+                <td style={{ padding: 6, border: "1px solid #ddd" }}>
+                  {p.seasonalDiscountPercent && p.seasonalDiscountPercent > 0 ? (
+                    <span style={{ color: p.activeDiscount > 0 ? "#2e7d32" : "#999" }}>
+                      {p.seasonalDiscountPercent}%
+                      {p.discountStartDate && (
+                        <div style={{ fontSize: 10, color: "#999" }}>
+                          {p.discountStartDate} to {p.discountEndDate}
+                          {p.activeDiscount > 0 ? "" : " (inactive)"}
+                        </div>
+                      )}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td style={{ padding: 6, border: "1px solid #ddd" }}>
                   {p.binLocation || "-"}

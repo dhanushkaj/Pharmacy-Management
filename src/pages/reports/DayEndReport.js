@@ -5,8 +5,8 @@ import { AuthContext } from '../../components/AuthContext';
 import { api } from '../../utill/api';
 import DayEndManualBillEntry from './DayEndManualBillEntry';
 
-const noteDenominations = [5000, 2000, 1000, 500, 100, 50, 20];
-const coinDenominations = [10, 5, 1];
+const noteDenominations = [20, 50, 100, 500, 1000, 2000, 5000];
+const coinDenominations = [1, 5, 10];
 
 
 const DayEndReport = () => {
@@ -17,22 +17,28 @@ const DayEndReport = () => {
         <ul style={{ marginTop: 8, marginBottom: 0 }}>
           <li><b>Total Sale:</b> All sales for the day (cash, card, online, cheque) + Credit Paid Today. New credit sales are excluded until paid. Auto-filled from billing.</li>
           <li><b>Cash Sales:</b> Only sales paid by cash. Auto-filled from billing.</li>
-          <li><b>Expected Cash:</b> <br />
+          <li><b>Credit Paid Today:</b> Amount of previously credited sales that were paid today. Now included in SYSTEM SALES SUMMARY as part of system sales recognition.</li>
+          <li><b>System Cash Expected:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <i>Cash Sales + Manual Bill Entries Total</i>
+              <i>Total Sales (System) + Credit Paid Today + Manual Bill Entries - Returns/Refunds - Supplier Payments (Cash)</i>
+            </span>
+          </li>
+          <li><b>Manual Cash Expected:</b> <br />
+            <span style={{ fontSize: 14 }}>
+              <i>Manual Bill Entry + Physical Cash Counted (remainder denomination breakdown, excludes Next Day Float) + Card Payments (cashier-entered, from the card machine)</i>
             </span>
           </li>
           <li><b>Physical Cash Counted:</b> Actual cash you count, based on denominations entered.</li>
           <li><b>Difference:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <i>Physical Cash Counted - Expected Cash</i>
+              <i>Manual Cash Expected - System Cash Expected</i>
             </span>
           </li>
           <li><b>Status:</b> <br />
             <span style={{ fontSize: 14 }}>
-              <b>SHORT:</b> Cash Counted &lt; Expected Cash (cash missing)<br />
-              <b>EXCESS:</b> Cash Counted &gt; Expected Cash (extra cash)<br />
-              <b>BALANCED:</b> Cash Counted = Expected Cash (perfect match)
+              <b>SHORT:</b> Manual Cash Expected &lt; System Cash Expected (cash missing)<br />
+              <b>EXCESS:</b> Manual Cash Expected &gt; System Cash Expected (extra cash)<br />
+              <b>BALANCED:</b> Manual Cash Expected = System Cash Expected (perfect match)
             </span>
           </li>
         </ul>
@@ -51,23 +57,26 @@ const DayEndReport = () => {
   const [dayEndNo, setDayEndNo] = useState('');
 
   // Denominations
-  const [notes, setNotes] = useState({ 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 });
-  const [coins, setCoins] = useState({ 10: 0, 5: 0, 1: 0 });
+  const [notes, setNotes] = useState({ 20: 0, 50: 0, 100: 0, 500: 0, 1000: 0, 2000: 0, 5000: 0 });
+  const [coins, setCoins] = useState({ 1: 0, 5: 0, 10: 0 });
 
   // Next day opening float: entered separately from Physical Cash Value, netted out of Expected Cash
-  const [nextDayNotes, setNextDayNotes] = useState({ 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 });
-  const [nextDayCoins, setNextDayCoins] = useState({ 10: 0, 5: 0, 1: 0 });
+  const [nextDayNotes, setNextDayNotes] = useState({ 20: 0, 50: 0, 100: 0, 500: 0, 1000: 0, 2000: 0, 5000: 0 });
+  const [nextDayCoins, setNextDayCoins] = useState({ 1: 0, 5: 0, 10: 0 });
   // Opening balance carried forward from previous day's retained float
   const [openingBalance, setOpeningBalance] = useState(0);
 
   // Non-cash
-  const [cardPayments, setCardPayments] = useState('0.00');
+  const [cardPayments, setCardPayments] = useState('');
   const [onlineTransfers, setOnlineTransfers] = useState('0.00');
   const [customerChequePayments, setCustomerChequePayments] = useState('0.00');
 
-  // Supplier payments
-  const [supplierPayments, setSupplierPayments] = useState([]);
-  const [supplierInput, setSupplierInput] = useState({ supplierName: '', mode: 'Cash', amount: '' });
+  // Auto-fetched supplier payments for today
+  const [autoSupplierPayments, setAutoSupplierPayments] = useState('0.00');
+  const [supplierPaymentsArray, setSupplierPaymentsArray] = useState([]); // Store the array of supplier payments
+  
+  // Track which payment is being printed (for individual payment printing)
+  const [printingPaymentIndex, setPrintingPaymentIndex] = useState(-1);
 
   // System sales summary
   const [totalSales, setTotalSales] = useState('0.00');
@@ -92,28 +101,26 @@ const DayEndReport = () => {
 
           // Denominations
           if (Array.isArray(details.noteDenominations)) {
-            const notesObj = { 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 };
+            const notesObj = { 20: 0, 50: 0, 100: 0, 500: 0, 1000: 0, 2000: 0, 5000: 0 };
             details.noteDenominations.forEach(n => { if (n && n.value in notesObj) notesObj[n.value] = n.qty; });
             setNotes(notesObj);
           }
           if (Array.isArray(details.coinDenominations)) {
-            const coinsObj = { 10: 0, 5: 0, 1: 0 };
+            const coinsObj = { 1: 0, 5: 0, 10: 0 };
             details.coinDenominations.forEach(c => { if (c && c.value in coinsObj) coinsObj[c.value] = c.qty; });
             setCoins(coinsObj);
           }
           if (Array.isArray(details.nextDayFloatNoteDenominations)) {
-            const floatNotesObj = { 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 20: 0 };
+            const floatNotesObj = { 20: 0, 50: 0, 100: 0, 500: 0, 1000: 0, 2000: 0, 5000: 0 };
             details.nextDayFloatNoteDenominations.forEach(n => { if (n && n.value in floatNotesObj) floatNotesObj[n.value] = n.qty; });
             setNextDayNotes(floatNotesObj);
           }
           if (Array.isArray(details.nextDayFloatCoinDenominations)) {
-            const floatCoinsObj = { 10: 0, 5: 0, 1: 0 };
+            const floatCoinsObj = { 1: 0, 5: 0, 10: 0 };
             details.nextDayFloatCoinDenominations.forEach(c => { if (c && c.value in floatCoinsObj) floatCoinsObj[c.value] = c.qty; });
             setNextDayCoins(floatCoinsObj);
           }
           setOpeningBalance(details.openingBalanceFromPreviousDay ?? 0);
-
-          setSupplierPayments(Array.isArray(details.supplierPayments) ? details.supplierPayments : []);
 
           setTotalSales(details.totalSales?.toString() ?? '0.00');
           setCashSales(details.cashSales?.toString() ?? '0.00');
@@ -121,6 +128,7 @@ const DayEndReport = () => {
           setOnlineTransferSales(details.onlineTransferSales?.toString() ?? '0.00');
           setChequeSales(details.chequeSales?.toString() ?? '0.00');
           setReturns(details.returns?.toString() ?? '0.00');
+          setCardPayments((details.cardPayments !== null && details.cardPayments !== undefined && details.cardPayments !== 0) ? details.cardPayments.toString() : '');
 
           setExpectedCash(details.expectedCash?.toString() ?? '0.00');
           setPhysicalCashCounted(details.physicalCashCounted?.toString() ?? '0.00');
@@ -133,6 +141,16 @@ const DayEndReport = () => {
 
           setOldManualBillValue(details.oldManualBillTotal ?? 0);
           setCreditCustomerBillings(details.creditCustomerTotal ?? 0);
+          
+          // Calculate and set supplier payments total from the response array
+          if (Array.isArray(details.supplierPayments)) {
+            const supplierPaymentsTotal = details.supplierPayments.reduce((sum, sp) => {
+              return sum + (parseFloat(sp.amount) || 0);
+            }, 0);
+            setAutoSupplierPayments(supplierPaymentsTotal.toFixed(2));
+            setSupplierPaymentsArray(details.supplierPayments); // Store the array for display
+          }
+          
           // Fill system sales summary for report display
           setSystemSalesSummary({
             totalSales: details.totalSales ?? 0,
@@ -155,80 +173,57 @@ const DayEndReport = () => {
     };
     fetchDayEndDetails();
   }, [token]);
-  
+
+  // Fetch supplier payments made today (fallback if not in day-end report response)
+  React.useEffect(() => {
+    const fetchSupplierPayments = async () => {
+      // Skip if already loaded from day-end report response
+      if (parseFloat(autoSupplierPayments) > 0) {
+        return;
+      }
+      
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        console.log("🔍 Fetching supplier payments for date:", today);
+        
+        const url = `${process.env.REACT_APP_API_BASE || ''}/api/supplier-payments/date-range?startDate=${today}&endDate=${today}`;
+        console.log("📡 API URL:", url);
+        
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include'
+        });
+        
+        console.log("📨 Response status:", response.status);
+        
+        if (response.ok) {
+          const payments = await response.json();
+          console.log("💰 Supplier payments received:", payments);
+          
+          const total = Array.isArray(payments) 
+            ? payments.reduce((sum, p) => sum + (parseFloat(p.paymentAmount) || 0), 0)
+            : 0;
+          console.log("✅ Total supplier payments today:", total);
+          setAutoSupplierPayments(total.toFixed(2));
+        } else {
+          console.warn("⚠️ Failed to fetch supplier payments:", response.status, response.statusText);
+          setAutoSupplierPayments('0.00');
+        }
+      } catch (e) {
+        console.error("❌ Error fetching supplier payments:", e);
+        setAutoSupplierPayments('0.00');
+      }
+    };
+    if (token) {
+      fetchSupplierPayments();
+    }
+  }, [token, autoSupplierPayments]);
   // Print-only CSS: thermal (float slip) vs A4 (full report), swapped dynamically right before printing
   const printStyleRef = React.useRef(null);
-  const buildPrintCss = (mode) => `
-    @page {
-      size: ${mode === 'floatSlip' ? '72mm auto' : 'A4 portrait'};
-      margin: ${mode === 'floatSlip' ? '0mm' : '0'};
-    }
-
+  const buildPrintCss = () => `
+    /* Simplified - main print CSS is in App.css */
     @media print {
-
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        height: auto !important;
-        overflow: hidden !important;
-      }
-
-      body * {
-        visibility: hidden !important;
-      }
-
-      #dayend-report-print,
-      #dayend-report-print *,
-      #float-slip-print,
-      #float-slip-print * {
-        visibility: visible !important;
-      }
-
-      #dayend-report-print {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        width: 210mm !important;
-        min-height: 297mm !important;
-        padding: 12mm !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-
-      #float-slip-print {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        width: 72mm !important;
-        max-width: 72mm !important;
-        height: auto !important;
-        padding: 2mm !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-        font-family: 'Courier New', monospace !important;
-        font-size: 10px !important;
-      }
-
-      /* Only one of the two printable sections shows at a time, toggled via body class */
-      body.print-float-slip-mode #dayend-report-print {
-        display: none !important;
-      }
-      body:not(.print-float-slip-mode) #float-slip-print {
-        display: none !important;
-      }
-
-      button {
-        display: none !important;
-      }
-
-      form {
-        display: none !important;
-      }
-
+      /* Only override if needed for specific styling */
     }
   `;
 
@@ -236,7 +231,7 @@ const DayEndReport = () => {
     const style = document.createElement('style');
     style.type = 'text/css';
     style.id = 'print-only-style';
-    style.innerHTML = buildPrintCss('report');
+    style.innerHTML = buildPrintCss();
     document.head.appendChild(style);
     printStyleRef.current = style;
     return () => {
@@ -323,16 +318,12 @@ const DayEndReport = () => {
   , [cardPayments, onlineTransfers, customerChequePayments]);
 
   // Sync physicalCashCounted and difference with cashValue and expectedCash
+  // Next Day Float has nothing to do with reconciliation — it is never included here
   React.useEffect(() => {
     setPhysicalCashCounted(Number(cashValue).toFixed(2));
     const diff = (Number(cashValue) || 0) - (parseFloat(expectedCash) || 0);
     setDifference(diff.toFixed(2));
   }, [cashValue, expectedCash]);
-
-  const handleSupplierAdd = () => {
-    setSupplierPayments([...supplierPayments, supplierInput]);
-    setSupplierInput({ supplierName: '', mode: 'Cash', amount: '' });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -340,6 +331,14 @@ const DayEndReport = () => {
     setError(null);
     setSuccess(null);
     setShowTotal(false);
+    
+    // Validate card payments is filled
+    if (cardPayments === '' || cardPayments === null || cardPayments === undefined) {
+      setError('Card Payments amount is required. Enter 0.00 if no card payments.');
+      setLoading(false);
+      return;
+    }
+    
     try {
       const payload = {
         branch,
@@ -355,7 +354,6 @@ const DayEndReport = () => {
         cardPayments: parseFloat(cardPayments) || 0,
         onlineTransfers: parseFloat(onlineTransfers) || 0,
         customerChequePayments: parseFloat(customerChequePayments) || 0,
-        supplierPayments,
         totalSales: parseFloat(totalSales) || 0,
         cashSales: parseFloat(cashSales) || 0,
         cardSales: parseFloat(cardSales) || 0,
@@ -365,6 +363,7 @@ const DayEndReport = () => {
         oldManualBillTotal: parseFloat(oldManualBillValue) || 0,
         creditCustomerTotal: parseFloat(creditCustomerBillings) || 0,
         manualBillEntries: manualBillEntries,
+        supplierPayments: supplierPaymentsArray, // Include supplier payments array
         expectedCash: parseFloat(expectedCash) || 0,
         physicalCashCounted: parseFloat(physicalCashCounted) || 0,
         difference: parseFloat(difference) || 0,
@@ -393,11 +392,9 @@ const DayEndReport = () => {
 
   // Print only the Next Day Opening Float slip on a thermal (72mm) page — wrap this printout with the retained cash
   const handlePrintFloatSlip = () => {
-    if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('floatSlip');
     document.body.classList.add('print-float-slip-mode');
     window.onafterprint = () => {
       document.body.classList.remove('print-float-slip-mode');
-      if (printStyleRef.current) printStyleRef.current.innerHTML = buildPrintCss('report');
       window.onafterprint = null;
     };
     window.print();
@@ -412,7 +409,11 @@ const DayEndReport = () => {
         {success && <div style={{ color: 'green' }}>{success}</div>}
 
         {showTotal && submittedData && (
-          <div style={{ marginTop: 32 }}>
+          <div style={{ marginTop: 32, clear: 'both', position: 'relative', zIndex: 1 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16, paddingTop: 16, borderTop: '3px solid #1976d2', paddingBottom: 8 }} className="no-print">
+              <h2 style={{ color: '#1976d2', margin: 0 }}>📋 Day-End Report Summary</h2>
+              <p style={{ fontSize: 12, color: '#666', margin: '4px 0 0 0' }}>Submitted on {submittedData?.printedOn ? new Date(submittedData.printedOn).toLocaleString() : 'N/A'}</p>
+            </div>
             <div
               id="dayend-report-print"
               style={{
@@ -443,89 +444,73 @@ const DayEndReport = () => {
 
               <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SUPPLIER PAYMENTS</div>
-              {submittedData.supplierPayments && submittedData.supplierPayments.length > 0 ? (
-                <table style={{ width: '100%', fontSize: 10, marginBottom: 4, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #000' }}>
-                      <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'bold' }}>Supplier</th>
-                      <th style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>Mode</th>
-                      <th style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submittedData.supplierPayments.map((sp, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #ccc' }}>
-                        <td style={{ padding: '2px 0', fontWeight: 'bold' }}>{sp.supplierName}</td>
-                        <td style={{ textAlign: 'center', padding: '2px 0', fontWeight: 'bold' }}>{sp.mode}</td>
-                        <td style={{ textAlign: 'right', padding: '2px 0', fontWeight: 'bold' }}>{parseFloat(sp.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ fontSize: 10, fontStyle: 'italic', marginBottom: 4 }}>No supplier payments</div>
-              )}
-
-              <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
-
               <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>SYSTEM SALES SUMMARY</div>
               <div style={{ fontSize: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Sales:</span><b>{submittedData.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash Sales:</span><b>{submittedData.cashSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card Sales:</span><b>{submittedData.cardSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Online Transfer:</span><b>{submittedData.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{submittedData.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{submittedData.returns.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{(submittedData.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{(submittedData.creditCustomerTotal != null ? parseFloat(submittedData.creditCustomerTotal) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Manual Bill Entry:</span><b>{(Array.isArray(submittedData.manualBillEntries) ? submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Sales:</span><b>{(submittedData?.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash Sales:</span><b>{(submittedData?.cashSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card Sales:</span><b>{(submittedData?.cardSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Online Transfer:</span><b>{(submittedData?.onlineTransferSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cheque Sales:</span><b>{(submittedData?.chequeSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Returns/Refunds:</span><b>{(submittedData?.returns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Old Manual Bill:</span><b>{((submittedData?.oldManualBillTotal != null ? parseFloat(submittedData.oldManualBillTotal) : 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Credit Paid Today:</span><b>{(parseFloat(submittedData?.creditCustomerTotal) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Supplier Payments (Paid):</span><b>-{(Array.isArray(submittedData?.supplierPayments) ? submittedData?.supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
               </div>
 
               <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
 
-              <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 4 }}>CASH RECONCILIATION</div>
               {(() => {
-                const cashSalesNum = parseFloat(submittedData.cashSales) || 0;
-                let manualBillEntriesNum = 0;
-                if (Array.isArray(submittedData.manualBillEntries)) {
-                  manualBillEntriesNum = submittedData.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
-                }
-                const floatRetained = Number(submittedData.nextDayFloatTotal) || 0;
-                // Expected Cash = Cash Sales + Manual Bill Entries, net of the float retained for tomorrow
-                const expectedCashCalc = cashSalesNum + manualBillEntriesNum - floatRetained;
-                return (
-                  <div style={{ fontSize: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Less: Next Day Float Retained:</span>
-                      <b>-{floatRetained.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  const totalSalesNum = parseFloat(submittedData?.totalSales) || 0;
+                  const manualBillEntriesNum = Array.isArray(submittedData?.manualBillEntries) ? submittedData?.manualBillEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0) : 0;
+                  const returnsNum = parseFloat(submittedData?.returns) || 0;
+                  let supplierPaymentsCashNum = 0;
+                  if (Array.isArray(submittedData?.supplierPayments)) {
+                    supplierPaymentsCashNum = submittedData?.supplierPayments
+                      .filter(sp => sp.mode === 'CASH')
+                      .reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
+                  }
+                  // System Cash Expected: Total Sales (which already includes all sales types and Old Manual Bill and Credit Paid Today) - Returns - Supplier Cash Payments (NO Manual Bill Entry added)
+                  const systemCashExpectedDisplay = totalSalesNum - returnsNum - supplierPaymentsCashNum;
+                  const systemCashExpected = totalSalesNum - returnsNum - supplierPaymentsCashNum;
+                  // Physical Cash Counted is the remainder only — Next Day Float is never part of reconciliation
+                  const physicalCashNum = Number(submittedData?.physicalCashCounted || 0);
+                  const cardPaymentsNum = parseFloat(submittedData?.cardPayments) || 0;
+                  // Manual Cash Expected: Manual Bill Entry + Card Payments (Cashier) + Physical Cash Counted (Credit Paid Today now in system sales)
+                  const manualCashExpected = manualBillEntriesNum + cardPaymentsNum + physicalCashNum;
+                  const difference = manualCashExpected - systemCashExpected;
+                  
+                  return (
+                    <div style={{ fontSize: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>System Cash Expected:</span>
+                        <b>{systemCashExpectedDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                      </div>
+                      <div style={{ fontSize: 8, color: '#555' }}>
+                        (Cash Sales + Card Sales + Online Transfer + Cheque Sales + Credit Paid Today + Old Manual Bill - Returns/Refunds - Supplier Payments (Cash))
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span>Manual Bill Entry:</span>
+                        <b>{manualBillEntriesNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Physical Cash Counted:</span>
+                        <b>{physicalCashNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Card Payments (Cashier):</span>
+                        <b>{cardPaymentsNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                      </div>
+                      <div style={{ borderTop: '1px solid #000', margin: '2px 0', paddingTop: 2, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>Manual Cash Expected:</span>
+                        <b>{manualCashExpected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontWeight: 'bold', color: difference > 0 ? '#28a745' : difference < 0 ? '#dc3545' : '#000' }}>
+                        <span>Difference:</span>
+                        <b>{difference >= 0 ? '+' : ''}{difference.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({difference > 0 ? 'EXCESS' : difference < 0 ? 'SHORT' : 'BALANCED'})</b>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Expected Cash:</span>
-                      <b>{expectedCashCalc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                    </div>
-                    <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(Cash Sales + Manual Bill Entry - Next Day Float)</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Physical Cash:</span>
-                      <b>{Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Difference:</span>
-                      <b>{(Number(cashValue) - expectedCashCalc).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, paddingTop: 2, borderTop: '1px solid #000' }}>
-                      <span>Status:</span>
-                      <b style={{ fontSize: 12 }}>{
-                        Number(cashValue) > expectedCashCalc
-                          ? 'EXCESS'
-                          : Number(cashValue) < expectedCashCalc
-                          ? 'SHORT'
-                          : 'BALANCED'
-                      }</b>
-                    </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
 
@@ -533,9 +518,9 @@ const DayEndReport = () => {
               <div style={{ fontSize: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Retained in Drawer:</span>
-                  <b>{Number(submittedData.nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  <b>{Number(submittedData?.nextDayFloatTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
                 </div>
-                <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(netted out of Expected Cash above)</div>
+                <div style={{ fontSize: 8, textAlign: 'right', marginBottom: 2 }}>(From Physical Cash Counted)</div>
               </div>
 
               <div style={{ borderTop: '2px solid #000', margin: '6px 0' }}></div>
@@ -546,13 +531,28 @@ const DayEndReport = () => {
                 <div style={{ marginTop: 4 }}>Supervisor: ___________________</div>
               </div>
               <div style={{ fontSize: 8, textAlign: 'center', fontWeight: 'bold' }}>
-                Printed: {new Date(submittedData.printedOn).toLocaleString()}
+                Printed: {submittedData?.printedOn ? new Date(submittedData.printedOn).toLocaleString() : 'N/A'}
               </div>
 
               <div style={{ textAlign: 'center', marginTop: 12 }} className="no-print">
+                {!submittedData && (
+                  <div style={{ fontSize: 12, color: '#d32f2f', marginBottom: 8, fontWeight: 'bold' }}>
+                    ⚠️ Submit the report first before printing
+                  </div>
+                )}
                 <button
-                  onClick={() => window.print()}
-                  style={{ fontSize: 14, padding: '8px 24px', background: '#388e3c', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}
+                  onClick={() => {
+                    if (submittedData) {
+                      document.body.classList.add('print-day-end-report-mode');
+                      window.onafterprint = () => {
+                        document.body.classList.remove('print-day-end-report-mode');
+                        window.onafterprint = null;
+                      };
+                      window.print();
+                    }
+                  }}
+                  disabled={!submittedData}
+                  style={{ fontSize: 14, padding: '8px 24px', background: submittedData ? '#388e3c' : '#bdbdbd', color: '#fff', border: 'none', borderRadius: 4, cursor: submittedData ? 'pointer' : 'not-allowed', fontWeight: 'bold', opacity: submittedData ? 1 : 0.5 }}
                 >
                   🖨️ Print Report
                 </button>
@@ -725,74 +725,26 @@ const DayEndReport = () => {
           </div>
           <div style={{ fontWeight: 'bold', marginTop: 8 }}>Total Cash Value: {Number(cashValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
 
-          <h3>Supplier Payments (Same Day)</h3>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <input type="text" placeholder="Supplier Name" value={supplierInput.supplierName} onChange={e => setSupplierInput({ ...supplierInput, supplierName: e.target.value })} />
-            <select value={supplierInput.mode} onChange={e => setSupplierInput({ ...supplierInput, mode: e.target.value })}>
-              <option value="Cash">Cash</option>
-              <option value="Cheque">Cheque</option>
-            </select>
-            <input type="number" placeholder="Amount" value={supplierInput.amount} onChange={e => setSupplierInput({ ...supplierInput, amount: e.target.value })} />
-            <button type="button" onClick={handleSupplierAdd}>Add Supplier Payment</button>
+          <h3>Card Payments</h3>
+          <div style={{ marginBottom: 12 }}>
+            <label>Card Payments (Decimal) <span style={{ color: '#d32f2f' }}>*</span></label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Enter amount (0.00 is valid)"
+              value={cardPayments}
+              onChange={e => setCardPayments(e.target.value)}
+              required
+              style={{ width: 150, padding: '8px', fontSize: 14 }}
+            />
           </div>
-          <ul>
-            {supplierPayments.map((sp, idx) => (
-              <li key={idx}>{sp.supplierName} ({sp.mode}) - {sp.amount}</li>
-            ))}
-          </ul>
 
-         
         <DayEndManualBillEntry
           reportDate={new Date().toISOString().split('T')[0]}
           user={cashier}
           onChange={setManualBillEntries}
         />
-
-          <h3>SYSTEM SALES SUMMARY (AUTO)</h3>
-          <div style={{ marginBottom: 12, fontSize: 16 }}>
-            <div>Total Sales: <b>{systemSalesSummary?.totalSales != null ? systemSalesSummary.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Cash Sales: <b>{systemSalesSummary?.cashSales != null ? systemSalesSummary.cashSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Card Sales: <b>{systemSalesSummary?.cardSales != null ? systemSalesSummary.cardSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Online Transfer Sales: <b>{systemSalesSummary?.onlineTransferSales != null ? systemSalesSummary.onlineTransferSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Cheque Sales: <b>{systemSalesSummary?.chequeSales != null ? systemSalesSummary.chequeSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Returns/Refunds: <b>{systemSalesSummary?.returns != null ? systemSalesSummary.returns.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Old Manual Bill Value: <b>{oldManualBillValue !== null ? oldManualBillValue.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Credit Paid Today: <b>{creditCustomerBillings !== null ? creditCustomerBillings.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</b></div>
-            <div>Total Manual Bill Entry (Today): <b>{manualBillEntriesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-            <div>Next Day Opening Float (Retained): <b>-{Number(nextDayFloatTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-          </div>
-
-        <h3>Cash Reconciliation</h3>
-        <div style={{ marginBottom: 12, fontSize: 16 }}>
-          {(() => {
-            // Calculate supplier payments total
-            let supplierPaymentsTotal = 0;
-            if (Array.isArray(supplierPayments)) {
-              supplierPaymentsTotal = supplierPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
-            }
-            // Calculate expected cash using the updated formula
-            const cashSalesNum = parseFloat(cashSales) || 0;
-            const returnsNum = parseFloat(returns) || 0;
-            const oldManualNum = oldManualBillValue != null ? parseFloat(oldManualBillValue) : 0;
-            const creditCustomerNum = creditCustomerBillings != null ? parseFloat(creditCustomerBillings) : 0;
-            const manualBillEntriesNum = manualBillEntriesTotal;
-            const expectedCashCalc = cashSalesNum - returnsNum - supplierPaymentsTotal + oldManualNum + manualBillEntriesNum - creditCustomerNum;
-            const liveDifference = Number(physicalCashCounted) - expectedCashCalc;
-            return (
-              <>
-                <div>Physical Cash Counted: <b>{Number(physicalCashCounted).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
-              </>
-            );
-          })()}
-        </div>
-  
-
-          {difference !== '0.00' && (
-            <div style={{ marginBottom: 12 }}>
-              <label>Reason (if not zero):</label>
-              <input type="text" value={differenceReason} onChange={e => setDifferenceReason(e.target.value)} />
-            </div>
-          )}
 
           <h3>Sign Off</h3>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>

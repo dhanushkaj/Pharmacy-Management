@@ -14,14 +14,17 @@ import GRNManagement from './pages/GRNManagement';
 import Billing from './pages/Billing';
 import BillingHistory from './pages/BillingHistory';
 import CustomerManagement from './pages/CustomerManagement';
+import CustomerDiscount from './pages/CustomerDiscount';
 import ProductBin from './pages/ProductBin';
 import SettingsSecurity from './pages/SettingsSecurity';
 import StoreSettings from './pages/StoreSettings';
 import BillingReport from './pages/reports/BillingReport';
 import DayEndReport from './pages/reports/DayEndReport';
+import DayEndReportHistory from './pages/reports/DayEndReportHistory';
 import SalesReport from './pages/reports/SalesReport';
 import AlertReport from './pages/reports/AlertReport';
 import InventoryReport from './pages/reports/InventoryReport';
+import ProductMovementReport from './pages/reports/ProductMovementReport';
 import PurchaseOrder from './pages/PurchaseOrder';
 import PurchaseOrderDetails from './pages/PurchaseOrderDetails';
 import PurchaseOrderList from "./pages/PurchaseOrderList";
@@ -29,7 +32,7 @@ import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Landing from './pages/Landing';
 import AuditTrail from './pages/AuditTrail';
-import InventoryReturn from './pages/InventoryReturn';
+import InventoryReturnsHome from './pages/InventoryReturnsHome';
 import InventoryCount from './pages/InventoryCountManagement/PhysicalCount';
 import InventoryCountApproval from './pages/InventoryCountManagement/ApprovalCenter';
 import InventoryCountHistory from './pages/InventoryCountManagement/HistoryViewer';
@@ -42,6 +45,7 @@ import UserProfile from './pages/UserProfile';
 import AdminUserManagement from './pages/AdminUserManagement';
 import CustomerSpectrum from './pages/CustomerSpectrum';
 import AIDashboard from './components/AIDashboard/AIDashboard';
+import SupplierPayment from './pages/SupplierPayment';
 
 const AppContent = () => {
   const location = useLocation();
@@ -71,17 +75,20 @@ const AppContent = () => {
             <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
             <Route path="/billing-history" element={<PrivateRoute><BillingHistory /></PrivateRoute>} />
             <Route path="/customers" element={<PrivateRoute><CustomerManagement /></PrivateRoute>} />
+            <Route path="/customer-discount" element={<PrivateRoute><CustomerDiscount /></PrivateRoute>} />
             <Route path="/customer-spectrum" element={<PrivateRoute><CustomerSpectrum /></PrivateRoute>} />
             <Route path="/bin" element={<PrivateRoute><ProductBin /></PrivateRoute>} />
             {/* Removed /reports route to disable parent ReportsAlerts screen */}
             <Route path="/reports/billing" element={<PrivateRoute><BillingReport /></PrivateRoute>} />
             <Route path="/reports/day-end" element={<PrivateRoute><DayEndReport /></PrivateRoute>} />
+            <Route path="/reports/day-end-history" element={<PrivateRoute><DayEndReportHistory /></PrivateRoute>} />
             <Route path="/reports/sales" element={<PrivateRoute><SalesReport /></PrivateRoute>} />
             <Route path="/reports/alerts" element={<PrivateRoute><AlertReport /></PrivateRoute>} />
             <Route path="/reports/inventory" element={<PrivateRoute><InventoryReport /></PrivateRoute>} />
+            <Route path="/reports/product-movement" element={<PrivateRoute><ProductMovementReport /></PrivateRoute>} />
             <Route path="/reports/alert-config" element={<PrivateRoute><AlertConfig /></PrivateRoute>} />
             <Route path="/audit-trail" element={<PrivateRoute><AuditTrail /></PrivateRoute>} />
-            <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturn /></PrivateRoute>} />
+            <Route path="/inventory-returns" element={<PrivateRoute><InventoryReturnsHome /></PrivateRoute>} />
             <Route path="/inventory-count" element={<PrivateRoute><InventoryCount /></PrivateRoute>} />
             <Route path="/inventory-count-approval" element={<PrivateRoute><InventoryCountApproval /></PrivateRoute>} />
             <Route path="/inventory-count-history" element={<PrivateRoute><InventoryCountHistory /></PrivateRoute>} />
@@ -90,6 +97,7 @@ const AppContent = () => {
             <Route path="/purchase-order/:id" element={<PrivateRoute><PurchaseOrderDetails /></PrivateRoute>} />
             <Route path="/purchase-orders" element={<PurchaseOrderList />} />       {/* list */}
             <Route path="/grn-list" element={<GRNListView />} />
+            <Route path="/supplier-payment" element={<PrivateRoute><SupplierPayment /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
             <Route path="/admin/users" element={<PrivateRoute><AdminUserManagement /></PrivateRoute>} />
             <Route path="/customer-credit-report" element={<PrivateRoute><CustomerCreditReport /></PrivateRoute>} />
